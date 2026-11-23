@@ -1,0 +1,693 @@
+<title>Noms longs des graphiques</title>
+<meta name="color-scheme" content="light dark">
+
+<style>
+  /* Plan : quatre cartes du tableau de bord qui portent des noms (Meilleurs produits, Meilleurs clients, Achats par fournisseur,
+     Chiffre d'affaires par magasin), chacune en barres couchées ou en anneau. Le nom s'écrit à partir de la gauche, sa fin est cachée par « … »,
+     une info-bulle montre le nom complet au survol de la souris (ordinateur) ou à l'appui du doigt (téléphone, tablette). Tout est en
+     variables de couleur : clair, sombre, et les trois teintes des panneaux (société, magasin, cabinet). */
+  :root {
+    color-scheme: light;
+    --bg: #f4f4f5;
+    --cadre: #ececee;
+    --carte: #ffffff;
+    --anneau: #d4d4d8;
+    --texte: #18181b;
+    --doux: #52525b;
+    --champ: #ffffff;
+    --champ-bord: #71717a;
+    --grille: #e4e4e7;
+    --survol: rgba(113, 113, 122, .14);
+    --focus: #1d4ed8;
+    --a-societe: #047857;
+    --a-magasin: #4f46e5;
+    --a-cabinet: #0369a1;
+    --a-expert: #4f46e5;
+    --t1: #b45309;
+    --t2: #15803d;
+    --t3: #b91c1c;
+    --t4: #1d4ed8;
+    --t5: #52525b;
+    --bulle-fond: #18181b;
+    --bulle-texte: #fafafa;
+    --bulle-bord: #18181b;
+    --bulle-liseré: #fafafa;
+    --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #09090b; --cadre: #111113; --carte: #18181b; --anneau: #3f3f46; --texte: #fafafa; --doux: #a1a1aa;
+      --champ: #18181b; --champ-bord: #8e8e98; --grille: #2e2e33; --survol: rgba(161, 161, 170, .18); --focus: #93c5fd;
+      --a-societe: #34d399; --a-magasin: #818cf8; --a-cabinet: #38bdf8; --a-expert: #818cf8;
+      --t1: #fbbf24; --t2: #4ade80; --t3: #f87171; --t4: #60a5fa; --t5: #a1a1aa;
+      --bulle-fond: #000000; --bulle-texte: #fafafa; --bulle-bord: #8e8e98; --bulle-liseré: #fafafa;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #09090b; --cadre: #111113; --carte: #18181b; --anneau: #3f3f46; --texte: #fafafa; --doux: #a1a1aa;
+    --champ: #18181b; --champ-bord: #8e8e98; --grille: #2e2e33; --survol: rgba(161, 161, 170, .18); --focus: #93c5fd;
+    --a-societe: #34d399; --a-magasin: #818cf8; --a-cabinet: #38bdf8; --a-expert: #818cf8;
+    --t1: #fbbf24; --t2: #4ade80; --t3: #f87171; --t4: #60a5fa; --t5: #a1a1aa;
+    --bulle-fond: #000000; --bulle-texte: #fafafa; --bulle-bord: #8e8e98; --bulle-liseré: #fafafa;
+  }
+  [data-ecran="societe"] { --accent: var(--a-societe); }
+  [data-ecran="magasin"] { --accent: var(--a-magasin); }
+  [data-ecran="cabinet"] { --accent: var(--a-cabinet); }
+  [data-ecran="expert"] { --accent: var(--a-expert); }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--texte); font-family: var(--police); font-size: 15px; line-height: 1.5;
+    padding-block: 24px 64px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  main { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+  h1 { font-size: 24px; line-height: 1.25; margin: 0; text-wrap: balance; }
+  h2 { font-size: 17px; line-height: 1.3; margin: 0; text-wrap: balance; }
+  h3 { font-size: 15px; margin: 0; }
+  p { margin: 0; }
+  .doux { color: var(--doux); }
+  .petit { font-size: 13px; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .panneau { background: var(--carte); border-radius: 12px; box-shadow: 0 0 0 1px var(--anneau); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .regles, .essais, .questions { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+  .regles li::marker { font-weight: 700; }
+  .deux { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .realisation { border-radius: 10px; box-shadow: 0 0 0 1px var(--anneau); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .realisation ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+  .realisation .etiquette { display: inline-block; align-self: flex-start; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 999px; box-shadow: 0 0 0 1px var(--champ-bord); }
+  .realisation.retenue { box-shadow: 0 0 0 2px var(--a-societe); }
+  .realisation.retenue .etiquette { background: var(--a-societe); color: var(--carte); box-shadow: none; }
+
+  /* Écran de PILIQI miniature : la barre du haut dit l'espace, puis les filtres, puis la grille de cartes. */
+  .ecran { background: var(--cadre); border-radius: 14px; box-shadow: 0 0 0 1px var(--anneau); padding: 14px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .barre-haut { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .barre-haut strong { color: var(--accent); font-size: 16px; }
+  .filtres { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; }
+  .filtre { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; min-width: 0; }
+  select, .bouton, .croix {
+    font: inherit; font-size: 14px; color: var(--texte); background: var(--champ); border: 1px solid var(--champ-bord);
+    border-radius: 8px; min-height: 36px; padding: 5px 10px; max-width: 100%;
+  }
+  select { padding-right: 6px; }
+  .bouton { font-weight: 600; font-size: 13px; cursor: pointer; }
+  .bouton:disabled { color: var(--doux); border-color: var(--anneau); cursor: default; }
+  .croix { font-size: 20px; line-height: 1; padding: 4px 10px; cursor: pointer; }
+
+  .grille { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  @media (min-width: 1280px) { .grille { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .carte { background: var(--carte); border-radius: 12px; box-shadow: 0 0 0 1px var(--anneau), 0 1px 2px rgba(0, 0, 0, .05); padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .tete { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 8px; }
+  .tete h3 { flex: 1 1 0; min-width: 0; line-height: 24px; padding-block: 6px; overflow-wrap: break-word; }
+  .commandes { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
+  @media (max-width: 639px) {
+    .tete { flex-wrap: wrap; }
+    .tete h3 { flex-basis: 100%; padding-block: 0; }
+    .commandes { flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+    .commandes select { min-width: 0; flex: 0 1 auto; }
+  }
+  .vide { color: var(--doux); font-size: 13px; }
+
+  /* Barres couchées : à gauche la colonne des noms (du texte de la page), à droite les barres, que le logiciel dessinera sur le canevas. */
+  .couchees { --noms: clamp(7.5rem, 42%, 15rem); --ecart: .75rem; position: relative; isolation: isolate; display: flex; flex-direction: column; margin-block: 2px 0; }
+  .rang {
+    position: relative; display: grid; grid-template-columns: var(--noms) minmax(0, 1fr); column-gap: var(--ecart);
+    align-items: center; height: 36px; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+  .rang::before { content: ""; position: absolute; inset: 1px -6px; border-radius: 6px; z-index: -1; }
+  .rang.actif::before { background: var(--survol); }
+  .nom { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font-size: 13px; line-height: 20px; }
+  .piste { position: relative; height: 24px; min-width: 0; }
+  .barre { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 4px; min-width: 2px; }
+  .traits { position: absolute; z-index: -2; top: 0; bottom: 26px; left: calc(var(--noms) + var(--ecart)); right: 0; pointer-events: none; }
+  .traits i { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--grille); }
+  .axe { position: relative; height: 26px; margin-left: calc(var(--noms) + var(--ecart)); font-size: 12px; color: var(--doux); font-variant-numeric: tabular-nums; }
+  .axe span { position: absolute; top: 6px; transform: translateX(-50%); white-space: nowrap; }
+  .axe span:first-child { transform: none; }
+  .axe span:last-child { transform: translateX(-100%); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* Anneau : la légende (HTML) sous le dessin, à la place où Chart.js la met aujourd'hui ; chaque nom est plafonné et coupé de la même façon. */
+  .anneau { display: flex; flex-direction: column; gap: 12px; }
+  .legende { display: flex; flex-wrap: wrap; gap: 2px 14px; list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  .legende li { position: relative; display: flex; align-items: center; gap: 7px; max-width: min(100%, 17rem); min-width: 0; min-height: 28px; padding: 2px 4px; border-radius: 6px; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .legende li.actif { background: var(--survol); }
+  .pastille { flex: none; width: 12px; height: 12px; border-radius: 3px; }
+  .legende .nom { flex: 1 1 auto; line-height: 20px; }
+  .roue { width: min(100%, 12.5rem); height: auto; margin-inline: auto; display: block; }
+  .roue circle { fill: none; cursor: default; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .roue circle.actif { stroke-opacity: .72; }
+
+  .lien { align-self: flex-start; font: inherit; font-size: 14px; font-weight: 600; color: var(--accent); background: none; border: 0; padding: 4px 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .defiler { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { padding: 7px 8px; border-bottom: 1px solid var(--grille); font-size: 13px; vertical-align: top; }
+  thead th { font-size: 12px; color: var(--doux); text-align: right; }
+  tbody th { font-weight: 400; text-align: left; overflow-wrap: anywhere; }
+  td { text-align: right; white-space: nowrap; }
+
+  /* L'info-bulle : celle de la page, la même pour la barre, le nom et la légende. Fond sombre dans les deux modes. */
+  #bulle {
+    position: fixed; z-index: 50; left: 0; top: 0; max-width: min(24rem, calc(100vw - 16px)); padding: 8px 12px; border-radius: 8px;
+    background: var(--bulle-fond); color: var(--bulle-texte); border: 1px solid var(--bulle-bord); box-shadow: 0 8px 22px rgba(0, 0, 0, .3);
+    font-size: 13px; line-height: 1.4; pointer-events: none; overflow-wrap: anywhere;
+  }
+  #bulle[hidden] { display: none; }
+  #bulle .titre { font-weight: 700; }
+  #bulle .ligne { display: flex; align-items: center; gap: 7px; margin-top: 4px; }
+  #bulle .echantillon { flex: none; width: 10px; height: 10px; border-radius: 2px; box-shadow: 0 0 0 1.5px var(--bulle-liseré); }
+  [hidden] { display: none !important; }
+  @media (max-width: 760px) { .deux { grid-template-columns: minmax(0, 1fr); } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+<main>
+  <header class="panneau">
+    <h1>Noms longs des graphiques en barres couchées</h1>
+    <p class="doux">Quand un nom ne tient pas dans sa place, il s’écrit à partir de la gauche et sa fin est cachée par « … ». Une info-bulle montre le nom complet : au passage de la souris sur ordinateur, d’un appui du doigt sur téléphone et sur tablette. Les noms, les magasins et les chiffres de cette page sont fictifs.</p>
+    <label class="filtre" style="align-self:flex-start">Affichage de la page
+      <select id="affichage">
+        <option value="auto">Comme mon appareil</option>
+        <option value="light">Clair</option>
+        <option value="dark">Sombre</option>
+      </select>
+    </label>
+  </header>
+
+  <section class="panneau" aria-labelledby="t-regles">
+    <h2 id="t-regles">Vos trois règles, telles que cette maquette les applique</h2>
+    <ol class="regles">
+      <li>Le nom s’écrit à partir de la <strong>gauche</strong> : on en lit le début. S’il y a beaucoup de lettres, le reste est caché par « … » (jamais le début).</li>
+      <li>La souris au-dessus du nom : une <strong>info-bulle</strong> montre le nom complet.</li>
+      <li>Téléphone et tablette : un <strong>appui</strong> sur le nom ouvre directement l’info-bulle.</li>
+    </ol>
+    <p class="doux petit">Elles valent pour toutes les cartes qui portent des noms : Meilleurs produits, Meilleurs clients, Achats par fournisseur, Chiffre d’affaires par magasin (barres couchées et légendes d’anneau), dans l’espace de la société, le panneau d’un magasin, l’espace du cabinet et la page de l’expert-comptable, en clair comme en sombre.</p>
+    <h3>À essayer</h3>
+    <ul class="essais">
+      <li><strong>Ordinateur</strong> : passez la souris sur un nom, sur une barre ou sur un nom de légende d’anneau.</li>
+      <li><strong>Téléphone ou tablette</strong> : appuyez sur un nom ; appuyez ailleurs, ou de nouveau sur le nom, pour fermer l’info-bulle.</li>
+      <li>Changez le <strong>type</strong> d’une carte (« Barres couchées » ou « Anneau »), l’<strong>écran</strong>, ou réduisez la largeur de la fenêtre : le « … » se place seul.</li>
+      <li>Changez le <strong>magasin</strong> : dans « Tous mes magasins », chaque nom porte le magasin à la fin (« · Maison Ferrand Halles ») et tous sont donc coupés ; avec « Maison Ferrand Fort-de-France », des noms entiers et des noms coupés se côtoient, de part et d’autre de la limite.</li>
+      <li>« Voir les chiffres » donne, comme aujourd’hui, le tableau avec les noms en entier.</li>
+    </ul>
+  </section>
+
+  <section class="ecran" id="ecran" aria-labelledby="t-ecran">
+    <h2 id="t-ecran" class="sr">Le tableau de bord</h2>
+    <div class="barre-haut">
+      <strong id="espace">PILIQI · Espace de la société</strong>
+      <span class="doux petit" id="contexte"></span>
+    </div>
+    <div class="filtres">
+      <label class="filtre">Écran
+        <select id="choix-ecran">
+          <option value="societe">Espace de la société (propriétaire)</option>
+          <option value="magasin">Panneau d’un magasin (responsable)</option>
+          <option value="cabinet">Espace du cabinet (comptable, client lié)</option>
+          <option value="expert">Page de l’expert-comptable déclaré</option>
+        </select>
+      </label>
+      <label class="filtre" id="filtre-magasin">Magasin
+        <select id="choix-magasin"></select>
+      </label>
+      <label class="filtre" id="filtre-ajout">Ajouter un graphique
+        <select id="choix-ajout"></select>
+      </label>
+    </div>
+    <div class="grille" id="grille"></div>
+  </section>
+
+  <section class="panneau" aria-labelledby="t-real">
+    <h2 id="t-real">Comment c’est réalisé</h2>
+    <p class="doux">Le dessin des barres est fait par le canevas (Chart.js) ; il ne sait pas faire survoler ni toucher un nom. Deux façons de s’en sortir, et cette maquette montre la seconde.</p>
+    <div class="deux">
+      <div class="realisation">
+        <span class="etiquette">Réalisation A, non retenue</span>
+        <h3>Les noms restent dans le dessin</h3>
+        <ul>
+          <li>Le programme raccourcit chaque nom à la bonne longueur avant de le dessiner, et recommence à chaque changement de largeur ou de mode clair et sombre.</li>
+          <li>Il faut ajouter du code qui devine que la souris ou le doigt est sur un nom, car le canevas ne le fait pas.</li>
+          <li>Le nom n’est pas du texte de la page : pas de lecteur d’écran, pas de copie.</li>
+        </ul>
+      </div>
+      <div class="realisation retenue">
+        <span class="etiquette">Réalisation B, retenue</span>
+        <h3>Les noms sont du texte, à gauche du dessin</h3>
+        <ul>
+          <li>Le navigateur pose lui-même le « … » à la bonne place, à toutes les largeurs, en clair comme en sombre.</li>
+          <li>Le survol et l’appui marchent sur le texte comme sur n’importe quel texte ; le nom se lit au lecteur d’écran et se copie.</li>
+          <li>En échange, chaque ligne a une hauteur fixe pour rester alignée sur sa barre (un test en navigateur le vérifie), et l’info-bulle de ces cartes est celle de la page, la même pour la barre, le nom et la légende.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="doux petit">Constaté avec le canevas du logiciel lui-même : il écrit les noms longs coupés à gauche (ce que vous avez vu) et ouvre son info-bulle sur la barre, jamais sur le nom.</p>
+    <p class="doux petit">Dans cette maquette, les barres et leur axe sont dessinés par la page à la place du canevas : l’aspect et le comportement des noms sont ceux du logiciel.</p>
+  </section>
+
+  <section class="panneau" aria-labelledby="t-quest">
+    <h2 id="t-quest">À vous de dire</h2>
+    <ol class="questions">
+      <li>L’info-bulle d’un nom montre le nom complet <strong>et le chiffre</strong>, comme celle de la barre aujourd’hui. Voulez-vous seulement le nom ?</li>
+      <li>Un nom court, dont rien n’est caché, ouvre aussi l’info-bulle (la ligne entière la porte, avec son chiffre). Voulez-vous qu’elle ne s’ouvre que sur un nom coupé ?</li>
+      <li>Dans « Tous mes magasins », le magasin vient à la fin du nom (« · Maison Ferrand Halles ») et se trouve donc caché : dans « Meilleurs produits », la 4<sup>e</sup> et la 5<sup>e</sup> ligne (« Bougie parfumée figue ») se ressemblent une fois coupées. À regarder à 390 px.</li>
+      <li>Les barres verticales et le camembert ne sont pas montrés : mêmes règles pour leurs noms ?</li>
+    </ol>
+  </section>
+</main>
+
+<div id="bulle" role="tooltip" hidden></div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------- Données fictives (Maison Ferrand), en centimes d'euro, par magasin ---------- */
+  const MAGASINS = [
+    { id: 'halles', nom: 'Maison Ferrand Halles' },
+    { id: 'republique', nom: 'Maison Ferrand République' },
+    { id: 'fdf', nom: 'Maison Ferrand Fort-de-France' },
+    { id: 'entrepot', nom: 'Maison Ferrand Entrepôt' },
+    { id: 'marche', nom: 'Maison Ferrand Marché', ferme: true }
+  ];
+  const COFFRET = 'Coffret découverte de savons artisanaux au lait de coco et à la fleur de tiaré, 250 g';
+  const CARTES = {
+    produits: {
+      titre: 'Meilleurs produits', serie: 'Chiffre d’affaires HT',
+      compte: 'Les 10 produits ou services au plus fort chiffre d’affaires HT net, ou les plus vendus en quantité.',
+      lignes: {
+        halles: [['Bougie parfumée figue', 987040], [COFFRET, 1576200], ['Plaid en laine mérinos écru', 721550], ['Thé vert Sencha 100 g', 634000], ['Savon d’Alep 200 g', 510880], ['Mug émaillé blanc', 396000], ['Carnet A5 ligné', 214425], ['Lampe de chevet en bois de hêtre', 438000], ['Torchon en coton', 150600], ['Diffuseur en bambou', 119000]],
+        republique: [['Bougie parfumée figue', 891000], ['Thé vert Sencha 100 g', 712050], ['Coussin en lin brodé main, coloris sable', 648400], ['Plaid en laine mérinos écru', 583000], ['Tasse en grès émaillé', 351240], ['Stylo plume laqué', 296000], ['Savon d’Alep 200 g', 241000], ['Carnet A5 ligné', 132000]],
+        fdf: [['Bougie parfumée coco', 1842000], ['Thé à la cannelle et à l’orange amère 100 g', 1234000], ['Savon au coco', 746000], ['Épices colombo 100 g', 498050], ['Thé citronnelle 100 g', 421500], ['Huile de coco vierge pressée à froid, flacon verre 500 ml', 374000], [COFFRET, 298400], ['Rhum arrangé vanille-gingembre 35 cl', 210000], ['Panier tressé en bambou', 106000]],
+        entrepot: [['Bougie parfumée coco', 321000], ['Savon au coco', 194000], ['Cire de soja en paillettes, sac de 5 kg', 88000]],
+        marche: [['Plaid en laine mérinos écru', 231000], ['Thé vert Sencha 100 g', 74000]]
+      }
+    },
+    clients: {
+      titre: 'Meilleurs clients', serie: 'Chiffre d’affaires HT',
+      compte: 'Les 10 clients au plus fort chiffre d’affaires HT net, sans le client comptoir.',
+      lignes: {
+        halles: [['Hôtel Habitation Saint-Étienne', 2148000], ['SAS Traiteur Mathurin Réceptions et Événements', 1492050], ['Restaurant La Case à Léa', 864000], ['Mme Sophie Lambert', 321000], ['Association des commerçants des Halles', 288000], ['Épicerie fine Le Comptoir des Îles', 612000], ['M. Jean-Baptiste Hoarau', 154000]],
+        republique: [['Hôtel Habitation Saint-Étienne', 987000], ['Épicerie fine Le Comptoir des Îles', 734500], ['Cabinet dentaire du Docteur Marie-Claude Rousseau-Delmas', 520000], ['Mairie de Schœlcher, service de la restauration scolaire et des affaires sociales', 1176000], ['Mme Nadège Pinel', 196000]],
+        fdf: [['Coopérative agricole des planteurs de la Martinique', 1624000], ['Hôtel Les Trois-Îlets Résidence & Spa', 1389000], ['Restaurant La Case à Léa', 641000], ['Épicerie fine Le Comptoir des Îles', 527000], ['M. Antoine Dorival', 213000], ['Boulangerie Dufour', 148000]],
+        entrepot: [['Épicerie fine Le Comptoir des Îles', 411000], ['SAS Traiteur Mathurin Réceptions et Événements', 295000]],
+        marche: [['Mme Sophie Lambert', 64000], ['M. Jean-Baptiste Hoarau', 41000]]
+      }
+    },
+    fournisseurs: {
+      titre: 'Achats par fournisseur', serie: 'Achats HT',
+      compte: 'Les 10 fournisseurs aux plus forts achats HT nets (factures d’achat validées moins avoirs fournisseur).',
+      lignes: {
+        halles: [['Savonnerie Artisanale du Vieux Port', 1824000], ['Cirerie Dupuis et Fils', 1138000], ['Épices et Thés du Monde — Import Export SARL', 976000], ['Verrerie Lorraine Emballages', 482000], ['Tissage des Alpes Maritimes', 694000]],
+        republique: [['Savonnerie Artisanale du Vieux Port', 1245000], ['Épices et Thés du Monde — Import Export SARL', 812000], ['Maison de la Céramique d’Art de Vallauris, atelier Pierre Sauvaire', 593000], ['Papeterie Belloc', 248000]],
+        fdf: [['Coopérative des producteurs de coco de Sainte-Anne', 1496000], ['Distillerie Saint-Étienne', 932000], ['Épices et Thés du Monde — Import Export SARL', 741000], ['Savonnerie Artisanale du Vieux Port', 682000], ['Verrerie Lorraine Emballages', 314000]],
+        entrepot: [['Cirerie Dupuis et Fils', 792000], ['Verrerie Lorraine Emballages', 446000], ['Grossiste en cire de soja biologique, Compagnie Laurent-Renaud SA', 561000]],
+        marche: [['Papeterie Belloc', 38000]]
+      }
+    },
+    magasins: {
+      titre: 'Chiffre d’affaires par magasin', serie: 'Chiffre d’affaires HT',
+      compte: 'La part de chaque magasin dans les ventes HT nettes de la période.',
+      parMagasin: { halles: 4128000, republique: 3394000, fdf: 5596000, entrepot: 912000, marche: 305000 }
+    }
+  };
+  const TYPES = { couchees: 'Barres couchées', anneau: 'Anneau' };
+  const ECRANS = {
+    societe: { espace: 'PILIQI · Espace de la société', contexte: 'Maison Ferrand · propriétaire', magasins: true },
+    magasin: { espace: 'PILIQI · Panneau du magasin', contexte: 'Maison Ferrand Fort-de-France · responsable', magasins: false },
+    cabinet: { espace: 'PILIQI · Espace du cabinet', contexte: 'Cabinet Martin · client lié : Maison Ferrand · comptable', magasins: true },
+    expert: { espace: 'PILIQI · Tableau de bord de la société', contexte: 'Maison Ferrand · expert-comptable déclaré', magasins: true }
+  };
+
+  /* ---------- Formats, comme le logiciel (fr-FR, euros) ---------- */
+  const euros = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
+  const compact = new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 });
+  const montant = (cents) => euros.format(cents / 100);
+  const graduation = (valeur) => valeur === 0 ? '0 €' : compact.format(valeur) + ' €';
+
+  /* ---------- État ---------- */
+  const etat = {
+    ecran: 'societe',
+    magasin: 'tous',
+    ordre: ['produits', 'clients', 'fournisseurs', 'magasins'],
+    retirees: [],
+    type: { produits: 'couchees', clients: 'couchees', fournisseurs: 'couchees', magasins: 'anneau' },
+    chiffres: {}
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const el = (balise, classe, texte) => {
+    const e = document.createElement(balise);
+    if (classe) e.className = classe;
+    if (texte !== undefined) e.textContent = texte;
+    return e;
+  };
+
+  /* Le périmètre : le magasin du panneau, ou tous les magasins, ou celui du filtre. Un seul magasin : les noms ne le disent pas. */
+  const perimetre = () => {
+    if (etat.ecran === 'magasin') return [MAGASINS[2]];
+    if (etat.magasin === 'tous') return MAGASINS;
+    return MAGASINS.filter((m) => m.id === etat.magasin);
+  };
+  const cartesDisponibles = () => etat.ecran === 'magasin' ? ['produits', 'clients', 'fournisseurs'] : ['produits', 'clients', 'fournisseurs', 'magasins'];
+
+  /* Les dix premiers, par valeur décroissante puis par nom ; le nom dit le magasin quand la carte en compte plusieurs. */
+  function classement(cle) {
+    const magasins = perimetre();
+    const carte = CARTES[cle];
+    if (cle === 'magasins') {
+      return magasins.map((m) => ({ nom: m.nom + (m.ferme ? ' (fermé)' : ''), cents: carte.parMagasin[m.id] }));
+    }
+    const plusieurs = magasins.length > 1;
+    const toutes = [];
+    magasins.forEach((m) => carte.lignes[m.id].forEach(([nom, cents]) => toutes.push({ nom: nom + (plusieurs ? ' · ' + m.nom : ''), cents, brut: nom })));
+    toutes.sort((a, b) => b.cents - a.cents || a.brut.localeCompare(b.brut, 'fr'));
+    return toutes.slice(0, 10);
+  }
+
+  /* Une échelle à graduations rondes : au plus cinq intervalles. */
+  function echelle(maxCents) {
+    const max = maxCents / 100;
+    const base = Math.pow(10, Math.floor(Math.log10(max / 5)));
+    const pas = [1, 2, 2.5, 5, 10].map((k) => k * base).find((p) => max / p <= 5) || base * 10;
+    const haut = Math.ceil(max / pas) * pas;
+    const graduations = [];
+    for (let v = 0; v <= haut + pas / 1000; v += pas) graduations.push(v);
+    return { haut, graduations };
+  }
+
+  /* ---------- L'info-bulle ---------- */
+  const bulle = $('bulle');
+  let courant = null;
+  let pointeur = null;
+  let dernierType = 'mouse';
+  let defilementALOuverture = 0;
+
+  function remplirLaBulle(info) {
+    bulle.replaceChildren();
+    bulle.appendChild(el('div', 'titre', info.titre));
+    const ligne = el('div', 'ligne');
+    const echantillon = el('span', 'echantillon');
+    echantillon.style.background = info.couleur;
+    ligne.append(echantillon, el('span', null, info.texte));
+    bulle.appendChild(ligne);
+  }
+
+  function placerLaBulle() {
+    const larg = bulle.offsetWidth;
+    const haut = bulle.offsetHeight;
+    const vw = document.documentElement.clientWidth;
+    const vh = window.innerHeight;
+    let x;
+    let y;
+    if (pointeur) {
+      x = pointeur.x + 14;
+      y = pointeur.y + 18;
+      if (x + larg > vw - 8) x = pointeur.x - larg - 14;
+      if (y + haut > vh - 8) y = pointeur.y - haut - 12;
+    } else {
+      const r = courant.getBoundingClientRect();
+      x = r.left;
+      y = r.bottom + 6;
+      if (y + haut > vh - 8) y = r.top - haut - 6;
+    }
+    x = Math.max(8, Math.min(x, vw - larg - 8));
+    y = Math.max(8, y);
+    bulle.style.transform = 'translate(' + Math.round(x) + 'px, ' + Math.round(y) + 'px)';
+  }
+
+  function ouvrir(cible, info, evenement) {
+    if (courant && courant !== cible) courant.classList.remove('actif');
+    courant = cible;
+    defilementALOuverture = window.scrollY;
+    pointeur = evenement ? { x: evenement.clientX, y: evenement.clientY } : null;
+    cible.classList.add('actif');
+    remplirLaBulle(info);
+    bulle.hidden = false;
+    placerLaBulle();
+  }
+
+  function fermer() {
+    if (courant) courant.classList.remove('actif');
+    courant = null;
+    pointeur = null;
+    bulle.hidden = true;
+  }
+
+  /* Souris (ou stylet) : le survol ouvre et ferme ; doigt : un appui ouvre, un second appui ou un appui ailleurs ferme. */
+  function brancher(cible, info) {
+    cible.addEventListener('pointerenter', (e) => { if (e.pointerType !== 'touch') ouvrir(cible, info, e); });
+    cible.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'touch' || courant !== cible) return;
+      pointeur = { x: e.clientX, y: e.clientY };
+      placerLaBulle();
+    });
+    cible.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch' && courant === cible) fermer(); });
+    cible.addEventListener('click', () => {
+      if (dernierType !== 'touch') return;
+      if (courant === cible) fermer(); else ouvrir(cible, info, null);
+    });
+  }
+
+  document.addEventListener('pointerdown', (e) => {
+    dernierType = e.pointerType;
+    if (courant && !courant.contains(e.target)) fermer();
+  }, true);
+  window.addEventListener('scroll', () => { if (courant && Math.abs(window.scrollY - defilementALOuverture) > 4) fermer(); }, { passive: true });
+  window.addEventListener('resize', () => { fermer(); ajusterLesAxes(); });
+
+  /* ---------- Dessin d'une carte ---------- */
+  function couleurDeLaPart(rang) {
+    return ['var(--accent)', 'var(--t1)', 'var(--t2)', 'var(--t3)', 'var(--t4)', 'var(--t5)'][rang % 6];
+  }
+
+  function barresCouchees(carte, lignes) {
+    const zone = el('div', 'couchees');
+    zone.setAttribute('role', 'list');
+    zone.setAttribute('aria-label', carte.titre + ' : barres couchées');
+    const { haut, graduations } = echelle(Math.max(...lignes.map((l) => l.cents)));
+    const traits = el('div', 'traits');
+    traits.setAttribute('aria-hidden', 'true');
+    graduations.forEach((v) => {
+      const trait = document.createElement('i');
+      trait.style.left = (v / haut * 100) + '%';
+      traits.appendChild(trait);
+    });
+    zone.appendChild(traits);
+    lignes.forEach((ligne) => {
+      const rang = el('div', 'rang');
+      rang.setAttribute('role', 'listitem');
+      rang.appendChild(el('span', 'nom', ligne.nom));
+      const piste = el('span', 'piste');
+      const barre = el('span', 'barre');
+      barre.style.width = (ligne.cents / 100 / haut * 100) + '%';
+      piste.appendChild(barre);
+      rang.appendChild(piste);
+      rang.appendChild(el('span', 'sr', ' : ' + montant(ligne.cents)));
+      brancher(rang, { titre: ligne.nom, couleur: 'var(--accent)', texte: carte.serie + ' : ' + montant(ligne.cents) });
+      zone.appendChild(rang);
+    });
+    const axe = el('div', 'axe');
+    axe.setAttribute('aria-hidden', 'true');
+    graduations.forEach((v) => {
+      const graduation_ = el('span', null, graduation(v));
+      graduation_.style.left = (v / haut * 100) + '%';
+      axe.appendChild(graduation_);
+    });
+    zone.appendChild(axe);
+    return zone;
+  }
+
+  function anneau(carte, lignes) {
+    const conteneur = el('div', 'anneau');
+    const total = lignes.reduce((somme, l) => somme + l.cents, 0);
+    const legende = el('ul', 'legende');
+    legende.setAttribute('aria-label', carte.titre + ' : légende');
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'roue');
+    svg.setAttribute('viewBox', '0 0 200 200');
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', carte.titre + ' : anneau');
+    const rayon = 67.5;
+    const tour = 2 * Math.PI * rayon;
+    let cumul = 0;
+    lignes.forEach((ligne, rang) => {
+      const info = { titre: ligne.nom, couleur: couleurDeLaPart(rang), texte: carte.serie + ' : ' + montant(ligne.cents) };
+      const li = el('li');
+      const pastille = el('span', 'pastille');
+      pastille.style.background = couleurDeLaPart(rang);
+      li.append(pastille, el('span', 'nom', ligne.nom), el('span', 'sr', ' : ' + montant(ligne.cents)));
+      brancher(li, info);
+      legende.appendChild(li);
+
+      const part = ligne.cents / total * tour;
+      const trou = lignes.length > 1 ? 2.5 : 0;
+      const cercle = document.createElementNS(NS, 'circle');
+      cercle.setAttribute('cx', '100');
+      cercle.setAttribute('cy', '100');
+      cercle.setAttribute('r', String(rayon));
+      cercle.setAttribute('stroke-width', '45');
+      cercle.setAttribute('stroke-dasharray', Math.max(part - trou, 0.5).toFixed(2) + ' ' + tour.toFixed(2));
+      cercle.setAttribute('stroke-dashoffset', (-cumul).toFixed(2));
+      cercle.setAttribute('transform', 'rotate(-90 100 100)');
+      cercle.style.stroke = couleurDeLaPart(rang);
+      cumul += part;
+      brancher(cercle, info);
+      svg.appendChild(cercle);
+    });
+    conteneur.append(svg, legende);
+    return conteneur;
+  }
+
+  function tableau(carte, lignes) {
+    const defiler = el('div', 'defiler');
+    defiler.dataset.chiffres = '';
+    const table = el('table');
+    const tete = el('thead');
+    const entete = el('tr');
+    const vide = el('th');
+    vide.scope = 'col';
+    const colonne = el('th', null, carte.serie);
+    colonne.scope = 'col';
+    entete.append(vide, colonne);
+    tete.appendChild(entete);
+    const corps = el('tbody');
+    lignes.forEach((ligne) => {
+      const tr = el('tr');
+      const th = el('th', null, ligne.nom);
+      th.scope = 'row';
+      tr.append(th, el('td', null, montant(ligne.cents)));
+      corps.appendChild(tr);
+    });
+    table.append(tete, corps);
+    defiler.appendChild(table);
+    return defiler;
+  }
+
+  function carteComplete(cle, rang, nombre) {
+    const carte = CARTES[cle];
+    const lignes = classement(cle);
+    const section = el('section', 'carte');
+    section.dataset.carte = cle;
+    section.setAttribute('aria-labelledby', 'titre-' + cle);
+
+    const tete = el('div', 'tete');
+    const titre = el('h3', null, carte.titre);
+    titre.id = 'titre-' + cle;
+    const commandes = el('div', 'commandes');
+    const type = document.createElement('select');
+    type.setAttribute('aria-label', 'Type du graphique');
+    type.dataset.geste = 'type';
+    Object.entries(TYPES).forEach(([valeur, libelle]) => {
+      const option = el('option', null, libelle);
+      option.value = valeur;
+      option.selected = etat.type[cle] === valeur;
+      type.appendChild(option);
+    });
+    type.addEventListener('change', () => { etat.type[cle] = type.value; dessiner(); });
+    const monter = el('button', 'bouton', 'Monter');
+    monter.type = 'button';
+    monter.disabled = rang === 0;
+    monter.addEventListener('click', () => { deplacer(cle, -1); });
+    const descendre = el('button', 'bouton', 'Descendre');
+    descendre.type = 'button';
+    descendre.disabled = rang === nombre - 1;
+    descendre.addEventListener('click', () => { deplacer(cle, 1); });
+    const croix = el('button', 'croix', '×');
+    croix.type = 'button';
+    croix.setAttribute('aria-label', 'Retirer ce graphique');
+    croix.title = 'Retirer ce graphique';
+    croix.addEventListener('click', () => { etat.ordre = etat.ordre.filter((c) => c !== cle); etat.retirees.push(cle); dessiner(); });
+    commandes.append(type, monter, descendre, croix);
+    tete.append(titre, commandes);
+
+    section.append(tete, el('p', 'vide', carte.compte));
+    section.appendChild(etat.type[cle] === 'anneau' ? anneau(carte, lignes) : barresCouchees(carte, lignes));
+
+    const lien = el('button', 'lien');
+    lien.type = 'button';
+    lien.dataset.geste = 'chiffres';
+    const tab = tableau(carte, lignes);
+    const ouvert = !!etat.chiffres[cle];
+    const majLien = (o) => { lien.textContent = o ? 'Masquer les chiffres' : 'Voir les chiffres'; lien.setAttribute('aria-expanded', String(o)); tab.hidden = !o; };
+    majLien(ouvert);
+    lien.addEventListener('click', () => { etat.chiffres[cle] = !etat.chiffres[cle]; majLien(etat.chiffres[cle]); });
+    section.append(lien, tab);
+    return section;
+  }
+
+  function deplacer(cle, sens) {
+    const i = etat.ordre.indexOf(cle);
+    const j = i + sens;
+    if (j < 0 || j >= etat.ordre.length) return;
+    [etat.ordre[i], etat.ordre[j]] = [etat.ordre[j], etat.ordre[i]];
+    dessiner();
+  }
+
+  function dessiner() {
+    fermer();
+    document.body.dataset.ecran = etat.ecran;
+    const ecran = ECRANS[etat.ecran];
+    $('espace').textContent = ecran.espace;
+    $('contexte').textContent = ecran.contexte;
+    $('filtre-magasin').hidden = !ecran.magasins;
+
+    const disponibles = cartesDisponibles();
+    const affichees = etat.ordre.filter((c) => disponibles.includes(c));
+    const grille = $('grille');
+    grille.replaceChildren(...affichees.map((cle, rang) => carteComplete(cle, rang, affichees.length)));
+
+    const ajout = $('choix-ajout');
+    const aAjouter = etat.retirees.filter((c) => disponibles.includes(c));
+    ajout.replaceChildren();
+    ajout.disabled = aAjouter.length === 0;
+    const premiere = el('option', null, aAjouter.length === 0 ? 'Tous les graphiques sont affichés' : '— Choisir —');
+    premiere.value = '';
+    ajout.appendChild(premiere);
+    aAjouter.forEach((c) => { const o = el('option', null, CARTES[c].titre); o.value = c; ajout.appendChild(o); });
+    ajusterLesAxes();
+  }
+
+  /* Une graduation sur deux, sur trois... quand la place manque : jamais deux libellés qui se recouvrent. */
+  function ajusterLesAxes() {
+    document.querySelectorAll('.axe').forEach((axe) => {
+      const libelles = Array.from(axe.children);
+      libelles.forEach((l) => { l.style.visibility = ''; });
+      let pas = 1;
+      for (; pas < libelles.length; pas++) {
+        const visibles = libelles.filter((_, i) => i % pas === 0).map((l) => l.getBoundingClientRect());
+        const serres = visibles.some((r, i) => i > 0 && r.left < visibles[i - 1].right + 8);
+        if (!serres) break;
+      }
+      libelles.forEach((l, i) => { if (i % pas !== 0) l.style.visibility = 'hidden'; });
+    });
+  }
+
+  /* ---------- Menus de la page ---------- */
+  const choixMagasin = $('choix-magasin');
+  [['tous', 'Tous mes magasins'], ...MAGASINS.map((m) => [m.id, m.nom])].forEach(([valeur, libelle]) => {
+    const o = el('option', null, libelle);
+    o.value = valeur;
+    choixMagasin.appendChild(o);
+  });
+  choixMagasin.addEventListener('change', () => { etat.magasin = choixMagasin.value; dessiner(); });
+  $('choix-ecran').addEventListener('change', (e) => { etat.ecran = e.target.value; dessiner(); });
+  $('choix-ajout').addEventListener('change', (e) => {
+    const cle = e.target.value;
+    if (cle === '') return;
+    etat.retirees = etat.retirees.filter((c) => c !== cle);
+    etat.ordre.push(cle);
+    dessiner();
+  });
+  $('affichage').addEventListener('change', (e) => {
+    if (e.target.value === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.dataset.theme = e.target.value;
+    fermer();
+  });
+
+  dessiner();
+})();
+</script>

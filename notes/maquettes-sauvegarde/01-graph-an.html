@@ -1,0 +1,1474 @@
+<title>Graphiques par période</title>
+<meta name="color-scheme" content="light dark">
+
+<style>
+/* Plan : la page montre d'abord ce que l'éditeur a décidé (avec des boutons « Voir » qui règlent l'écran), puis un petit pupitre de la maquette (le site, la personne, l'historique, la fin d'exercice : rien de cela n'est dans PILIQI), puis l'écran du tableau de bord de PILIQI, puis les points à trancher. Le dessin des graphiques est fait ici en SVG, sans aucune ressource extérieure. */
+:root{
+  --bg:#f3f4f7; --fg:#1b1f2b; --muted:#5b6274; --line:#d9dce4; --ctl:#7d8598;
+  --card:#ffffff; --panel:#f8f9fb;
+  --accent:#1f5fbf; --accent-bg:#e7eefb; --prim:#1f5fbf; --prim-fg:#ffffff;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#13986a; --s4:#d6568a; --s5:#6250d6;
+  --prev:#8a8d96; --ink:#1b1f2b; --grid:#e3e5ec; --axe:#b3b8c5; --survol:rgba(42,120,214,.10);
+  --ok:#006300; --ko:#c0292b; --bar-ok:#0ca30c; --bar-ko:#d03b3b;
+  --plus:#c2410c; --moins:#0b7a5a;
+  --avert-bg:#fff4d6; --avert-fg:#6b4a00;
+  --police:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#14151a; --fg:#ececf1; --muted:#a3a9b8; --line:#2f323b; --ctl:#8b93a8;
+  --card:#1d1f26; --panel:#181a20;
+  --accent:#8db4f5; --accent-bg:#1f2a44; --prim:#2f66c8; --prim-fg:#ffffff;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#d55181; --s5:#9085e9;
+  --prev:#7c8191; --ink:#ececf1; --grid:#2c2f38; --axe:#4a4f5c; --survol:rgba(141,180,245,.14);
+  --ok:#4cc760; --ko:#ff9490; --bar-ok:#0ca30c; --bar-ko:#e66767;
+  --plus:#f59e6b; --moins:#4cc79d;
+  --avert-bg:#3a2f0e; --avert-fg:#f3d98a;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14151a; --fg:#ececf1; --muted:#a3a9b8; --line:#2f323b; --ctl:#8b93a8;
+  --card:#1d1f26; --panel:#181a20;
+  --accent:#8db4f5; --accent-bg:#1f2a44; --prim:#2f66c8; --prim-fg:#ffffff;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#d55181; --s5:#9085e9;
+  --prev:#7c8191; --ink:#ececf1; --grid:#2c2f38; --axe:#4a4f5c; --survol:rgba(141,180,245,.14);
+  --ok:#4cc760; --ko:#ff9490; --bar-ok:#0ca30c; --bar-ko:#e66767;
+  --plus:#f59e6b; --moins:#4cc79d;
+  --avert-bg:#3a2f0e; --avert-fg:#f3d98a;
+  color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--police);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 64px}
+.page{max-width:1320px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1{font-size:23px;margin:0;text-wrap:balance}
+h2{font-size:18px;margin:0;text-wrap:balance}
+h3{font-size:14.5px;margin:0}
+p{margin:0}
+.intro{color:var(--muted);margin:6px 0 0;max-width:80ch}
+.gris{color:var(--muted);font-size:13px}
+[hidden]{display:none!important}
+button,select,input{font:inherit;color:var(--fg)}
+select{font-size:13px;background:var(--card);border:1px solid var(--ctl);border-radius:7px;padding:4px 8px;max-width:100%}
+select:disabled{opacity:1;color:var(--muted);background:var(--panel);border-style:dashed}
+button{font-size:13px;background:var(--card);border:1px solid var(--ctl);border-radius:7px;padding:4px 10px;cursor:pointer}
+button:disabled{color:var(--muted);cursor:default;border-style:dashed}
+button.prim{background:var(--prim);color:var(--prim-fg);border-color:var(--prim);font-weight:600}
+button.lien{border:0;background:none;color:var(--accent);padding:0;text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-weight:600}
+button.petit{padding:2px 9px;font-size:12.5px}
+input[type=checkbox],input[type=radio]{width:16px;height:16px;accent-color:var(--prim);margin:0;flex:none}
+select:focus-visible,button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+section{min-width:0}
+
+/* Ce que l'éditeur a décidé */
+.decisions{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 20px}
+.decisions ol{margin:10px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:7px;max-width:112ch}
+.decisions li{padding-left:2px}
+.decisions .voir{display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:6px;vertical-align:middle}
+.source{color:var(--muted);font-size:12.5px}
+.horsmaquette{margin-top:10px;font-size:13px;color:var(--muted)}
+
+/* Pupitre de la maquette */
+.pupitre{border:1px dashed var(--ctl);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;background:var(--panel)}
+.pupitre-tete{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.pupitre-tete b{font-size:13px}
+.pupitre .ligne{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+.pupitre label{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);max-width:100%;flex-wrap:wrap}
+.pupitre select{min-width:0;max-width:100%}
+.pupitre .radios{display:inline-flex;gap:12px}
+.pupitre .radios label{color:var(--fg)}
+
+/* L'écran de PILIQI */
+.piliqi{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.fil{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.fil h2{font-size:17px}
+.fil .gris{font-size:12.5px}
+.chiffres{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.chiffre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px 9px;min-width:0}
+.chiffre .k{font-size:12px;color:var(--muted)}
+.chiffre .v{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.3}
+.chiffre .d{font-size:12px;line-height:1.35}
+.hausse{color:var(--ok)}
+.baisse{color:var(--ko)}
+.barre{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:12.5px}
+.barre .f{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;color:var(--muted);font-size:12.5px}
+.barre .f select{color:var(--fg);padding:3px 3px 3px 6px;font-size:12.5px;text-overflow:ellipsis}
+.barre select[data-f=periode]{width:150px}
+.barre select[data-f=decoupe]{width:88px}
+.barre select[data-f=magasin]{width:152px}
+.barre select[data-f=ajout]{width:120px}
+.barre .f.case{color:var(--fg)}
+.barre .f.ajout{margin-left:auto}
+.barre .f.coupee{color:var(--muted)}
+.notes{display:flex;flex-direction:column;gap:2px}
+.vide-ecran{background:var(--card);border:1px dashed var(--ctl);border-radius:10px;padding:18px;color:var(--muted)}
+.grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,500px),1fr));gap:12px;align-items:start}
+.carte{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.tete{display:flex;align-items:flex-start;gap:8px 10px;flex-wrap:wrap;justify-content:space-between}
+.tete h3{flex:1 1 200px;min-width:0;font-size:14.5px;padding-top:2px}
+.cmds{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto}
+.cmds select{max-width:none}
+.cmds .x{border:0;background:none;color:var(--muted);font-size:20px;line-height:1;padding:2px 6px}
+.options{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font-size:13px}
+.options .f{display:inline-flex;align-items:center;gap:6px;color:var(--muted);white-space:nowrap}
+.options .f select{color:var(--fg)}
+.options .f.case{color:var(--fg)}
+.options .f.coupee{color:var(--muted)}
+.chemin{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-size:13px}
+.chemin .sep{color:var(--muted)}
+.chemin button.lien{font-weight:500}
+.chemin .ici{font-weight:700}
+.chemin .revenir{margin-left:auto}
+.zone{position:relative;min-height:120px}
+.zone svg{display:block;width:100%;height:auto;overflow:visible}
+.zone text{font-family:var(--police)}
+.legende{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--muted)}
+.legende span{display:inline-flex;align-items:center;gap:6px}
+.puce{width:11px;height:11px;border-radius:3px;flex:none;display:inline-block}
+.puce.ligne{height:3px;width:16px;border-radius:2px}
+.puce.tirets{height:0;border-top:3px dashed var(--prev);width:16px;border-radius:0;background:none}
+.puce.diam{width:9px;height:9px;border-radius:1px;transform:rotate(45deg)}
+.astuce{font-size:12.5px;color:var(--muted)}
+.chiffres-carte{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:13px}
+th,td{padding:6px 9px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{font-size:12px;color:var(--muted);font-weight:600}
+tbody tr:last-child td,tbody tr:last-child th{border-bottom:0}
+tbody th{font-weight:400}
+td.neg{color:var(--ko)}td.pos{color:var(--ok)}
+.col{cursor:default;outline:none}
+.col.clic{cursor:pointer}
+.col .fond{fill:transparent}
+.col:hover .fond{fill:var(--survol)}
+.col:focus-visible .fond{fill:var(--survol);stroke:var(--fg);stroke-width:2}
+.zero-marque{fill:var(--muted)}
+.donut-wrap{display:flex;flex-wrap:wrap;gap:10px 20px;align-items:center}
+.donut-wrap ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;font-size:13px;flex:1 1 180px;min-width:0}
+.donut-wrap li{display:flex;gap:8px;align-items:baseline}
+.donut-wrap li .n{flex:1;min-width:0;overflow-wrap:anywhere}
+.donut-wrap li .p{color:var(--muted)}
+.donut-wrap li .m{font-variant-numeric:tabular-nums}
+.sl:hover{opacity:.85}
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--card);color:var(--fg);border:1px solid var(--ctl);border-radius:8px;padding:6px 9px;font-size:12.5px;line-height:1.45;max-width:260px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+#tip b{display:block;margin-bottom:2px}
+#tip .l{display:flex;gap:6px;align-items:center;white-space:nowrap}
+#tip .l .puce{width:9px;height:9px}
+.mini-note{font-size:12px;color:var(--muted)}
+
+/* Fenêtre : la liste filtrée des documents (ce que le clic sur un jour ouvre) */
+dialog{border:1px solid var(--ctl);border-radius:12px;padding:0;background:var(--card);color:var(--fg);width:min(760px,calc(100vw - 24px));max-height:calc(100vh - 32px)}
+dialog::backdrop{background:rgba(10,12,20,.55)}
+.dlg{display:flex;flex-direction:column;max-height:calc(100vh - 34px)}
+.dlg-tete{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;padding:14px 16px 8px}
+.dlg-corps{overflow:auto;padding:0 16px 8px;display:flex;flex-direction:column;gap:14px}
+.dlg-pied{padding:10px 16px 14px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--line)}
+.filtre-puce{display:inline-block;border:1px solid var(--ctl);border-radius:999px;padding:1px 9px;font-size:12px;color:var(--fg);margin-right:6px}
+
+/* Points à trancher */
+.questions{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:0 12px 12px 0;padding:16px 20px}
+.questions ol{margin:10px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:9px;max-width:112ch}
+.duo{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px;margin-top:10px}
+.duo .carte{background:var(--panel)}
+.seg{display:inline-flex;border:1px solid var(--ctl);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:5px 12px;background:var(--card)}
+.seg button[aria-pressed="true"]{background:var(--prim);color:var(--prim-fg);font-weight:600}
+.seg button+button{border-left:1px solid var(--ctl)}
+@media (max-width:640px){
+  body{padding-top:16px}
+  .decisions{padding:14px}
+  .piliqi{padding:10px}
+  .chiffre .v{font-size:17px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+<main class="page">
+  <header>
+    <h1>GRAPH-AN : l'écran complet des graphiques du tableau de bord, avec les nouveaux choix</h1>
+    <p class="intro">Le tableau de bord de la maquette « G1 + chiffres de G2 » que vous avez acceptée le 14/11, avec ce que vous avez décidé le 16/11 : barre des filtres sur une ligne, couleurs sous les chiffres clés, « Découper par » (mois, trimestre, année), cumul, écart en %, ventes par vendeur, « Cliquer pour voir le détail », tendance lissée, et les cartes ouvertes au départ. Tout fonctionne : les menus, les cases, les clics sur les barres. Les chiffres sont ceux d'une société fictive (Maison Ferrand, trois magasins) ; ils se calculent tous du même jeu de ventes, de jour en jour.</p>
+  </header>
+
+  <section class="decisions" aria-labelledby="t-dec">
+    <h2 id="t-dec">Ce que vous avez décidé, et où le voir</h2>
+    <p class="gris" style="margin-top:4px">Chaque bouton « Voir » règle l'écran ci-dessous sur le cas et vous y emmène. Rien d'autre n'est dans la maquette.</p>
+    <ol>
+      <li><b>Barre des filtres sur une ligne</b>, le libellé de chaque filtre à gauche de son menu <span class="source">(constat du 16/11, point 0)</span>. <span class="voir"><button class="petit" data-voir="barre">Voir</button></span></li>
+      <li><b>Couleurs sous les chiffres clés</b> : la variation sur un an est verte quand elle monte, rouge quand elle baisse ; cartes des chiffres plus compactes. <span class="voir"><button class="petit" data-voir="chiffres">Voir</button></span></li>
+      <li><b>Menu « Découper par »</b> : mois (par défaut), trimestre, année. <span class="voir"><button class="petit" data-voir="mois">Par mois</button><button class="petit" data-voir="trimestre">Par trimestre</button><button class="petit" data-voir="annee">Par année</button></span></li>
+      <li><b>Par année, sur 10 ans</b> : les 10 dernières années, les années vides du début cachées, une année vide au milieu à 0 ; quand l'exercice ne finit pas en décembre, une barre par exercice. <span class="voir"><button class="petit" data-voir="annee">Depuis 2019</button><button class="petit" data-voir="annee-vide">Année vide au milieu</button><button class="petit" data-voir="annee-premiere">Première année</button><button class="petit" data-voir="annee-juin">Exercice qui finit en juin</button></span></li>
+      <li><b>Par trimestre</b> : T1 à T4, ou les trimestres de l'exercice. <span class="voir"><button class="petit" data-voir="trimestre-annee">Année 2026</button><button class="petit" data-voir="trimestre-juin">Exercice qui finit en juin</button></span></li>
+      <li><b>Case « Cumul depuis le début de l'année »</b> (ou de l'exercice), avec, si « Comparer » est cochée, l'année précédente cumulée en pointillés. <span class="voir"><button class="petit" data-voir="cumul">Voir</button></span></li>
+      <li><b>« Écart en % sur un an »</b>, dans le menu de la carte : une barre par période, verte au-dessus de 0, rouge en dessous, « – » quand l'année précédente vaut 0. <span class="voir"><button class="petit" data-voir="ecart">Voir</button><button class="petit" data-voir="ecart-annee">Par année</button></span></li>
+      <li><b>Nouveau graphique « Ventes par vendeur »</b>, en barres couchées : le chiffre d'affaires HT net de chaque vendeur, avec son nom figé sur les ventes ; seulement les magasins où la personne voit toutes les ventes de l'équipe, une phrase grise pour les autres, jamais pour un vendeur ni un observateur. <span class="voir"><button class="petit" data-voir="vendeur">Voir</button><button class="petit" data-voir="vendeur-admin">Administrateur (un magasin non compté)</button><button class="petit" data-voir="vendeur-vendeur">Vendeur</button></span></li>
+      <li><b>« Cliquer pour voir le détail »</b> : un clic sur une barre découpe la période plus finement (année, puis mois, puis jours) ; un clic sur un jour ouvre la liste filtrée de ses documents ; « Revenir » remonte. <span class="voir"><button class="petit" data-voir="detail">Voir</button></span></li>
+      <li><b>« Tendance lissée (moyenne sur 3 mois) »</b>, « Ajouter la tendance » dans le menu de la carte. <span class="voir"><button class="petit" data-voir="tendance">Voir</button></span></li>
+      <li><b>Cartes ouvertes au départ</b> : sur le site réel, quelques cartes principales (plus « Factures à encaisser par ancienneté ») ; sur le site de démonstration, toutes les cartes que le compte peut voir ; une préférence déjà enregistrée par le compte prime. <span class="voir"><button class="petit" data-voir="reel">Site réel</button><button class="petit" data-voir="demo">Site de démonstration</button></span></li>
+      <li><b>« Comparer avec l'année précédente » grisée par année</b>, avec sa phrase grise <span class="source">(proposition de Claude, pas encore validée)</span>. <span class="voir"><button class="petit" data-voir="annee">Voir</button></span></li>
+      <li><b>Garder ou retirer « Chiffre d'affaires HT par an »</b> <span class="source">(à trancher : voir en bas de la page)</span>. <span class="voir"><button class="petit" data-voir="question-an">Voir</button></span></li>
+    </ol>
+    <p class="horsmaquette">Pas dans la maquette, comme vous l'avez décidé : découpage par semaine ou par jour, dates libres « Du … au … », magasins côte à côte, ventes par heure, objectif.</p>
+  </section>
+
+  <section class="pupitre" aria-label="Pupitre de la maquette">
+    <div class="pupitre-tete"><b>Pupitre de la maquette</b><span class="gris">Ces réglages ne sont pas dans PILIQI : ils servent à montrer chaque cas. Changer le site ou la personne remet l'écran au départ.</span></div>
+    <div class="ligne">
+      <span class="radios" role="radiogroup" aria-label="Site">
+        <label><input type="radio" name="site" value="reel" checked> Site réel</label>
+        <label><input type="radio" name="site" value="demo"> Site de démonstration</label>
+      </span>
+      <label>Qui regarde
+        <select id="p-qui">
+          <option value="societe">Propriétaire : espace de la société (3 magasins)</option>
+          <option value="magasin">Panneau du magasin Halles</option>
+          <option value="admin">Administrateur coché : Halles et République, voit toutes les ventes de Halles seulement</option>
+          <option value="cabinet">Cabinet lié : page « Graphiques » du client</option>
+          <option value="ec">Expert-comptable déclaré : Halles et République</option>
+          <option value="vendeur">Vendeur ou observateur</option>
+        </select></label>
+      <label>Historique de la société
+        <select id="p-hist">
+          <option value="A">Magasin ouvert depuis 2019, 8 années de ventes</option>
+          <option value="B">Une année vide au milieu (2022), rien avant 2018</option>
+          <option value="C">Première année (2026)</option>
+        </select></label>
+      <label>L'exercice finit en
+        <select id="p-fin"><option value="12">décembre</option><option value="6">juin</option></select></label>
+      <label>Mode
+        <select id="p-mode"><option value="auto">Comme l'appareil</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
+      <button type="button" id="p-depart">Remettre l'écran au départ</button>
+    </div>
+  </section>
+
+  <section class="piliqi" id="ecran" aria-label="Écran de PILIQI : tableau de bord">
+    <div class="fil" id="fil"></div>
+    <div class="chiffres" id="chiffres" aria-label="Chiffres clés du mois"></div>
+    <div class="barre" id="barre"></div>
+    <div class="notes" id="notes"></div>
+    <div class="grille" id="grille"></div>
+  </section>
+
+  <section class="questions" id="questions" aria-labelledby="t-q">
+    <h2 id="t-q">À trancher avec vous</h2>
+    <ol>
+      <li id="q-an"><b>Garder ou retirer « Chiffre d'affaires HT par an ».</b> Avec « Découper par : année », la carte « Chiffre d'affaires HT par mois » montre les mêmes barres sur 10 ans, avec en plus le trimestre, le cumul, l'écart en %, la tendance et le détail. Le graphique existant en montre cinq. Choisissez, l'écran ci-dessus suit.
+        <div style="margin-top:8px"><span class="seg" role="group" aria-label="Chiffre d'affaires HT par an"><button type="button" data-an="garde" aria-pressed="true">Je le garde</button><button type="button" data-an="retire" aria-pressed="false">Je le retire</button></span></div>
+        <div class="duo" id="duo-an"></div>
+      </li>
+      <li>Les autres points sont dans le fichier des changements (« Questions ouvertes ») : ce que devient la période quand on découpe par année, les trimestres de « 12 derniers mois », la couleur de la ligne « dont … en retard », et ce que les nouveaux choix font entre eux.</li>
+    </ol>
+  </section>
+</main>
+
+<div id="tip" role="tooltip" hidden></div>
+<dialog id="dlg" aria-labelledby="dlg-t"></dialog>
+
+<script>
+(function(){
+'use strict';
+/* ===== Outils de format ===== */
+const NB = ' ';
+const E = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const eur = (c) => (c / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+const eur0 = (c) => Math.round(c / 100).toLocaleString('fr-FR') + NB + '€';
+const nbre = (n) => Math.round(n).toLocaleString('fr-FR');
+const MOINS = '−';
+const pc = (p) => (p > 0 ? '+' : p < 0 ? MOINS : '') + Math.abs(p).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + NB + '%';
+const pcSimple = (p) => p.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + NB + '%';
+const pctDe = (cur, prev) => (prev === 0 || prev === null || cur === null ? null : Math.round(((cur - prev) * 1000) / prev) / 10);
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/* ===== Calendrier : un jour est un rang depuis le 1er janvier 2017 ; un mois est année × 12 + mois (0 à 11) ===== */
+const MS = 864e5;
+const D0 = Date.UTC(2017, 0, 1);
+const di = (y, m, d) => Math.round((Date.UTC(y, m - 1, d) - D0) / MS);
+const dd = (i) => new Date(D0 + i * MS);
+const AUJ = di(2026, 11, 22);
+const ANNEE_AUJ = 2026;
+const MOIS_AUJ = ANNEE_AUJ * 12 + 10;
+const MOIS_ABR = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+const MOIS_LONG = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const JOURS_LONG = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+const premier = (mA) => di(Math.floor(mA / 12), (mA % 12) + 1, 1);
+const dernier = (mA) => premier(mA + 1) - 1;
+const anDe = (mA) => Math.floor(mA / 12);
+const moisDe = (mA) => mA % 12;
+const libMois = (mA) => MOIS_LONG[moisDe(mA)] + ' ' + anDe(mA);
+const libJour = (i) => { const x = dd(i); return JOURS_LONG[x.getUTCDay()] + ' ' + x.getUTCDate() + ' ' + MOIS_LONG[x.getUTCMonth()] + ' ' + x.getUTCFullYear(); };
+const libJourCourt = (i) => { const x = dd(i); return String(x.getUTCDate()).padStart(2, '0') + '/' + String(x.getUTCMonth() + 1).padStart(2, '0') + '/' + x.getUTCFullYear(); };
+
+/* ===== Les trois magasins de Maison Ferrand ===== */
+const MAGS = {
+  H: { id: 'H', nom: 'Halles', code: 'HALLES', base: 62000, wd: [0.35, 0.9, 0.95, 1, 1.05, 1.2, 1.5], tva: 0.19, panier: 3600, marge: 0.52, graine: 11, pro: 0.14 },
+  R: { id: 'R', nom: 'République', code: 'REPUB', base: 38000, wd: [0.3, 0.85, 0.95, 1, 1.05, 1.25, 1.45], tva: 0.19, panier: 2900, marge: 0.5, graine: 23, pro: 0.1 },
+  F: { id: 'F', nom: 'Fort-de-France', code: 'FDF', base: 19000, wd: [0, 0.9, 0.95, 1, 1.05, 1.3, 1.5], tva: 0.095, panier: 3100, marge: 0.55, graine: 37, pro: 0.06 }
+};
+const IDS = ['H', 'R', 'F'];
+const FOREVER = 1e9;
+const HIST = {
+  A: { H: [[di(2019, 3, 1), FOREVER]], R: [[di(2022, 2, 1), FOREVER]], F: [[di(2024, 4, 1), FOREVER]] },
+  B: { H: [[di(2018, 2, 1), di(2021, 12, 31)], [di(2023, 1, 1), FOREVER]], R: [[di(2023, 6, 1), FOREVER]], F: [[di(2024, 4, 1), FOREVER]] },
+  C: { H: [[di(2026, 2, 3), FOREVER]], R: [[di(2026, 6, 1), FOREVER]], F: [[di(2026, 9, 1), FOREVER]] }
+};
+const YF = { 2017: 0.5, 2018: 0.52, 2019: 0.55, 2020: 0.45, 2021: 0.62, 2022: 0.74, 2023: 0.84, 2024: 0.92, 2025: 0.97, 2026: 1.08 };
+const SAI = [0.82, 0.78, 0.9, 0.95, 1, 1, 0.95, 0.72, 1, 1.05, 1.2, 1.5];
+const VENDEURS = {
+  H: [
+    { jusque: di(2025, 9, 30), parts: [['Inès Garnier', 0.4], ['Hugo Petit', 0.35], ['Sandrine Colin', 0.25]] },
+    { jusque: FOREVER, parts: [['Inès Garnier', 0.55], ['Hugo Petit', 0.45]] }
+  ],
+  R: [{ jusque: FOREVER, parts: [['Léa Bertrand', 0.6], ['Nicolas Faure', 0.4]] }],
+  F: [{ jusque: FOREVER, parts: [['Joëlle Marie-Sainte', 0.58], ['Kévin Louisy', 0.42]] }]
+};
+const partsDuJour = (id, i) => VENDEURS[id].find((p) => i <= p.jusque).parts;
+
+/* Le hasard est écrit une fois pour toutes : la même maquette montre toujours les mêmes chiffres. */
+function alea(a, b) {
+  let h = (Math.imul(a, 374761393) + Math.imul(b, 668265263)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+const CHAMPS = ['ca', 'vte', 'ttc', 'achats', 'nb', 'tvaC', 'tvaD', 'marge', 'avoirs'];
+
+function genere(h) {
+  const out = {};
+  const n = AUJ + 1;
+  for (const id of IDS) {
+    const M = MAGS[id];
+    const fen = HIST[h][id];
+    const raw = {};
+    CHAMPS.forEach((c) => { raw[c] = new Float64Array(n); });
+    const stock = new Float64Array(n);
+    const wdSomme = M.wd.reduce((a, b) => a + b, 0);
+    let niveau = 0;
+    let avant = false;
+    for (let i = 0; i < n; i++) {
+      const actif = fen.some(([a, b]) => i >= a && i <= b);
+      if (!actif) { niveau = 0; avant = false; stock[i] = 0; continue; }
+      const x = dd(i);
+      const y = x.getUTCFullYear();
+      const m0 = x.getUTCMonth();
+      const dow = x.getUTCDay();
+      const sd = M.graine * 100003 + i;
+      const yf = YF[y];
+      const sai = SAI[m0];
+      const coutJour = M.base * yf * 0.48 * (wdSomme / 7);
+      if (!avant) { niveau = Math.round(coutJour * 62); avant = true; }
+      const attendu = M.base * yf * sai * M.wd[dow];
+      const vte = attendu === 0 ? 0 : Math.round(attendu * (0.78 + 0.44 * alea(sd, 1)));
+      const ttc = Math.round(vte * (1 + M.tva));
+      const nb = vte === 0 ? 0 : Math.max(1, Math.round(ttc / (M.panier * (0.85 + 0.3 * alea(sd, 3)))));
+      const marge = Math.round(vte * (M.marge + 0.06 * (alea(sd, 4) - 0.5)));
+      const avoirs = vte > 0 && alea(sd, 5) > 0.93 ? Math.round(vte * (0.12 + 0.35 * alea(sd, 6))) : 0;
+      const ca = vte - avoirs;
+      const cogs = vte - marge;
+      let achats = 0;
+      if (dow === 2 || dow === 4) {
+        const semaine = M.base * yf * sai * wdSomme * 0.48;
+        const cible = 70 * coutJour;
+        achats = Math.max(0, Math.round((cible - niveau) * 0.35 + semaine * 0.5 * (0.75 + 0.5 * alea(sd, 7))));
+        /* La commande de Noël 2026 a été passée en octobre : novembre achète moins que novembre 2025. */
+        if (y === 2026 && m0 === 9) achats = Math.round(achats * 1.15);
+        if (y === 2026 && m0 === 10) achats = Math.round(achats * 0.88);
+      }
+      niveau = Math.max(0, niveau + achats - cogs);
+      raw.ca[i] = ca; raw.vte[i] = vte; raw.ttc[i] = ttc; raw.achats[i] = achats; raw.nb[i] = nb;
+      raw.tvaC[i] = Math.round(ca * M.tva); raw.tvaD[i] = Math.round(achats * M.tva);
+      raw.marge[i] = marge - Math.round(avoirs * 0.5); raw.avoirs[i] = avoirs;
+      stock[i] = niveau;
+    }
+    const P = {};
+    CHAMPS.forEach((c) => {
+      const p = new Float64Array(n + 1);
+      for (let i = 0; i < n; i++) p[i + 1] = p[i] + raw[c][i];
+      P[c] = p;
+    });
+    out[id] = { raw, P, stock };
+  }
+  return out;
+}
+const CACHE = {};
+const donnees = (h) => CACHE[h] || (CACHE[h] = genere(h));
+
+/* Somme d'un champ, pour des magasins, du jour d0 au jour d1 (jamais au-delà d'aujourd'hui). */
+function som(h, champ, ids, d0, d1) {
+  const D = donnees(h);
+  const f = Math.min(d1, AUJ);
+  const a = Math.max(d0, 0);
+  if (a > f) return 0;
+  let s = 0;
+  for (const id of ids) s += D[id].P[champ][f + 1] - D[id].P[champ][a];
+  return s;
+}
+function niveauStock(h, ids, d) {
+  const D = donnees(h);
+  const f = Math.min(d, AUJ);
+  let s = 0;
+  for (const id of ids) s += D[id].stock[f];
+  return s;
+}
+/* Les ventes de chaque vendeur sur une période, avec le nom figé sur chaque vente ; le dernier vendeur du jour reçoit le reste, pour que la somme soit exacte. */
+function ventesParVendeur(h, ids, d0, d1) {
+  const D = donnees(h);
+  const f = Math.min(d1, AUJ);
+  const tot = new Map();
+  for (const id of ids) {
+    for (let i = Math.max(d0, 0); i <= f; i++) {
+      const ca = D[id].raw.ca[i];
+      if (ca === 0) continue;
+      const parts = partsDuJour(id, i);
+      let reste = ca;
+      parts.forEach(([nom, p], k) => {
+        const v = k === parts.length - 1 ? reste : Math.round(ca * p);
+        reste -= v;
+        tot.set(nom, (tot.get(nom) || 0) + v);
+      });
+    }
+  }
+  return [...tot.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+/* ===== L'état de l'écran, et ce que chaque personne peut voir ===== */
+const S = { site: 'reel', qui: 'societe', hist: 'A', fin: 12, periode: '12m', decoupe: 'mois', magasin: 'tous', comparer: false, cumul: false, anRetire: false, cartes: [], opt: {} };
+
+const QUI = {
+  societe: { espace: 'Espace de la société', sous: 'Tableau de bord', mags: ['H', 'R', 'F'], ventes: ['H', 'R', 'F'], achats: ['H', 'R', 'F'], menuMag: true },
+  magasin: { espace: 'Panneau du magasin Halles', sous: 'Tableau de bord', mags: ['H'], ventes: ['H'], achats: ['H'], menuMag: false },
+  admin: { espace: 'Espace de la société', sous: 'Tableau de bord (administrateur)', mags: ['H', 'R'], ventes: ['H'], achats: ['H', 'R'], menuMag: true },
+  cabinet: { espace: 'Espace du cabinet', sous: 'Client Maison Ferrand · Graphiques', mags: ['H', 'R', 'F'], ventes: ['H', 'R', 'F'], achats: ['H', 'R', 'F'], menuMag: true },
+  ec: { espace: 'Tableau de bord de la société', sous: 'Expert-comptable déclaré, lecture seule', mags: ['H', 'R'], ventes: ['H', 'R'], achats: ['H', 'R'], menuMag: true },
+  vendeur: { espace: 'Tableau de bord du magasin', sous: 'Vendeur ou observateur', mags: ['H'], ventes: [], achats: [], menuMag: false }
+};
+const NOM_MAG = (id) => MAGS[id].nom;
+const QUI_ACTIF = () => QUI[S.qui];
+
+/* ===== Les périodes ===== */
+function exerciceDe(mA) {
+  if (S.fin === 12) { const s = anDe(mA) * 12; return [s, s + 11]; }
+  const f = moisDe(mA) <= 5 ? anDe(mA) * 12 + 5 : (anDe(mA) + 1) * 12 + 5;
+  return [f - 11, f];
+}
+const nomExercice = (d, f) => (S.fin === 12 ? String(anDe(f)) : anDe(d) + '-' + anDe(f));
+const nomExerciceCourt = (d, f) => (S.fin === 12 ? String(anDe(f)) : anDe(d) + '-' + String(anDe(f)).slice(2));
+const libPeriodeMois = (a, b) => MOIS_ABR[moisDe(a)] + ' ' + anDe(a) + ' à ' + MOIS_ABR[moisDe(b)] + ' ' + anDe(b);
+const termeAn = () => (S.fin === 12 ? 'année' : 'exercice');
+
+function fenetre() {
+  const [d, f] = exerciceDe(MOIS_AUJ);
+  if (S.decoupe === 'annee') return [d - 108, f];
+  if (S.periode === '12m') return [MOIS_AUJ - 11, MOIS_AUJ];
+  if (S.periode === 'annee') return [d, f];
+  return [d - 12, f - 12];
+}
+const fenetreSansDecoupe = () => {
+  const [d, f] = exerciceDe(MOIS_AUJ);
+  if (S.periode === '12m') return [MOIS_AUJ - 11, MOIS_AUJ];
+  return S.periode === 'annee' ? [d, f] : [d - 12, f - 12];
+};
+const fenetreCumul = () => (S.periode === '12m' ? exerciceDe(MOIS_AUJ) : fenetreSansDecoupe());
+const joursDeLaFenetre = () => { const [a, b] = fenetre(); return [premier(a), dernier(b)]; };
+const libFenetre = () => {
+  if (S.decoupe === 'annee') return '10 dernières années';
+  if (S.periode === '12m') return '12 derniers mois';
+  const [d, f] = fenetreSansDecoupe();
+  const prec = S.periode === 'prec';
+  return S.fin === 12 ? 'Année ' + anDe(f) + (prec ? ' (exercice précédent)' : ' (exercice en cours)') : (prec ? 'Exercice précédent' : 'Exercice en cours') + ' (' + libPeriodeMois(d, f).replace(' à ', ' à ') + ')';
+};
+
+/* ===== Les barres : un mois, un trimestre, une année, un jour ===== */
+function annoter(liste) {
+  liste.forEach((b, i) => { if (i === 0 || moisDe(b.m0) === 0) b.l2 = String(anDe(b.m0)); });
+  return liste;
+}
+function bMois(mA) {
+  const d0 = premier(mA), d1 = dernier(mA);
+  return { niveau: 'mois', m0: mA, m1: mA, d0, d1, futur: d0 > AUJ, partiel: d0 <= AUJ && d1 > AUJ, l1: MOIS_ABR[moisDe(mA)], l2: null, tip: cap(libMois(mA)) + (d0 <= AUJ && d1 > AUJ ? ' (en cours, au ' + libJourCourt(AUJ) + ')' : ''), nom: libMois(mA) };
+}
+function bJour(i) {
+  const x = dd(i);
+  return { niveau: 'jour', d0: i, d1: i, futur: i > AUJ, partiel: false, l1: String(x.getUTCDate()), l2: null, tip: cap(libJour(i)), nom: libJour(i), jour: i };
+}
+function bTrimestre(m0, k, glissant) {
+  const m1 = m0 + 2, d0 = premier(m0), d1 = dernier(m1);
+  const [ed, ef] = exerciceDe(m0);
+  const an = nomExerciceCourt(ed, ef);
+  const b = { niveau: 'trimestre', m0, m1, d0, d1, futur: d0 > AUJ, partiel: d0 <= AUJ && d1 > AUJ };
+  if (glissant) {
+    b.l1 = MOIS_ABR[moisDe(m0)] + '–' + MOIS_ABR[moisDe(m1)];
+    b.l2 = k === 0 || anDe(m0) !== anDe(m1) ? (anDe(m0) === anDe(m1) ? String(anDe(m0)) : anDe(m0) + '–' + String(anDe(m1)).slice(2)) : null;
+    b.tip = cap(libMois(m0)) + ' à ' + libMois(m1);
+    b.nom = MOIS_ABR[moisDe(m0)] + ' ' + anDe(m0) + ' à ' + MOIS_ABR[moisDe(m1)] + ' ' + anDe(m1);
+  } else {
+    b.l1 = 'T' + (k + 1);
+    b.l2 = k === 0 ? an : null;
+    b.tip = (k === 0 ? '1er' : k + 1 + 'e') + ' trimestre ' + an + ' (' + MOIS_ABR[moisDe(m0)] + '–' + MOIS_ABR[moisDe(m1)] + ')';
+    b.nom = 'T' + (k + 1) + ' ' + an;
+  }
+  return b;
+}
+function bAnnee(d, f) {
+  const d0 = premier(d), d1 = dernier(f);
+  const nom = nomExercice(d, f);
+  return { niveau: 'annee', m0: d, m1: f, d0, d1, futur: d0 > AUJ, partiel: d0 <= AUJ && d1 > AUJ, l1: nomExerciceCourt(d, f), l2: null,
+    tip: S.fin === 12 ? 'Année ' + nom + (d0 <= AUJ && d1 > AUJ ? ' (en cours, au ' + libJourCourt(AUJ) + ')' : '') : 'Exercice ' + nom + ' (' + libPeriodeMois(d, f) + ')' + (d0 <= AUJ && d1 > AUJ ? ', en cours' : ''),
+    nom: S.fin === 12 ? nom : 'Exercice ' + nom };
+}
+function bucketsBase(cumul) {
+  const [m0, m1] = cumul ? fenetreCumul() : fenetre();
+  if (S.decoupe === 'annee') {
+    const [, f] = exerciceDe(MOIS_AUJ);
+    return Array.from({ length: 10 }, (_, k) => bAnnee(f - 12 * (9 - k) - 11, f - 12 * (9 - k)));
+  }
+  if (S.decoupe === 'trimestre') {
+    const glissant = !cumul && S.periode === '12m';
+    return Array.from({ length: 4 }, (_, k) => bTrimestre(m0 + 3 * k, k, glissant));
+  }
+  const l = [];
+  for (let m = m0; m <= m1; m++) l.push(bMois(m));
+  return annoter(l);
+}
+function sousBuckets(b) {
+  if (b.niveau === 'jour') return [];
+  if (b.niveau === 'mois') { const l = []; for (let i = b.d0; i <= b.d1; i++) l.push(bJour(i)); return l; }
+  const l = [];
+  for (let m = b.m0; m <= b.m1; m++) l.push(bMois(m));
+  return annoter(l);
+}
+function bPrec(b) {
+  const m0 = b.m0 - 12, m1 = b.m1 - 12;
+  return { d0: premier(m0), d1: b.partiel ? di(ANNEE_AUJ - 1, 11, 22) : dernier(m1) };
+}
+
+/* ===== Ce qu'une série compte ===== */
+function val(s, mags, d0, d1, debut) {
+  if (d0 > AUJ) return null;
+  const h = S.hist, a = debut === undefined || debut === null ? d0 : debut;
+  if (s.mode === 'niveau') return niveauStock(h, mags, d1);
+  if (s.mode === 'ratio') { const nu = som(h, s.num, mags, a, d1), de = som(h, s.den, mags, a, d1); return de === 0 ? 0 : Math.round(nu / de); }
+  if (s.mode === 'diff') return som(h, s.a, mags, a, d1) - som(h, s.b, mags, a, d1);
+  return som(h, s.champ, mags, a, d1);
+}
+
+/* ===== Les magasins comptés : ceux où la personne voit toutes les sources de la carte ===== */
+const SRC_LIB = { ventes: 'toutes les ventes', achats: 'les achats' };
+function perim(c) {
+  const q = QUI_ACTIF();
+  const base = S.magasin === 'tous' ? q.mags : q.mags.filter((m) => m === S.magasin);
+  const srcs = [].concat(c.src);
+  const ok = base.filter((m) => srcs.every((s) => q[s].includes(m)));
+  const manque = new Set();
+  base.filter((m) => !ok.includes(m)).forEach((m) => srcs.forEach((s) => { if (!q[s].includes(m)) manque.add(s); }));
+  const n = base.length - ok.length;
+  const quoi = [...manque].map((s) => SRC_LIB[s]).join(' ni ');
+  const phrase = n === 0 ? null : n === 1 ? "1 magasin n'est pas compté : vous n'y voyez pas " + quoi + '.' : n + ' magasins ne sont pas comptés : vous n’y voyez pas ' + quoi + '.';
+  return { mags: ok, phrase };
+}
+
+/* ===== Le catalogue : les dix-neuf graphiques d'aujourd'hui, plus « Ventes par vendeur » ===== */
+const TS = ['bar', 'line', 'area'];
+const REP = ['doughnut', 'pie', 'bar', 'barh'];
+const CLASSEMENT = ['barh', 'bar', 'doughnut', 'pie'];
+const NOMS_TYPES = { bar: 'Barres', line: 'Lignes', area: 'Aires', doughnut: 'Anneau', pie: 'Camembert', barh: 'Barres couchées', radar: 'Radar' };
+const S_VENTES = (nom) => ({ nom, mode: 'somme', champ: 'ca' });
+const CAT = [
+  { id: 'ca', titre: 'Chiffre d’affaires HT par mois', par: true, periodique: true, types: TS, src: ['ventes'], liste: 'ventes', princ: 0,
+    texte: 'Les ventes HT émises, moins les avoirs émis, {pas}.', series: [S_VENTES('Chiffre d’affaires HT')] },
+  { id: 'va', titre: 'Ventes et achats HT par mois', par: true, periodique: true, types: TS, src: ['ventes', 'achats'], liste: 'ventes-achats', princ: 0,
+    texte: 'Les ventes HT nettes des avoirs et les achats de marchandises HT (factures d’achat validées moins avoirs fournisseur), {pas}.',
+    series: [S_VENTES('Ventes HT'), { nom: 'Achats HT', mode: 'somme', champ: 'achats' }] },
+  { id: 'tva', titre: 'TVA à payer par mois (estimation)', par: true, periodique: true, types: TS, src: ['ventes', 'achats'], liste: 'ventes', princ: 2,
+    texte: 'La TVA collectée des ventes (nette des avoirs), la TVA déductible des achats (nette des avoirs fournisseur) et leur différence, {pas}. Estimation tirée de vos documents.',
+    series: [{ nom: 'Collectée', mode: 'somme', champ: 'tvaC' }, { nom: 'Déductible', mode: 'somme', champ: 'tvaD' }, { nom: 'À payer', mode: 'diff', a: 'tvaC', b: 'tvaD', ligne: true }] },
+  { id: 'an', titre: 'Chiffre d’affaires HT par an', periodique: true, special: 'an', types: ['bar', 'line'], src: ['ventes'], liste: 'ventes', princ: 0,
+    texte: 'Les ventes HT nettes des avoirs de chaque année civile, qui est aussi l’exercice quand il finit en décembre, ou de chaque exercice quand la période choisie est un exercice.', series: [S_VENTES('Chiffre d’affaires HT')] },
+  { id: 'marge', titre: 'Marge brute HT par mois', par: true, periodique: true, types: TS, src: ['ventes', 'achats'], liste: 'ventes', princ: 0,
+    texte: 'Les ventes HT des articles moins leur coût moyen d’achat au moment de la vente, rejoué depuis le grand livre du stock, {pas} ; le taux de marge en info-bulle.',
+    series: [{ nom: 'Marge brute HT', mode: 'somme', champ: 'marge' }] },
+  { id: 'mag', titre: 'Chiffre d’affaires par magasin', rep: 'mag', types: CLASSEMENT, defType: 'doughnut', src: ['ventes'], texte: 'La part de chaque magasin dans les ventes HT nettes de la période.' },
+  { id: 'taux', titre: 'Ventes par taux de TVA', rep: 'taux', types: REP, src: ['ventes'], texte: 'Les ventes HT nettes des avoirs, taux par taux.' },
+  { id: 'pp', titre: 'Particuliers et professionnels', rep: 'pp', types: REP, src: ['ventes'], texte: 'Les ventes HT nettes aux particuliers et aux professionnels, selon le type du client figé à l’émission.' },
+  { id: 'modes', titre: 'Encaissements par mode de paiement', rep: 'modes', types: REP, src: ['ventes'], texte: 'Les encaissements TTC par mode de paiement, contre-passations déduites ; le crédit d’avoir utilisé à part.' },
+  { id: 'prod', titre: 'Meilleurs produits', rep: 'prod', types: CLASSEMENT, src: ['ventes'], texte: 'Les 10 produits ou services au plus fort chiffre d’affaires HT net, ou les plus vendus en quantité.' },
+  { id: 'cli', titre: 'Meilleurs clients', rep: 'cli', types: CLASSEMENT, src: ['ventes'], texte: 'Les 10 clients au plus fort chiffre d’affaires HT net, sans le client comptoir.' },
+  { id: 'four', titre: 'Achats par fournisseur', rep: 'four', types: CLASSEMENT, src: ['achats'], texte: 'Les 10 fournisseurs aux plus forts achats HT nets (factures d’achat validées moins avoirs fournisseur).' },
+  { id: 'anc', titre: 'Factures à encaisser par ancienneté', rep: 'anc', types: ['bar', 'doughnut', 'pie', 'barh'], src: ['ventes'], texte: 'Ce qui reste dû à ce jour : à échoir, puis en retard de 1 à 30 jours, de 31 à 60 jours et de plus de 60 jours, en jours du calendrier du magasin.' },
+  { id: 'stock', titre: 'Valeur du stock au coût moyen', par: false, periodique: true, flux: false, types: TS, src: ['achats'], liste: null, princ: 0,
+    texte: 'La valeur HT du stock au coût moyen à la fin de chaque période, rejouée depuis le grand livre du stock.', series: [{ nom: 'Valeur du stock', mode: 'niveau' }] },
+  { id: 'panier', titre: 'Nombre de ventes et panier moyen', periodique: true, types: ['bar', 'line'], src: ['ventes'], liste: 'ventes', princ: 0,
+    texte: 'Le nombre de tickets et de factures émis, et leur montant moyen TTC (axe de droite).',
+    series: [{ nom: 'Nombre de ventes', mode: 'somme', champ: 'nb', unite: 'nb' }, { nom: 'Panier moyen TTC', mode: 'ratio', num: 'ttc', den: 'nb', ligne: true, axe: 'd' }] },
+  { id: 'avoirs', titre: 'Avoirs émis par mois', par: true, periodique: true, types: TS, src: ['ventes'], liste: 'avoirs', princ: 0,
+    texte: 'Le montant HT des avoirs émis, {pas}.', series: [{ nom: 'Avoirs HT', mode: 'somme', champ: 'avoirs' }] },
+  { id: 'jours', titre: 'Ventes par jour de la semaine', rep: 'jours', types: ['bar', 'line', 'radar'], src: ['ventes'], texte: 'Le chiffre d’affaires HT net moyen de chaque jour, du lundi au dimanche, sur la période.' },
+  { id: 'as', titre: 'Articles et services', rep: 'as', types: REP, src: ['ventes'], texte: 'La part des articles et des services dans les ventes HT nettes.' },
+  { id: 'ecart', titre: 'Écart des prix d’achat par mois', rep: 'ecart', types: ['bar'], src: ['achats'], texte: 'Ce que les achats d’un même produit ont coûté de plus ou de moins que son premier achat du mois, produit par produit, jamais entre deux magasins.' },
+  { id: 'vend', titre: 'Ventes par vendeur', rep: 'vend', nouveau: true, types: CLASSEMENT, defType: 'barh', src: ['ventes'], texte: 'Le chiffre d’affaires HT net de chaque compte qui a vendu, avec le nom figé sur ses ventes ; seulement les magasins où vous voyez toutes les ventes de l’équipe.' }
+];
+const CARTE = (id) => CAT.find((c) => c.id === id);
+const typeDefaut = (c) => c.defType || c.types[0];
+
+function visible(c) {
+  const q = QUI_ACTIF();
+  if (S.qui === 'vendeur') return false;
+  if (c.id === 'an' && S.anRetire) return false;
+  if (c.id === 'mag' && q.mags.length < 2) return false;
+  return c.src.some((s) => q[s].length > 0);
+}
+function cartesDepart() {
+  const permises = CAT.filter(visible).map((c) => c.id);
+  if (S.site === 'demo') return permises;
+  return ['va', 'tva', 'ca', 'mag', 'anc'].filter((id) => permises.includes(id));
+}
+function opt(id) {
+  if (!S.opt[id]) { const c = CARTE(id); S.opt[id] = { type: typeDefaut(c), mode: 'montants', tendance: false, drill: [], chiffres: false, mesure: 'ca' }; }
+  return S.opt[id];
+}
+
+/* ===== Les graphiques par période ===== */
+const pasTxt = (n) => ({ mois: 'mois par mois', trimestre: 'trimestre par trimestre', annee: S.fin === 12 ? 'année par année' : 'exercice par exercice', jour: 'jour par jour' }[n]);
+const pasPlur = (n) => ({ mois: 'mois', trimestre: 'trimestres', annee: S.fin === 12 ? 'ans' : 'exercices', jour: 'jours' }[n]);
+const pasPar = (n) => ({ mois: 'mois', trimestre: 'trimestre', annee: S.fin === 12 ? 'année' : 'exercice', jour: 'jour' }[n]);
+
+function vuePeriodique(c) {
+  const o = opt(c.id);
+  const { mags, phrase } = perim(c);
+  const enDetail = o.drill.length > 0;
+  const gros = c.special === 'an';
+  const cumulPossible = S.cumul && S.decoupe !== 'annee' && c.flux !== false && !gros;
+  const ecart = !enDetail && o.mode === 'ecart';
+  const cumul = !enDetail && !ecart && cumulPossible;
+  const notes = [];
+  if (phrase) notes.push(phrase);
+  let bks;
+  if (enDetail) bks = sousBuckets(o.drill[o.drill.length - 1]);
+  else if (gros) bks = bucketsAn();
+  else bks = bucketsBase(cumulPossible && !ecart);
+  const niveau = bks.length ? bks[0].niveau : S.decoupe;
+  const princ = c.series[c.princ];
+  const debut = cumul ? bks[0].d0 : null;
+  const calcul = (b, s, dd0) => (b.futur ? null : val(s, mags, b.d0, b.d1, dd0));
+  const montants = c.series.map((s) => bks.map((b) => calcul(b, s, cumul && s.mode !== 'niveau' ? debut : null)));
+  /* Les années vides du début ne s'affichent pas ; une année vide au milieu reste à 0. */
+  let depart = 0;
+  if (niveau === 'annee' && !enDetail) {
+    while (depart < bks.length && montants.every((m) => m[depart] === null || m[depart] === 0)) depart++;
+    if (depart > 0) notes.push(S.fin === 12 ? (depart === 1 ? 'Une année plus ancienne sans donnée n’est pas affichée.' : depart + ' années plus anciennes sans donnée ne sont pas affichées.') : (depart === 1 ? 'Un exercice plus ancien sans donnée n’est pas affiché.' : depart + ' exercices plus anciens sans donnée ne sont pas affichés.'));
+  }
+  bks = bks.slice(depart);
+  const mont = montants.map((m) => m.slice(depart));
+  const vide = bks.length === 0 || mont.every((m) => m.every((v) => v === null || v === 0));
+  const pasLib = niveau;
+  const titre = c.par ? c.titre.replace('par mois', 'par ' + pasPar(pasLib)) : c.titre;
+  const series = [];
+  const tips = bks.map(() => []);
+  const legende = [];
+  let tableau;
+  const dispo = { ecart: !enDetail, tendance: !enDetail && !ecart && !cumul };
+  if (ecart) {
+    const prev = bks.map((b) => (b.futur ? null : val(princ, mags, bPrec(b).d0, bPrec(b).d1)));
+    const cur = mont[c.princ];
+    const pcts = bks.map((b, i) => (cur[i] === null ? null : pctDe(cur[i], prev[i])));
+    const tirets = new Set();
+    pcts.forEach((p, i) => { if (!bks[i].futur && p === null) tirets.add(i); });
+    series.push({ nom: 'Écart sur un an', valeurs: pcts, unite: 'pct', axe: 'g', forme: 'bar', couleur: 0, signe: true });
+    tableau = { tete: ['', 'Écart sur un an', bks[0] && bks[0].niveau === 'annee' ? 'Cette ' + termeAn() : 'Cette période', 'Un an plus tôt'],
+      lignes: bks.map((b, i) => [b.tip, pcts[i] === null ? '–' : pc(pcts[i]), cur[i] === null ? '–' : fmtU(cur[i], princ.unite), prev[i] === null ? '–' : fmtU(prev[i], princ.unite)]) };
+    notes.push('Écart en % sur un an : chaque barre compare la période au même moment un an plus tôt ; « – » quand cette année-là vaut 0.' + (bks.some((b) => b.partiel) ? ' La période en cours se compare aux mêmes jours de l’an dernier.' : ''));
+    legende.push({ t: 'Au-dessus de 0 : en hausse sur un an', puce: 'ok' }, { t: 'En dessous de 0 : en baisse', puce: 'ko' });
+    return { kind: 'cart', c, titre, bks, series, tirets, vide, notes, legende, tableau, niveau, enDetail, dispo, ecart, cumul, drillable: true, unitG: 'pct', pasLib, prevVals: prev, curVals: cur, mags };
+  }
+  c.series.forEach((s, k) => {
+    const forme = s.ligne ? 'line' : o.type === 'line' ? 'line' : o.type === 'area' ? 'area' : 'bar';
+    series.push({ nom: s.nom, valeurs: mont[k], unite: s.unite || 'eur', axe: s.axe || 'g', forme: cumul && forme === 'bar' ? 'line' : forme, couleur: k });
+  });
+  const cp = series[c.princ];
+  const compare = S.comparer && !enDetail && !gros && (S.decoupe !== 'annee');
+  if (compare && !cumul) {
+    const vals = bks.map((b) => (b.futur ? null : val(princ, mags, bPrec(b).d0, bPrec(b).d1)));
+    series.push({ nom: 'Un an plus tôt', valeurs: vals, unite: cp.unite, axe: cp.axe, forme: cp.forme === 'bar' ? 'bar' : 'line', prev: true, tirets: true });
+  }
+  if (compare && cumul) {
+    const b0 = bPrec(bks[0]);
+    const vals = bks.map((b) => (b.futur ? null : val(princ, mags, bPrec(b).d0, bPrec(b).d1, b0.d0)));
+    series.push({ nom: (S.fin === 12 ? 'Année précédente' : 'Exercice précédent') + ' cumulé' + (S.fin === 12 ? 'e' : ''), valeurs: vals, unite: cp.unite, axe: cp.axe, forme: 'line', prev: true, tirets: true });
+  }
+  if (o.tendance && dispo.tendance) {
+    const pv = cp.valeurs;
+    const tv = pv.map((v, i) => (i < 2 || v === null || pv[i - 1] === null || pv[i - 2] === null ? null : Math.round((v + pv[i - 1] + pv[i - 2]) / 3)));
+    series.push({ nom: 'Moyenne sur 3 ' + pasPlur(niveau), valeurs: tv, unite: cp.unite, axe: cp.axe, forme: 'line', tendance: true });
+  }
+  if (o.tendance && !dispo.tendance) notes.push(enDetail ? 'Le détail montre les montants seulement : pas de tendance.' : cumul ? 'Pas de tendance sur un cumul.' : 'Pas de tendance sur l’écart en %.');
+  if (S.cumul && c.flux === false && !gros) notes.push('Le cumul ne s’applique pas à un stock : la carte garde ses valeurs de fin de période.');
+  if (cumul) notes.push('Cumul depuis le début ' + (S.fin === 12 ? 'de l’année' : 'de l’exercice') + ' : chaque point ajoute les précédents.' + (S.periode === '12m' ? ' La carte part du début ' + (S.fin === 12 ? 'de l’année' : 'de l’exercice') + ' en cours.' : ''));
+  if (enDetail) notes.push('Détail de ' + o.drill[o.drill.length - 1].nom + ' : les montants seulement, sans comparaison ni tendance.');
+  series.forEach((s) => { if (!s.prev && !s.tendance) legende.push({ t: s.nom, puce: s.forme === 'bar' ? 's' + s.couleur : 'l' + s.couleur }); });
+  series.filter((s) => s.prev).forEach((s) => legende.push({ t: s.nom, puce: s.forme === 'bar' ? 'prevb' : 'prev' }));
+  series.filter((s) => s.tendance).forEach((s) => legende.push({ t: s.nom, puce: 'tend' }));
+  tableau = { tete: [''].concat(series.map((s) => s.nom)), lignes: bks.map((b, i) => [b.tip].concat(series.map((s) => (s.valeurs[i] === null ? '–' : fmtU(s.valeurs[i], s.unite))))) };
+  const drillable = !cumul && niveau !== 'jour' || (niveau === 'jour' && !!c.liste);
+  return { kind: 'cart', c, titre, bks, series, tirets: new Set(), vide, notes, legende, tableau, niveau, enDetail, dispo, ecart, cumul, drillable, unitG: cp.unite, pasLib, mags };
+}
+function fmtU(v, unite) { return unite === 'nb' ? nbre(v) : unite === 'pct' ? pc(v) : eur(v); }
+
+/* « Chiffre d'affaires HT par an » tel qu'il existe : les cinq années qui finissent avec la période, les années vides du début retirées. */
+function bucketsAn() {
+  const [, f] = exerciceDe(fenetreSansDecoupe()[1]);
+  return Array.from({ length: 5 }, (_, k) => bAnnee(f - 12 * (4 - k) - 11, f - 12 * (4 - k)));
+}
+
+/* ===== Les cartes qui répartissent la période ===== */
+const part = (total, parts) => { let reste = total; return parts.map((p, i) => { const v = i === parts.length - 1 ? reste : Math.round(total * p); reste -= v; return v; }); };
+const PRODUITS = [['Bougie parfumée figue', 0.17, 18.9], ['Coussin en lin naturel', 0.13, 39], ['Plaid en laine mérinos', 0.11, 89], ['Tasse en grès émaillé', 0.09, 14.5], ['Thé vert Sencha 100 g', 0.08, 12.9], ['Carnet A5 ligné', 0.07, 8.5], ['Diffuseur en bambou', 0.06, 24], ['Stylo plume laqué', 0.05, 49]];
+const CLIENTS = [['Hôtel Le Bellevue', 0.16], ['Restaurant Chez Mado', 0.12], ['Cabinet du Dr Marchand', 0.1], ['Association Les Jardins d’Éole', 0.08], ['Boutique Éclat SAS', 0.07], ['Mairie de Saint-Cyr', 0.05]];
+const FOURNISSEURS = [['Maison Lemaire Distribution', 0.31], ['Verrerie d’Argonne', 0.22], ['Thés de Kyoto SAS', 0.17], ['Textiles Delcourt', 0.16], ['Papeterie Faure', 0.14]];
+const TAUX = { H: [['20 %', 0.6], ['10 %', 0.17], ['5,5 %', 0.14], ['0 %', 0.09]], R: [['20 %', 0.6], ['10 %', 0.17], ['5,5 %', 0.14], ['0 %', 0.09]], F: [['8,5 %', 0.78], ['2,1 %', 0.12], ['0 %', 0.1]] };
+const ORDRE_TAUX = ['20 %', '10 %', '8,5 %', '5,5 %', '2,1 %', '0 %'];
+const MODES = { H: [0.56, 0.22, 0.12, 0.06, 0.04], R: [0.58, 0.2, 0.12, 0.06, 0.04], F: [0.48, 0.36, 0.08, 0.06, 0.02] };
+const NOMS_MODES = ['Carte bancaire', 'Espèces', 'Virement', 'Chèque', 'Prélèvement'];
+const ANCIENNETE = { H: [210000, 42000, 18000, 9000], R: [110000, 20000, 6000, 3000], F: [52000, 8000, 0, 0] };
+const NOMS_ANC = ['À échoir', 'En retard de 1 à 30 jours', 'En retard de 31 à 60 jours', 'En retard de plus de 60 jours'];
+const DOW_ORDRE = [1, 2, 3, 4, 5, 6, 0];
+const NOMS_JOURS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
+
+function ancienneteDe(mags) {
+  const t = [0, 0, 0, 0];
+  mags.forEach((m) => ANCIENNETE[m].forEach((v, i) => { t[i] += v; }));
+  return t;
+}
+
+function vueRepartition(c) {
+  const o = opt(c.id);
+  const { mags, phrase } = perim(c);
+  const [d0, d1] = joursDeLaFenetre();
+  const h = S.hist;
+  const notes = [];
+  if (phrase) notes.push(phrase);
+  let items = [], unite = 'eur', nomTotal = 'Total';
+  const ca = (m) => som(h, 'ca', [m], d0, d1);
+  switch (c.rep) {
+    case 'mag':
+      items = mags.map((m) => ({ nom: NOM_MAG(m), v: ca(m) })).filter((x) => x.v > 0).sort((a, b) => b.v - a.v);
+      break;
+    case 'taux': {
+      const t = new Map();
+      mags.forEach((m) => { const total = ca(m); part(total, TAUX[m].map((x) => x[1])).forEach((v, i) => t.set(TAUX[m][i][0], (t.get(TAUX[m][i][0]) || 0) + v)); });
+      items = ORDRE_TAUX.filter((k) => t.has(k)).map((k) => ({ nom: 'TVA ' + k, v: t.get(k) })).filter((x) => x.v > 0);
+      break;
+    }
+    case 'pp': {
+      let part1 = 0, part2 = 0;
+      mags.forEach((m) => { const total = ca(m); const p = Math.round(total * MAGS[m].pro); part2 += p; part1 += total - p; });
+      items = [{ nom: 'Particuliers (tickets)', v: part1 }, { nom: 'Professionnels (factures)', v: part2 }].filter((x) => x.v > 0);
+      break;
+    }
+    case 'modes': {
+      const t = [0, 0, 0, 0, 0];
+      let ttc = 0;
+      mags.forEach((m) => { const total = som(h, 'ttc', [m], d0, d1); ttc += total; part(total, MODES[m]).forEach((v, i) => { t[i] += v; }); });
+      items = NOMS_MODES.map((n, i) => ({ nom: n, v: t[i] })).filter((x) => x.v > 0).sort((a, b) => b.v - a.v);
+      if (ttc > 0) notes.push('Le crédit d’avoir utilisé est à part : ' + eur(Math.round(ttc * 0.005)) + ' sur la période.');
+      break;
+    }
+    case 'prod': {
+      let total = 0;
+      mags.forEach((m) => { total += ca(m); });
+      const arts = Math.round(total * 0.84);
+      const vs = part(arts, PRODUITS.map((p) => p[1]).concat([1 - PRODUITS.reduce((a, p) => a + p[1], 0)])).slice(0, PRODUITS.length);
+      const par = o.mesure === 'qte';
+      items = PRODUITS.map((p, i) => ({ nom: p[0], v: par ? Math.round(vs[i] / (p[2] * 100)) : vs[i], aux: Math.round(vs[i] / (p[2] * 100)) }));
+      items.sort((a, b) => b.v - a.v);
+      if (par) unite = 'nb';
+      items = items.filter((x) => x.v > 0);
+      break;
+    }
+    case 'cli': {
+      let pro = 0;
+      mags.forEach((m) => { pro += Math.round(ca(m) * MAGS[m].pro); });
+      items = CLIENTS.map((p) => ({ nom: p[0], v: Math.round(pro * p[1]) })).filter((x) => x.v > 0);
+      break;
+    }
+    case 'four': {
+      let tot = 0;
+      mags.forEach((m) => { tot += som(h, 'achats', [m], d0, d1); });
+      items = FOURNISSEURS.map((p) => ({ nom: p[0], v: Math.round(tot * p[1]) })).filter((x) => x.v > 0);
+      break;
+    }
+    case 'anc':
+      items = ancienneteDe(mags).map((v, i) => ({ nom: NOMS_ANC[i], v, court: ['À échoir', '1 à 30 j', '31 à 60 j', '+ de 60 j'][i] }));
+      if (items.every((x) => x.v === 0)) items = [];
+      break;
+    case 'jours': {
+      const D = donnees(h);
+      const tot = new Array(7).fill(0), cnt = new Array(7).fill(0);
+      mags.forEach((m) => { for (let i = Math.max(d0, 0); i <= Math.min(d1, AUJ); i++) { const v = D[m].raw.ca[i]; if (v > 0) { const w = dd(i).getUTCDay(); tot[w] += v; cnt[w] += 1; } } });
+      items = DOW_ORDRE.map((w, i) => ({ nom: NOMS_JOURS[i], long: JOURS_LONG[w], v: cnt[w] ? Math.round(tot[w] / cnt[w]) : 0 }));
+      if (items.every((x) => x.v === 0)) items = [];
+      break;
+    }
+    case 'as': {
+      let total = 0;
+      mags.forEach((m) => { total += ca(m); });
+      const a = Math.round(total * 0.84);
+      items = [{ nom: 'Articles', v: a }, { nom: 'Services', v: total - a }].filter((x) => x.v > 0);
+      break;
+    }
+    case 'vend': {
+      const l = ventesParVendeur(h, mags, d0, d1);
+      items = l.map(([nom, v]) => ({ nom, v })).filter((x) => x.v > 0);
+      break;
+    }
+    default:
+      break;
+  }
+  const total = items.reduce((a, x) => a + x.v, 0);
+  const vide = items.length === 0 || total === 0;
+  const tableau = { tete: ['', unite === 'nb' ? 'Quantité' : c.rep === 'jours' ? 'CA HT moyen' : c.rep === 'modes' ? 'TTC' : c.rep === 'anc' ? 'Restant dû' : 'HT net', c.rep === 'jours' ? '' : 'Part'], lignes: items.map((x) => [x.nom, fmtU(x.v, unite), c.rep === 'jours' ? '' : pcSimple(total ? Math.round((x.v * 1000) / total) / 10 : 0)]) };
+  if (c.rep === 'jours') { tableau.tete.pop(); tableau.lignes.forEach((l) => l.pop()); }
+  return { kind: 'rep', c, titre: c.titre, items, unite, vide, notes, tableau, total };
+}
+
+/* « Écart des prix d'achat par mois » : la carte déjà validée le 21/11, reprise ici en abrégé. */
+function vueEcart(c) {
+  const { mags, phrase } = perim(c);
+  const notes = [];
+  if (phrase) notes.push(phrase);
+  let m0, m1;
+  if (S.decoupe === 'annee') { m1 = MOIS_AUJ; m0 = m1 - 11; notes.push('Cette carte compare les achats mois par mois : par année, elle montre les 12 derniers mois.'); }
+  else [m0, m1] = fenetre();
+  const bks = [];
+  for (let m = m0; m <= m1; m++) bks.push(bMois(m));
+  annoter(bks);
+  const h = S.hist;
+  const haus = [], bais = [], net = [];
+  bks.forEach((b) => {
+    if (b.futur) { haus.push(null); bais.push(null); net.push(null); return; }
+    const a = som(h, 'achats', mags, b.d0, b.d1);
+    const hh = b.m0 % 12 === 7 || a === 0 ? 0 : Math.round(a * (0.011 + 0.02 * alea(b.m0, 1)));
+    const bb = b.m0 % 12 === 7 || a === 0 ? 0 : Math.round(a * (0.004 + 0.014 * alea(b.m0, 2)));
+    haus.push(hh); bais.push(-bb); net.push(hh - bb);
+  });
+  const vide = net.every((v) => v === null || v === 0);
+  const series = [{ nom: 'Hausses : achats plus chers que le premier achat du mois', valeurs: haus, unite: 'eur', forme: 'bar', couleur: 'plus' },
+    { nom: 'Baisses : achats moins chers que le premier achat du mois', valeurs: bais, unite: 'eur', forme: 'bar', couleur: 'moins' },
+    { nom: 'Écart du mois', valeurs: net, unite: 'eur', forme: 'diam' }];
+  const tableau = { tete: ['Mois', 'Hausses', 'Baisses', 'Écart du mois'], lignes: bks.map((b, i) => [b.tip, haus[i] === null ? '–' : eur(haus[i]), bais[i] === null ? '–' : eur(bais[i]), net[i] === null ? '–' : eur(net[i])]) };
+  const legende = [{ t: series[0].nom, puce: 'plus' }, { t: series[1].nom, puce: 'moins' }, { t: series[2].nom, puce: 'diam' }];
+  notes.push('Carte déjà validée (21/11) : reprise ici en abrégé, sans « Découper par », sans comparaison ni tendance.');
+  return { kind: 'ecart', c, titre: c.titre, bks, series, vide, notes, legende, tableau, empiler: true, mags };
+}
+
+function vue(c) {
+  if (c.periodique) return vuePeriodique(c);
+  if (c.rep === 'ecart') return vueEcart(c);
+  return vueRepartition(c);
+}
+
+/* ===== Les chiffres clés du mois ===== */
+function chiffresCles() {
+  const q = QUI_ACTIF();
+  const h = S.hist;
+  const m0 = premier(MOIS_AUJ);
+  const a0 = di(ANNEE_AUJ - 1, 11, 1), a1 = di(ANNEE_AUJ - 1, 11, 22);
+  const vm = q.ventes, am = q.achats;
+  if (S.qui === 'vendeur') return null;
+  const ca = som(h, 'ca', vm, m0, AUJ), caP = som(h, 'ca', vm, a0, a1);
+  const ac = som(h, 'achats', am, m0, AUJ), acP = som(h, 'achats', am, a0, a1);
+  const tc = som(h, 'tvaC', vm, m0, AUJ), td = som(h, 'tvaD', am, m0, AUJ);
+  const anc = ancienneteDe(vm);
+  return { ca, vca: pctDe(ca, caP), ac, vac: pctDe(ac, acP), tva: tc - td, tc, td, rd: anc.reduce((a, b) => a + b, 0), retard: anc[1] + anc[2] + anc[3] };
+}
+
+/* ===== Des documents, pour la liste que le clic sur un jour ouvre ===== */
+function documentsDuJour(kind, id, i) {
+  const M = MAGS[id], D = donnees(S.hist)[id];
+  const x = dd(i), annee = x.getUTCFullYear();
+  const sd = M.graine * 7919 + i;
+  const lignes = [];
+  if (kind === 'ventes' || kind === 'ventes-achats') {
+    const nb = D.raw.nb[i], ttc = D.raw.ttc[i];
+    if (nb > 0) {
+      const poids = Array.from({ length: nb }, (_, k) => 0.3 + alea(sd, 20 + k));
+      const somP = poids.reduce((a, b) => a + b, 0);
+      let reste = ttc;
+      const debutN = D.P.nb[di(annee, 1, 1)] || 0;
+      const rangJour = D.P.nb[i] - debutN;
+      const vendeurs = partsDuJour(id, i);
+      const heures = Array.from({ length: nb }, (_, k) => 570 + Math.floor(alea(sd, 60 + k) * 600)).sort((a, b) => a - b);
+      for (let k = 0; k < nb; k++) {
+        const v = k === nb - 1 ? reste : Math.round((ttc * poids[k]) / somP);
+        reste -= v;
+        const pro = alea(sd, 100 + k) < M.pro;
+        const r = alea(sd, 140 + k);
+        let cum = 0, nom = vendeurs[vendeurs.length - 1][0];
+        for (const [n, p] of vendeurs) { cum += p; if (r < cum) { nom = n; break; } }
+        const h = heures[k];
+        lignes.push({ type: pro ? 'Facture' : 'Ticket', num: (pro ? 'FAC-' : 'TIC-') + M.code + '-' + annee + '-' + String(rangJour + k + 1).padStart(6, '0'), heure: String(Math.floor(h / 60)).padStart(2, '0') + ':' + String(h % 60).padStart(2, '0'), client: pro ? CLIENTS[Math.floor(alea(sd, 180 + k) * CLIENTS.length)][0] : 'Client comptoir', vendeur: nom, ttc: v });
+      }
+    }
+    if (D.raw.avoirs[i] > 0) lignes.push({ type: 'Avoir', num: 'AVO-' + M.code + '-' + annee + '-' + String(1 + Math.floor(alea(sd, 9) * 60)).padStart(6, '0'), heure: '15:40', client: 'Client comptoir', vendeur: partsDuJour(id, i)[0][0], ttc: -Math.round(D.raw.avoirs[i] * (1 + M.tva)) });
+    return { lignes, ht: D.raw.ca[i], titre: 'Factures, tickets et avoirs' };
+  }
+  if (kind === 'avoirs') {
+    if (D.raw.avoirs[i] > 0) lignes.push({ type: 'Avoir', num: 'AVO-' + M.code + '-' + annee + '-' + String(1 + Math.floor(alea(sd, 9) * 60)).padStart(6, '0'), heure: '15:40', client: 'Client comptoir', vendeur: partsDuJour(id, i)[0][0], ttc: -Math.round(D.raw.avoirs[i] * (1 + M.tva)) });
+    return { lignes, ht: D.raw.avoirs[i], titre: 'Avoirs' };
+  }
+  return { lignes, ht: 0, titre: '' };
+}
+function achatsDuJour(id, i) {
+  const M = MAGS[id], D = donnees(S.hist)[id];
+  const a = D.raw.achats[i];
+  const lignes = [];
+  if (a > 0) {
+    const f1 = FOURNISSEURS[Math.floor(alea(M.graine + i, 5) * FOURNISSEURS.length)][0];
+    const f2 = FOURNISSEURS[Math.floor(alea(M.graine + i, 6) * FOURNISSEURS.length)][0];
+    const p1 = f1 === f2 ? a : Math.round(a * 0.62);
+    lignes.push({ type: 'Facture d’achat', num: 'FA-' + M.code + '-' + dd(i).getUTCFullYear() + '-' + String(100 + Math.floor(alea(M.graine + i, 7) * 800)).padStart(6, '0'), client: f1, ht: p1 });
+    if (f1 !== f2) lignes.push({ type: 'Facture d’achat', num: 'FA-' + M.code + '-' + dd(i).getUTCFullYear() + '-' + String(100 + Math.floor(alea(M.graine + i, 8) * 800)).padStart(6, '0'), client: f2, ht: a - p1 });
+  }
+  return lignes;
+}
+
+/* ===== Le dessin : tout en SVG, rien ne vient d'un autre site ===== */
+const nicePas = (x) => { const e = Math.pow(10, Math.floor(Math.log10(x))); const f = x / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e; };
+function echelle(vals, nb) {
+  let mn = Math.min(0, ...vals), mx = Math.max(0, ...vals);
+  if (mx === 0 && mn === 0) mx = 1;
+  const pas = nicePas((mx - mn) / (nb || 4));
+  return { min: Math.floor(mn / pas) * pas, max: Math.ceil(mx / pas) * pas, pas };
+}
+function axeFmt(v, unite) {
+  if (unite === 'pct') return (v > 0 ? '+' : v < 0 ? MOINS : '') + Math.abs(v).toLocaleString('fr-FR') + NB + '%';
+  if (unite === 'nb') return nbre(v);
+  const e = Math.abs(v) / 100, s = v < 0 ? MOINS : '';
+  if (e >= 1e6) return s + (e / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + NB + 'M€';
+  if (e >= 1000) return s + (e / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + NB + 'k€';
+  return s + Math.round(e).toLocaleString('fr-FR') + NB + '€';
+}
+const COUL = (k) => (k === 'plus' ? 'var(--plus)' : k === 'moins' ? 'var(--moins)' : 'var(--s' + (k + 1) + ')');
+const ptx = (x) => Math.round(x * 10) / 10;
+const trunc = (s, n) => (s.length > n ? s.slice(0, Math.max(1, n - 1)) + '…' : s);
+
+function tipCart(v, i) {
+  const b = v.bks[i];
+  let h = '<b>' + E(b.tip) + '</b>';
+  if (b.futur) return h + '<span class="l">À venir</span>';
+  if (v.ecart) {
+    h += '<span class="l">Écart sur un an : ' + (v.series[0].valeurs[i] === null ? '–' : '<b style="display:inline;margin:0">' + pc(v.series[0].valeurs[i]) + '</b>') + '</span>';
+    const un = v.c.series[v.c.princ].unite || 'eur';
+    h += '<span class="l">Cette période : ' + (v.curVals[i] === null ? '–' : fmtU(v.curVals[i], un)) + '</span>';
+    h += '<span class="l">Un an plus tôt : ' + (v.prevVals[i] === null ? '–' : fmtU(v.prevVals[i], un)) + '</span>';
+    return h;
+  }
+  v.series.forEach((s) => {
+    if (s.valeurs[i] === null) return;
+    const col = s.prev ? 'var(--prev)' : s.tendance ? 'var(--ink)' : COUL(s.couleur);
+    h += '<span class="l"><i class="puce" style="background:' + col + '"></i>' + E(s.nom.split(' : ')[0]) + ' : ' + fmtU(s.valeurs[i], s.unite) + '</span>';
+  });
+  return h;
+}
+
+function svgCart(v, w) {
+  const W = Math.max(280, Math.floor(w));
+  const bks = v.bks, n = bks.length, ser = v.series;
+  const aL2 = bks.some((b) => b.l2);
+  const H = 240 + (aL2 ? 14 : 0);
+  const Gs = ser.filter((s) => s.axe !== 'd'), Ds = ser.filter((s) => s.axe === 'd');
+  const gv = [].concat(...Gs.map((s) => s.valeurs.filter((x) => x !== null)));
+  const dv = [].concat(...Ds.map((s) => s.valeurs.filter((x) => x !== null)));
+  const eg = echelle(gv.length ? gv : [0], 4);
+  const ed = Ds.length ? echelle(dv.length ? dv : [0], 4) : null;
+  const uG = Gs.length ? Gs[0].unite : 'eur', uD = Ds.length ? Ds[0].unite : 'eur';
+  const lw = Math.max(axeFmt(eg.min, uG).length, axeFmt(eg.max, uG).length, 4) * 6.4 + 12;
+  const rw = ed ? Math.max(axeFmt(ed.min, uD).length, axeFmt(ed.max, uD).length, 4) * 6.4 + 12 : 8;
+  const T = 12, B = 26 + (aL2 ? 14 : 0);
+  const pw = W - lw - rw, ph = H - T - B;
+  const cw = pw / n;
+  const y = (x) => T + ((eg.max - x) / (eg.max - eg.min)) * ph;
+  const yd = (x) => T + ((ed.max - x) / (ed.max - ed.min)) * ph;
+  const ys = (s, x) => (s.axe === 'd' ? yd(x) : y(x));
+  const cx = (i) => lw + cw * (i + 0.5);
+  const barres = ser.filter((s) => s.forme === 'bar');
+  const nbB = v.empiler ? 1 : Math.max(1, barres.length);
+  const bw = Math.min(40, (cw * 0.74) / nbB);
+  const gw = bw * nbB + (nbB - 1) * 2;
+  let o = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' + E(v.titre) + '">';
+  /* grille et axes */
+  for (let t = eg.min; t <= eg.max + eg.pas / 2; t += eg.pas) {
+    const yy = ptx(y(t));
+    o += '<line x1="' + lw + '" x2="' + (W - rw) + '" y1="' + yy + '" y2="' + yy + '" stroke="' + (t === 0 ? 'var(--axe)' : 'var(--grid)') + '" stroke-width="' + (t === 0 ? 1.4 : 1) + '"/>';
+    o += '<text x="' + (lw - 6) + '" y="' + (yy + 4) + '" text-anchor="end" font-size="11.5" fill="var(--muted)">' + axeFmt(t, uG) + '</text>';
+  }
+  if (ed) for (let t = ed.min; t <= ed.max + ed.pas / 2; t += ed.pas) o += '<text x="' + (W - rw + 6) + '" y="' + (ptx(yd(t)) + 4) + '" font-size="11.5" fill="var(--muted)">' + axeFmt(t, uD) + '</text>';
+  /* barres */
+  const marques = [];
+  bks.forEach((b, i) => {
+    barres.forEach((s, j) => {
+      const x0 = cx(i) - gw / 2 + (v.empiler ? 0 : j * (bw + 2));
+      const val = s.valeurs[i];
+      if (val === null) return;
+      let col = s.prev ? 'var(--prev)' : COUL(s.couleur);
+      if (s.signe) col = val >= 0 ? 'var(--bar-ok)' : 'var(--bar-ko)';
+      if (val === 0) { o += '<rect class="zero-marque" x="' + ptx(x0) + '" y="' + ptx(y(0) - 1.5) + '" width="' + ptx(bw) + '" height="3" rx="1.5"/>'; return; }
+      const y1 = y(Math.max(val, 0)), y2 = y(Math.min(val, 0));
+      o += '<rect x="' + ptx(x0) + '" y="' + ptx(y1) + '" width="' + ptx(bw) + '" height="' + ptx(Math.max(2, y2 - y1)) + '" rx="3" fill="' + col + '" stroke="var(--card)" stroke-width="1"/>';
+    });
+    if (v.tirets && v.tirets.has(i)) o += '<text x="' + ptx(cx(i)) + '" y="' + (ptx(y(0)) - 6) + '" text-anchor="middle" font-size="13" fill="var(--muted)">–</text>';
+  });
+  /* lignes, aires, tendance */
+  ser.filter((s) => s.forme === 'line' || s.forme === 'area').forEach((s) => {
+    const col = s.prev ? 'var(--prev)' : s.tendance ? 'var(--ink)' : COUL(s.couleur);
+    let d = '', ouvert = false, prem = null, der = null;
+    s.valeurs.forEach((val, i) => {
+      if (val === null) { ouvert = false; return; }
+      d += (ouvert ? 'L' : 'M') + ptx(cx(i)) + ' ' + ptx(ys(s, val)) + ' ';
+      if (!ouvert) prem = i;
+      der = i; ouvert = true;
+    });
+    if (!d) return;
+    if (s.forme === 'area' && prem !== null && !s.prev) o += '<path d="' + d + 'L' + ptx(cx(der)) + ' ' + ptx(y(0)) + ' L' + ptx(cx(prem)) + ' ' + ptx(y(0)) + ' Z" fill="' + col + '" fill-opacity=".16" stroke="none"/>';
+    o += '<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="' + (s.tendance ? 2.6 : 2.2) + '" stroke-linejoin="round" stroke-linecap="round"' + (s.tirets ? ' stroke-dasharray="6 4"' : '') + '/>';
+  });
+  /* colonnes interactives, par-dessus : le survol, le clic, le clavier, et les marqueurs */
+  bks.forEach((b, i) => {
+    const clic = !b.futur && v.drillable;
+    const lib = b.tip + ' : ' + (v.series[0] && v.series[0].valeurs[i] !== null ? fmtU(v.series[0].valeurs[i], v.series[0].unite) : 'à venir') + (clic ? (b.niveau === 'jour' ? ' — ouvrir la liste de ses documents' : ' — cliquer pour voir le détail') : '');
+    o += '<g class="col' + (clic ? ' clic' : '') + '" data-i="' + i + '" data-tip="' + E(tipCart(v, i)) + '"' + (clic ? ' tabindex="0" role="button" aria-label="' + E(lib) + '"' : '') + '>';
+    o += '<rect class="fond" x="' + ptx(lw + cw * i) + '" y="' + T + '" width="' + ptx(cw) + '" height="' + ph + '" rx="4"/>';
+    ser.filter((s) => (s.forme === 'line' || s.forme === 'area') && !s.prev).forEach((s) => {
+      const val = s.valeurs[i];
+      if (val === null) return;
+      o += '<circle cx="' + ptx(cx(i)) + '" cy="' + ptx(ys(s, val)) + '" r="' + (s.tendance ? 2.8 : n > 40 ? 0 : 3.2) + '" fill="' + (s.tendance ? 'var(--ink)' : COUL(s.couleur)) + '" stroke="var(--card)" stroke-width="2"/>';
+    });
+    ser.filter((s) => s.forme === 'diam').forEach((s) => {
+      const val = s.valeurs[i];
+      if (val === null) return;
+      const X = cx(i), Y = ys(s, val);
+      o += '<polygon points="' + ptx(X) + ',' + ptx(Y - 5.5) + ' ' + ptx(X + 5.5) + ',' + ptx(Y) + ' ' + ptx(X) + ',' + ptx(Y + 5.5) + ' ' + ptx(X - 5.5) + ',' + ptx(Y) + '" fill="var(--ink)" stroke="var(--card)" stroke-width="1.5"/>';
+    });
+    o += '</g>';
+  });
+  /* étiquettes du bas */
+  const maxC = Math.max(...bks.map((b) => b.l1.length), 3);
+  const pas = Math.max(1, Math.ceil((maxC * 6.6 + 8) / cw));
+  bks.forEach((b, i) => {
+    if (i % pas !== 0 && !(b.l2 && pas === 1)) return;
+    const fort = b.partiel;
+    o += '<text x="' + ptx(cx(i)) + '" y="' + (T + ph + 16) + '" text-anchor="middle" font-size="11.5" fill="' + (b.futur ? 'var(--muted)' : 'var(--fg)') + '"' + (fort ? ' font-weight="700"' : '') + '>' + E(b.l1) + '</text>';
+    if (b.l2 && (i % pas === 0)) o += '<text x="' + ptx(cx(i)) + '" y="' + (T + ph + 30) + '" text-anchor="middle" font-size="11" fill="var(--muted)">' + E(b.l2) + '</text>';
+  });
+  return o + '</svg>';
+}
+
+function svgBarh(items, w, unite, c) {
+  const W = Math.max(280, Math.floor(w));
+  const lw = Math.min(Math.round(W * 0.4), 176);
+  const vw = 92;
+  const rh = 30;
+  const H = items.length * rh + 6;
+  const mx = Math.max(...items.map((x) => x.v), 1);
+  const bl = W - lw - vw;
+  let o = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' + E(c.titre) + '">';
+  items.forEach((x, i) => {
+    const y0 = i * rh + 3;
+    const l = Math.max(2, Math.round((x.v / mx) * bl));
+    const tip = '<b>' + E(x.nom) + '</b><span class="l">' + fmtU(x.v, unite) + '</span>';
+    o += '<g class="col" data-tip="' + E(tip) + '"><rect class="fond" x="0" y="' + y0 + '" width="' + W + '" height="' + (rh - 2) + '" rx="4"/>';
+    o += '<text x="' + (lw - 8) + '" y="' + (y0 + 17) + '" text-anchor="end" font-size="12.5" fill="var(--fg)">' + E(trunc(x.nom, Math.floor(lw / 6.6))) + '</text>';
+    o += '<rect x="' + lw + '" y="' + (y0 + 5) + '" width="' + l + '" height="14" rx="3" fill="' + COUL(0) + '"/>';
+    o += '<text x="' + (lw + l + 6) + '" y="' + (y0 + 17) + '" font-size="12" fill="var(--muted)">' + (unite === 'nb' ? nbre(x.v) : eur0(x.v)) + '</text></g>';
+  });
+  return o + '</svg>';
+}
+
+function arc(cx0, cy0, r, r2, a0, a1) {
+  const p = (rr, a) => [cx0 + rr * Math.sin(a), cy0 - rr * Math.cos(a)];
+  const g = a1 - a0 > Math.PI ? 1 : 0;
+  const [x0, y0] = p(r, a0), [x1, y1] = p(r, a1), [x2, y2] = p(r2, a1), [x3, y3] = p(r2, a0);
+  return 'M' + ptx(x0) + ' ' + ptx(y0) + ' A' + r + ' ' + r + ' 0 ' + g + ' 1 ' + ptx(x1) + ' ' + ptx(y1) + (r2 > 0 ? ' L' + ptx(x2) + ' ' + ptx(y2) + ' A' + r2 + ' ' + r2 + ' 0 ' + g + ' 0 ' + ptx(x3) + ' ' + ptx(y3) + ' Z' : ' L' + cx0 + ' ' + cy0 + ' Z');
+}
+function htmlAnneau(items, unite, trou, c) {
+  const size = 168, r = 80, r2 = trou ? 48 : 0, c0 = size / 2;
+  const tot = items.reduce((a, x) => a + x.v, 0);
+  let o = '<div class="donut-wrap"><svg viewBox="0 0 ' + size + ' ' + size + '" width="' + size + '" height="' + size + '" role="img" aria-label="' + E(c.titre) + '" style="width:' + size + 'px;flex:none">';
+  let a = 0;
+  items.forEach((x, i) => {
+    const part1 = x.v / tot, a1 = a + part1 * 2 * Math.PI;
+    const tip = '<b>' + E(x.nom) + '</b><span class="l">' + fmtU(x.v, unite) + ' (' + pcSimple(Math.round(part1 * 1000) / 10) + ')</span>';
+    const col = COUL(i % 5);
+    if (part1 >= 0.9999) o += '<circle class="sl" cx="' + c0 + '" cy="' + c0 + '" r="' + (trou ? (r + r2) / 2 : r) + '" fill="' + (trou ? 'none' : col) + '"' + (trou ? ' stroke="' + col + '" stroke-width="' + (r - r2) + '"' : '') + ' data-tip="' + E(tip) + '"/>';
+    else o += '<path class="sl" d="' + arc(c0, c0, r, r2, a, a1) + '" fill="' + col + '" stroke="var(--card)" stroke-width="2" data-tip="' + E(tip) + '"/>';
+    a = a1;
+  });
+  if (trou) o += '<text x="' + c0 + '" y="' + (c0 - 2) + '" text-anchor="middle" font-size="11.5" fill="var(--muted)">Total</text><text x="' + c0 + '" y="' + (c0 + 15) + '" text-anchor="middle" font-size="13.5" font-weight="700" fill="var(--fg)">' + (unite === 'nb' ? nbre(tot) : eur0(tot)) + '</text>';
+  o += '</svg><ul>';
+  items.forEach((x, i) => { o += '<li><i class="puce" style="background:' + COUL(i % 5) + '"></i><span class="n">' + E(x.nom) + '</span><span class="m">' + (unite === 'nb' ? nbre(x.v) : eur0(x.v)) + '</span><span class="p">' + pcSimple(Math.round((x.v * 1000) / tot) / 10) + '</span></li>'; });
+  return o + '</ul></div>';
+}
+function svgRadar(items, w, c) {
+  const W = Math.max(280, Math.floor(w)), H = 270, cx0 = W / 2, cy0 = 132, R = 92;
+  const mx = Math.max(...items.map((x) => x.v), 1);
+  const n = items.length;
+  const pt = (i, f) => [cx0 + R * f * Math.sin((2 * Math.PI * i) / n), cy0 - R * f * Math.cos((2 * Math.PI * i) / n)];
+  let o = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' + E(c.titre) + '">';
+  [0.25, 0.5, 0.75, 1].forEach((f) => { o += '<polygon points="' + items.map((_, i) => pt(i, f).map(ptx).join(',')).join(' ') + '" fill="none" stroke="var(--grid)" stroke-width="1"/>'; });
+  items.forEach((x, i) => {
+    const [ex, ey] = pt(i, 1), [lx, ly] = pt(i, 1.17);
+    o += '<line x1="' + cx0 + '" y1="' + cy0 + '" x2="' + ptx(ex) + '" y2="' + ptx(ey) + '" stroke="var(--grid)"/><text x="' + ptx(lx) + '" y="' + ptx(ly + 4) + '" text-anchor="middle" font-size="12" fill="var(--fg)">' + x.nom + '</text>';
+  });
+  o += '<polygon points="' + items.map((x, i) => pt(i, x.v / mx).map(ptx).join(',')).join(' ') + '" fill="' + COUL(0) + '" fill-opacity=".2" stroke="' + COUL(0) + '" stroke-width="2.2" stroke-linejoin="round"/>';
+  items.forEach((x, i) => {
+    const [px, py] = pt(i, x.v / mx);
+    o += '<circle class="sl" cx="' + ptx(px) + '" cy="' + ptx(py) + '" r="3.6" fill="' + COUL(0) + '" stroke="var(--card)" stroke-width="2" data-tip="' + E('<b>' + cap(x.long) + '</b><span class="l">' + eur(x.v) + ' en moyenne</span>') + '"/>';
+  });
+  return o + '</svg>';
+}
+/* Une carte qui répartit, dessinée en barres ou en lignes : mêmes colonnes que les graphiques par période. */
+function repVersCart(v, forme) {
+  const items = v.items;
+  return { kind: 'cart', c: v.c, titre: v.titre, drillable: false, series: [{ nom: v.c.titre, valeurs: items.map((x) => x.v), unite: v.unite, axe: 'g', forme, couleur: 0 }],
+    bks: items.map((x) => ({ l1: trunc(x.court || x.nom.replace(/^TVA /, ''), 12), l2: null, tip: x.long ? cap(x.long) : x.nom, futur: false, niveau: 'rep' })), tirets: new Set() };
+}
+
+/* ===== L'écran ===== */
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+let VUES = {};
+
+function libPeriode(cle) {
+  const [d, f] = exerciceDe(MOIS_AUJ);
+  if (cle === '12m') return '12 derniers mois';
+  if (cle === 'annee') return S.fin === 12 ? 'Année ' + anDe(f) + ' (exercice en cours)' : 'Exercice en cours (' + libPeriodeMois(d, f) + ')';
+  return S.fin === 12 ? 'Année ' + (anDe(f) - 1) + ' (exercice précédent)' : 'Exercice précédent (' + libPeriodeMois(d - 12, f - 12) + ')';
+}
+const cumulLib = () => 'Cumul depuis le début ' + (S.fin === 12 ? 'de l’année' : 'de l’exercice');
+
+function rendreFil() {
+  const q = QUI_ACTIF();
+  $('#fil').innerHTML = '<h2>' + E(q.espace) + '</h2><span class="gris">' + E(q.sous) + ' · Maison Ferrand' + (S.site === 'demo' ? ' (démonstration)' : '') + '</span>';
+}
+
+function rendreChiffres() {
+  const el = $('#chiffres');
+  const k = chiffresCles();
+  if (!k) { el.innerHTML = ''; el.hidden = true; return; }
+  el.hidden = false;
+  const vari = (v) => (v === null ? '' : '<div class="d ' + (v >= 0 ? 'hausse' : 'baisse') + '" data-variation="' + (v >= 0 ? 'hausse' : 'baisse') + '">' + pc(v) + ' sur un an</div>');
+  el.innerHTML =
+    '<div class="chiffre" data-chiffre="ca"><div class="k">CA HT du mois</div><div class="v">' + eur0(k.ca) + '</div>' + vari(k.vca) + '</div>' +
+    '<div class="chiffre" data-chiffre="achats"><div class="k">Achats HT du mois</div><div class="v">' + eur0(k.ac) + '</div>' + vari(k.vac) + '</div>' +
+    '<div class="chiffre" data-chiffre="tva"><div class="k">TVA à payer (estimation)</div><div class="v">' + eur0(k.tva) + '</div><div class="d hausse">collectée ' + eur0(k.tc) + ' ' + MOINS + ' déductible ' + eur0(k.td) + '</div></div>' +
+    '<div class="chiffre" data-chiffre="restant"><div class="k">Restant dû des clients</div><div class="v">' + eur0(k.rd) + '</div><div class="d hausse">dont ' + eur0(k.retard) + ' en retard</div></div>';
+}
+
+function rendreBarre() {
+  const q = QUI_ACTIF();
+  const el = $('#barre');
+  if (S.qui === 'vendeur') { el.innerHTML = ''; el.hidden = true; return; }
+  el.hidden = false;
+  const an = S.decoupe === 'annee';
+  const periodes = an ? '<option value="annee10" selected>10 dernières années</option>' : ['12m', 'annee', 'prec'].map((p) => '<option value="' + p + '"' + (S.periode === p ? ' selected' : '') + '>' + E(libPeriode(p)) + '</option>').join('');
+  const decoupes = [['mois', 'mois'], ['trimestre', 'trimestre'], ['annee', 'année']].map(([v, l]) => '<option value="' + v + '"' + (S.decoupe === v ? ' selected' : '') + '>' + l + '</option>').join('');
+  const mags = q.menuMag ? '<label class="f">Magasin <select data-f="magasin">' + '<option value="tous">Tous mes magasins</option>' + q.mags.map((m) => '<option value="' + m + '"' + (S.magasin === m ? ' selected' : '') + '>' + E(NOM_MAG(m)) + '</option>').join('') + '</select></label>' : '';
+  const aAjouter = CAT.filter((c) => visible(c) && !S.cartes.includes(c.id));
+  const ajout = aAjouter.length
+    ? '<select data-f="ajout"><option value="">— Choisir —</option>' + aAjouter.map((c) => '<option value="' + c.id + '">' + E(c.titre) + '</option>').join('') + '</select>'
+    : '<select data-f="ajout" disabled><option>Tous les graphiques sont affichés</option></select>';
+  el.innerHTML =
+    '<label class="f">Période <select data-f="periode"' + (an ? ' disabled' : '') + '>' + periodes + '</select></label>' +
+    '<label class="f">Découper par <select data-f="decoupe">' + decoupes + '</select></label>' + mags +
+    '<label class="f case' + (an ? ' coupee' : '') + '"><input type="checkbox" data-f="comparer"' + (S.comparer && !an ? ' checked' : '') + (an ? ' disabled' : '') + '> Comparer avec l’année précédente</label>' +
+    '<label class="f case' + (an ? ' coupee' : '') + '"><input type="checkbox" data-f="cumul"' + (S.cumul && !an ? ' checked' : '') + (an ? ' disabled' : '') + '> ' + cumulLib() + '</label>' +
+    '<label class="f ajout">Ajouter un graphique ' + ajout + '</label>';
+}
+
+function rendreNotes() {
+  const n = [];
+  if (S.qui !== 'vendeur') {
+    if (S.decoupe === 'annee') {
+      n.push('Par année : la période est les 10 dernières années pour tout l’écran ; les années vides du début ne s’affichent pas, une ' + (S.fin === 12 ? 'année' : 'exercice') + ' vide au milieu reste à 0' + (S.fin === 12 ? '.' : ' ; chaque barre est un exercice.'));
+      n.push('La comparaison se fait mois par mois ou trimestre par trimestre ; par année, chaque barre est déjà une année. Par année, il n’y a rien à cumuler.');
+    } else if (S.decoupe === 'trimestre' && S.periode === '12m' && !S.cumul) {
+      n.push('Par trimestre, sur les 12 derniers mois : quatre blocs de trois mois, le dernier finissant ce mois-ci.');
+    }
+    if (S.cumul && S.decoupe !== 'annee') n.push('Le cumul se compte depuis le début ' + (S.fin === 12 ? 'de l’année' : 'de l’exercice') + (S.comparer ? ' ; l’année précédente est cumulée en pointillés.' : '.'));
+  }
+  $('#notes').innerHTML = n.map((t) => '<p class="gris">' + E(t) + '</p>').join('');
+}
+
+function htmlCarte(id, rang, total) {
+  const c = CARTE(id), o = opt(id), v = (VUES[id] = vue(c));
+  const type = o.type;
+  let h = '<section class="carte" data-graphique="' + id + '" aria-labelledby="t-' + id + '">';
+  h += '<div class="tete"><h3 id="t-' + id + '">' + E(v.titre) + '</h3><div class="cmds">';
+  h += '<select aria-label="Type du graphique" data-f="type:' + id + '">' + c.types.map((t) => '<option value="' + t + '"' + (type === t ? ' selected' : '') + '>' + NOMS_TYPES[t] + '</option>').join('') + '</select>';
+  h += '<button type="button" data-f="monter:' + id + '"' + (rang === 0 ? ' disabled' : '') + '>Monter</button>';
+  h += '<button type="button" data-f="descendre:' + id + '"' + (rang === total - 1 ? ' disabled' : '') + '>Descendre</button>';
+  h += '<button type="button" class="x" aria-label="Retirer ce graphique" title="Retirer ce graphique" data-f="retirer:' + id + '">×</button></div></div>';
+  if (c.periodique) {
+    const dispo = v.dispo;
+    h += '<div class="options">';
+    h += '<label class="f' + (dispo.ecart ? '' : ' coupee') + '">Afficher <select data-f="mode:' + id + '"' + (dispo.ecart ? '' : ' disabled') + '><option value="montants"' + (o.mode === 'montants' || !dispo.ecart ? ' selected' : '') + '>Les montants</option><option value="ecart"' + (o.mode === 'ecart' && dispo.ecart ? ' selected' : '') + '>Écart en % sur un an</option></select></label>';
+    h += '<label class="f case' + (dispo.tendance ? '' : ' coupee') + '"><input type="checkbox" data-f="tend:' + id + '"' + (o.tendance ? ' checked' : '') + (dispo.tendance ? '' : ' disabled') + '> Ajouter la tendance (moyenne sur 3 ' + pasPlur(v.niveau === 'rep' ? 'mois' : v.niveau) + ')</label>';
+    h += '</div>';
+  }
+  if (id === 'prod') h += '<div class="options"><label class="f">Classer par <select data-f="mesure:prod"><option value="ca"' + (o.mesure === 'ca' ? ' selected' : '') + '>Par chiffre d’affaires</option><option value="qte"' + (o.mesure === 'qte' ? ' selected' : '') + '>Par quantité</option></select></label></div>';
+  h += '<p class="gris">' + E(c.texte.replace('{pas}', pasTxt(v.pasLib || 'mois'))) + '</p>';
+  (v.notes || []).forEach((t) => { h += '<p class="gris" data-note>' + E(t) + '</p>'; });
+  if (c.periodique && v.enDetail) {
+    const racine = { mois: 'Par mois', trimestre: 'Par trimestre', annee: 'Par année' }[c.special === 'an' ? 'annee' : S.decoupe];
+    h += '<nav class="chemin" aria-label="Où vous êtes dans le détail"><button type="button" class="lien" data-f="chemin:' + id + ':0">' + racine + '</button>';
+    o.drill.forEach((b, k) => { h += '<span class="sep" aria-hidden="true">›</span>' + (k === o.drill.length - 1 ? '<span class="ici" aria-current="page">' + E(b.nom) + '</span>' : '<button type="button" class="lien" data-f="chemin:' + id + ':' + (k + 1) + '">' + E(b.nom) + '</button>'); });
+    h += '<button type="button" class="petit revenir" data-f="revenir:' + id + '">Revenir</button></nav>';
+  }
+  h += '<div class="zone" data-card="' + id + '"></div>';
+  if (v.legende && v.legende.length >= 2) {
+    h += '<div class="legende">' + v.legende.map((l) => {
+      const cls = l.puce === 'prev' ? 'puce tirets' : l.puce === 'diam' ? 'puce diam' : l.puce === 'tend' ? 'puce ligne' : l.puce === 'prevb' ? 'puce' : 'puce' + (/^l/.test(l.puce) ? ' ligne' : '');
+      const bg = l.puce === 'prev' ? '' : l.puce === 'diam' ? 'var(--ink)' : l.puce === 'tend' ? 'var(--ink)' : l.puce === 'prevb' ? 'var(--prev)' : l.puce === 'ok' ? 'var(--bar-ok)' : l.puce === 'ko' ? 'var(--bar-ko)' : l.puce === 'plus' ? 'var(--plus)' : l.puce === 'moins' ? 'var(--moins)' : COUL(parseInt(l.puce.slice(1), 10));
+      return '<span><i class="' + cls + '"' + (bg ? ' style="background:' + bg + '"' : '') + '></i>' + E(l.t) + '</span>';
+    }).join('') + '</div>';
+  }
+  if (c.periodique && v.drillable && !v.vide) h += '<p class="astuce" data-astuce>' + (v.niveau === 'jour' ? 'Cliquer sur un jour pour ouvrir la liste de ses documents.' : 'Cliquer pour voir le détail : un clic sur une barre la découpe plus finement.') + '</p>';
+  if (!v.vide) {
+    h += '<div><button type="button" class="lien" data-f="chiffres:' + id + '" aria-expanded="' + !!o.chiffres + '">' + (o.chiffres ? 'Masquer les chiffres' : 'Voir les chiffres') + '</button></div>';
+    if (o.chiffres) {
+      h += '<div class="chiffres-carte"><table><thead><tr>' + v.tableau.tete.map((t) => '<th scope="col">' + E(t) + '</th>').join('') + '</tr></thead><tbody>';
+      v.tableau.lignes.forEach((l) => { h += '<tr><th scope="row">' + E(l[0]) + '</th>' + l.slice(1).map((x) => '<td' + (x.startsWith(MOINS) ? ' class="neg"' : '') + '>' + E(x) + '</td>').join('') + '</tr>'; });
+      h += '</tbody></table></div>';
+    }
+  }
+  return h + '</section>';
+}
+
+function rendreGrille() {
+  const g = $('#grille');
+  VUES = {};
+  if (S.qui === 'vendeur') {
+    g.innerHTML = '<div class="vide-ecran"><b>Pas de graphiques pour un vendeur ni pour un observateur.</b><br>Leur tableau de bord garde « Mes ventes », « À faire » et « À surveiller ».</div>';
+    return;
+  }
+  const ids = S.cartes.filter((id) => visible(CARTE(id)));
+  S.cartes = ids;
+  if (!ids.length) { g.innerHTML = '<p class="gris">Aucun graphique : ajoutez-en un par le menu « Ajouter un graphique ».</p>'; return; }
+  g.innerHTML = ids.map((id, r) => htmlCarte(id, r, ids.length)).join('');
+}
+
+function peindreZone(z, v, c) {
+  const w = z.clientWidth || 480;
+  if (v.vide) { z.innerHTML = '<p class="gris" data-vide>Aucune donnée sur la période.</p>'; return; }
+  const o = opt(c.id);
+  if (v.kind === 'cart' || v.kind === 'ecart') { z.innerHTML = svgCart(v, w); return; }
+  const t = o.type;
+  if (t === 'barh') z.innerHTML = svgBarh(v.items, w, v.unite, c);
+  else if (t === 'doughnut' || t === 'pie') z.innerHTML = htmlAnneau(v.items, v.unite, t === 'doughnut', c);
+  else if (t === 'radar') z.innerHTML = svgRadar(v.items, w, c);
+  else z.innerHTML = svgCart(repVersCart(v, t === 'line' ? 'line' : 'bar'), w);
+}
+function peindre() {
+  $$('.zone[data-card]').forEach((z) => { const c = CARTE(z.dataset.card); peindreZone(z, VUES[c.id], c); });
+  peindreDuo();
+}
+
+/* Le point à trancher : « Chiffre d'affaires HT par an » contre « Découper par : année ». */
+function vueSeule(id, decoupe) {
+  const sd = S.decoupe, so = S.opt[id], sc = S.cumul, sp = S.comparer;
+  S.decoupe = decoupe; S.cumul = false; S.comparer = false; delete S.opt[id];
+  const v = vue(CARTE(id));
+  S.decoupe = sd; S.cumul = sc; S.comparer = sp;
+  if (so) S.opt[id] = so; else delete S.opt[id];
+  return v;
+}
+function peindreDuo() {
+  const el = $('#duo-an');
+  if (!el) return;
+  const q = S.qui === 'vendeur' ? null : 1;
+  if (!q) { el.innerHTML = ''; return; }
+  const a = vueSeule('an', 'mois'), b = vueSeule('ca', 'annee');
+  el.innerHTML = '<div class="carte"><h3>Aujourd’hui : « Chiffre d’affaires HT par an »</h3><p class="gris">Les cinq années qui finissent avec la période.</p><div class="zone" id="duo-a"></div></div>' +
+    '<div class="carte"><h3>« Chiffre d’affaires HT par année » : Découper par année</h3><p class="gris">Les dix dernières années, les années vides du début cachées.</p><div class="zone" id="duo-b"></div></div>';
+  const w1 = $('#duo-a').clientWidth || 340, w2 = $('#duo-b').clientWidth || 340;
+  a.drillable = false; b.drillable = false;
+  $('#duo-a').innerHTML = a.vide ? '<p class="gris">Aucune donnée.</p>' : svgCart(a, w1);
+  $('#duo-b').innerHTML = b.vide ? '<p class="gris">Aucune donnée.</p>' : svgCart(b, w2);
+}
+
+function maj() {
+  const f = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.f : null;
+  rendreFil(); rendreChiffres(); rendreBarre(); rendreNotes(); rendreGrille(); peindre();
+  $$('[data-an]').forEach((b) => b.setAttribute('aria-pressed', String((S.anRetire ? 'retire' : 'garde') === b.dataset.an)));
+  if (f) { const el = document.querySelector('[data-f="' + f + '"]'); if (el && !el.disabled) el.focus({ preventScroll: true }); }
+}
+
+function razDetails() { Object.values(S.opt).forEach((o) => { o.drill = []; }); }
+function razEcran() {
+  S.cartes = cartesDepart(); S.opt = {}; S.periode = '12m'; S.decoupe = 'mois'; S.magasin = 'tous'; S.comparer = false; S.cumul = false;
+}
+
+/* ===== Les gestes ===== */
+function geste(cle, valeur, cible) {
+  const [k, id, x] = cle.split(':');
+  switch (k) {
+    case 'periode': S.periode = valeur; razDetails(); break;
+    case 'decoupe': S.decoupe = valeur; razDetails(); break;
+    case 'magasin': S.magasin = valeur; razDetails(); break;
+    case 'comparer': S.comparer = cible.checked; break;
+    case 'cumul': S.cumul = cible.checked; razDetails(); break;
+    case 'ajout': if (valeur) S.cartes.push(valeur); break;
+    case 'type': opt(id).type = valeur; break;
+    case 'mode': opt(id).mode = valeur; break;
+    case 'tend': opt(id).tendance = cible.checked; break;
+    case 'mesure': opt(id).mesure = valeur; break;
+    case 'chiffres': opt(id).chiffres = !opt(id).chiffres; break;
+    case 'retirer': S.cartes = S.cartes.filter((i) => i !== id); delete S.opt[id]; break;
+    case 'monter': case 'descendre': { const i = S.cartes.indexOf(id), j = k === 'monter' ? i - 1 : i + 1; if (j >= 0 && j < S.cartes.length) [S.cartes[i], S.cartes[j]] = [S.cartes[j], S.cartes[i]]; break; }
+    case 'revenir': opt(id).drill.pop(); break;
+    case 'chemin': opt(id).drill = opt(id).drill.slice(0, parseInt(x, 10)); break;
+    default: return;
+  }
+  maj();
+}
+document.addEventListener('change', (e) => {
+  const t = e.target;
+  if (t.dataset && t.dataset.f) geste(t.dataset.f, t.value, t);
+});
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-f]');
+  if (b && !b.disabled) { geste(b.dataset.f, null, b); return; }
+  const col = e.target.closest('.col.clic');
+  if (col) { clicColonne(col); return; }
+  const v = e.target.closest('[data-voir]');
+  if (v) { voir(v.dataset.voir); return; }
+  const an = e.target.closest('[data-an]');
+  if (an) { S.anRetire = an.dataset.an === 'retire'; S.cartes = S.cartes.filter((id) => id !== 'an' || !S.anRetire); if (!S.anRetire && S.site === 'demo' && !S.cartes.includes('an')) S.cartes.splice(3, 0, 'an'); maj(); }
+});
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('clic')) { e.preventDefault(); clicColonne(e.target); }
+});
+function clicColonne(col) {
+  const carte = col.closest('[data-graphique]');
+  if (!carte) return;
+  const id = carte.dataset.graphique, c = CARTE(id), v = VUES[id], b = v.bks[parseInt(col.dataset.i, 10)];
+  if (!b || b.futur) return;
+  masquerTip();
+  if (b.niveau === 'jour') { ouvrirListe(c, v, b); return; }
+  opt(id).drill.push(b);
+  maj();
+}
+
+/* ===== La liste filtrée que le clic sur un jour ouvre ===== */
+function ouvrirListe(c, v, b) {
+  const dlg = $('#dlg');
+  const mags = v.mags;
+  const unMag = QUI_ACTIF().mags.length === 1;
+  let h = '<div class="dlg"><div class="dlg-tete"><div><h2 id="dlg-t">' + E(c.liste === 'avoirs' ? 'Avoirs' : 'Factures, tickets et avoirs') + ' du ' + E(b.nom) + '</h2><p class="gris" style="margin-top:4px">Ce que le clic sur ce jour ouvre dans PILIQI : la liste des documents, déjà filtrée.</p></div><button type="button" data-fermer>Fermer</button></div><div class="dlg-corps">';
+  mags.forEach((m) => {
+    const d = documentsDuJour(c.liste === 'avoirs' ? 'avoirs' : 'ventes', m, b.jour);
+    h += '<section>' + (unMag ? '' : '<h3 style="margin-bottom:6px">' + E(NOM_MAG(m)) + '</h3>');
+    h += '<p style="margin-bottom:6px"><span class="filtre-puce">Date d’émission : ' + libJourCourt(b.jour) + '</span>' + (unMag ? '' : '<span class="filtre-puce">Magasin : ' + E(NOM_MAG(m)) + '</span>') + '</p>';
+    if (!d.lignes.length) h += '<p class="gris">Aucun document ce jour-là.</p>';
+    else {
+      h += '<div class="chiffres-carte"><table><thead><tr><th scope="col">N°</th><th scope="col" style="text-align:left">Heure</th><th scope="col" style="text-align:left">Client</th><th scope="col" style="text-align:left">Vendeur</th><th scope="col">TTC</th></tr></thead><tbody>';
+      d.lignes.slice(0, 8).forEach((l) => { h += '<tr><td><span style="color:var(--accent);text-decoration:underline;text-underline-offset:3px">' + E(l.num) + '</span></td><td style="text-align:left">' + l.heure + '</td><td style="text-align:left">' + E(l.client) + '</td><td style="text-align:left">' + E(l.vendeur) + '</td><td' + (l.ttc < 0 ? ' class="neg"' : '') + '>' + eur(l.ttc) + '</td></tr>'; });
+      if (d.lignes.length > 8) h += '<tr><td colspan="5" class="gris" style="text-align:left">… et ' + (d.lignes.length - 8) + ' autres documents</td></tr>';
+      h += '</tbody></table></div><p class="gris" style="margin-top:6px">' + d.lignes.length + ' document' + (d.lignes.length > 1 ? 's' : '') + ' · total HT net des avoirs' + (unMag ? '' : ' de ce magasin') + ' : <b>' + eur(d.ht) + '</b>' + (unMag ? ' (la valeur de la barre).' : '.') + '</p>';
+    }
+    if (c.liste === 'ventes-achats') {
+      const ac = achatsDuJour(m, b.jour);
+      h += '<h3 style="margin:10px 0 6px">Factures d’achat' + (unMag ? '' : ' · ' + E(NOM_MAG(m))) + '</h3>';
+      if (!ac.length) h += '<p class="gris">Aucune facture d’achat ce jour-là.</p>';
+      else { h += '<div class="chiffres-carte"><table><thead><tr><th scope="col">N°</th><th scope="col" style="text-align:left">Fournisseur</th><th scope="col">HT</th></tr></thead><tbody>'; ac.forEach((l) => { h += '<tr><td><span style="color:var(--accent);text-decoration:underline;text-underline-offset:3px">' + E(l.num) + '</span></td><td style="text-align:left">' + E(l.client) + '</td><td>' + eur(l.ht) + '</td></tr>'; }); h += '</tbody></table></div>'; }
+    }
+    h += '</section>';
+  });
+  if (!mags.length) h += '<p class="gris">Aucun magasin compté.</p>';
+  h += '</div><div class="dlg-pied"><span class="gris" style="margin-right:auto">Un document ne s’ouvre que pour qui peut le voir.</span><button type="button" class="prim" data-fermer>Revenir au tableau de bord</button></div></div>';
+  dlg.innerHTML = h;
+  if (!dlg.open) dlg.showModal();
+}
+$('#dlg').addEventListener('click', (e) => { if (e.target.closest('[data-fermer]') || e.target === $('#dlg')) $('#dlg').close(); });
+
+/* ===== L'info-bulle ===== */
+const tip = $('#tip');
+function montrerTip(el, x, y) {
+  tip.innerHTML = el.getAttribute('data-tip');
+  tip.hidden = false;
+  const r = tip.getBoundingClientRect();
+  let left = x + 14, top = y + 14;
+  if (left + r.width > window.innerWidth - 8) left = x - r.width - 14;
+  if (left < 8) left = 8;
+  if (top + r.height > window.innerHeight - 8) top = y - r.height - 14;
+  tip.style.left = left + 'px'; tip.style.top = Math.max(8, top) + 'px';
+}
+function masquerTip() { tip.hidden = true; }
+document.addEventListener('mouseover', (e) => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t) montrerTip(t, e.clientX, e.clientY); });
+document.addEventListener('mousemove', (e) => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t) montrerTip(t, e.clientX, e.clientY); else masquerTip(); });
+document.addEventListener('focusin', (e) => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t) { const r = t.getBoundingClientRect(); montrerTip(t, r.left + r.width / 2, r.top + 20); } });
+document.addEventListener('focusout', masquerTip);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') masquerTip(); });
+document.addEventListener('scroll', masquerTip, true);
+
+/* ===== Le pupitre de la maquette ===== */
+function appliquerMode() {
+  const m = $('#p-mode').value, r = document.documentElement;
+  if (m === 'auto') r.removeAttribute('data-theme'); else r.setAttribute('data-theme', m);
+}
+$$('input[name=site]').forEach((r) => r.addEventListener('change', () => { S.site = r.value; razEcran(); maj(); }));
+$('#p-qui').addEventListener('change', (e) => { S.qui = e.target.value; razEcran(); maj(); });
+$('#p-hist').addEventListener('change', (e) => { S.hist = e.target.value; razDetails(); maj(); });
+$('#p-fin').addEventListener('change', (e) => { S.fin = parseInt(e.target.value, 10); razDetails(); maj(); });
+$('#p-mode').addEventListener('change', appliquerMode);
+$('#p-depart').addEventListener('click', () => { razEcran(); maj(); });
+
+/* ===== Les boutons « Voir » ===== */
+function regler(p) {
+  const o = { site: S.site, qui: S.qui, hist: S.hist, fin: S.fin };
+  Object.assign(o, p);
+  S.site = o.site; S.qui = o.qui; S.hist = o.hist; S.fin = o.fin;
+  $$('input[name=site]').forEach((r) => { r.checked = r.value === S.site; });
+  $('#p-qui').value = S.qui; $('#p-hist').value = S.hist; $('#p-fin').value = String(S.fin);
+}
+function assurer(id) { if (!S.cartes.includes(id) && visible(CARTE(id))) S.cartes.unshift(id); }
+function aller(sel) { const el = typeof sel === 'string' ? $(sel) : sel; if (el) el.scrollIntoView({ block: 'start' }); }
+function voir(nom) {
+  const base = (p) => { regler(Object.assign({ qui: 'societe' }, p || {})); razEcran(); };
+  switch (nom) {
+    case 'barre': base({ site: 'reel', qui: 'societe' }); maj(); aller('#ecran'); return;
+    case 'chiffres': base({ site: 'reel', qui: 'societe' }); maj(); aller('#ecran'); return;
+    case 'mois': base({}); maj(); aller('#ecran'); return;
+    case 'trimestre': base({ fin: 12 }); S.decoupe = 'trimestre'; maj(); aller('#ecran'); return;
+    case 'annee': base({ hist: 'A', fin: 12 }); S.decoupe = 'annee'; S.comparer = true; maj(); aller('#ecran'); return;
+    case 'annee-vide': base({ hist: 'B', fin: 12 }); S.decoupe = 'annee'; maj(); aller('#ecran'); return;
+    case 'annee-premiere': base({ hist: 'C', fin: 12 }); S.decoupe = 'annee'; maj(); aller('#ecran'); return;
+    case 'annee-juin': base({ hist: 'A', fin: 6 }); S.decoupe = 'annee'; maj(); aller('#ecran'); return;
+    case 'trimestre-annee': base({ hist: 'A', fin: 12 }); S.decoupe = 'trimestre'; S.periode = 'annee'; S.comparer = true; maj(); aller('#ecran'); return;
+    case 'trimestre-juin': base({ hist: 'A', fin: 6 }); S.decoupe = 'trimestre'; S.periode = 'annee'; maj(); aller('#ecran'); return;
+    case 'cumul': base({ hist: 'A', fin: 12 }); S.cumul = true; S.comparer = true; maj(); aller('#ecran'); return;
+    case 'ecart': base({ hist: 'A', fin: 12 }); opt('ca').mode = 'ecart'; maj(); aller('[data-graphique=ca]'); return;
+    case 'ecart-annee': base({ hist: 'B', fin: 12 }); S.decoupe = 'annee'; assurer('ca'); opt('ca').mode = 'ecart'; maj(); aller('[data-graphique=ca]'); return;
+    case 'vendeur': base({ site: 'demo', qui: 'societe' }); maj(); aller('[data-graphique=vend]'); return;
+    case 'vendeur-admin': base({ site: 'demo', qui: 'admin' }); maj(); aller('[data-graphique=vend]'); return;
+    case 'vendeur-vendeur': base({ qui: 'vendeur' }); maj(); aller('#ecran'); return;
+    case 'detail': { base({ hist: 'A', fin: 12 }); S.decoupe = 'annee'; assurer('ca'); const bk = bucketsBase(false); opt('ca').drill = [bk[bk.length - 2]]; maj(); aller('[data-graphique=ca]'); return; }
+    case 'tendance': base({ hist: 'A', fin: 12 }); assurer('ca'); opt('ca').tendance = true; maj(); aller('[data-graphique=ca]'); return;
+    case 'reel': base({ site: 'reel', qui: 'societe' }); maj(); aller('#ecran'); return;
+    case 'demo': base({ site: 'demo', qui: 'societe' }); maj(); aller('#ecran'); return;
+    case 'question-an': aller('#q-an'); return;
+    default: return;
+  }
+}
+
+/* ===== Le redessin quand la largeur change ===== */
+let minuteur = null, largeur = 0;
+const obs = new ResizeObserver(() => {
+  const w = Math.round($('#ecran').clientWidth);
+  if (w === largeur) return;
+  largeur = w;
+  clearTimeout(minuteur);
+  minuteur = setTimeout(peindre, 90);
+});
+obs.observe($('#ecran'));
+
+razEcran();
+maj();
+
+})();
+</script>

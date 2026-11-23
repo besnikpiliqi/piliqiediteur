@@ -1,73 +1,54 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 22/11/2026 à 00:52 UTC par pilotage-sync.sh : « Mise à jour des notes de reprise ».
+Mis à jour le 23/11/2026 à 10:25 UTC par pilotage-sync.sh : « Arrêt demandé par l'éditeur le 23/11/2026 : sauvegarde complète et notes de reprise [skip ci] ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
-Tête poussée : `075b9f20`. Commits locaux pas encore poussés :
+Tête poussée : `b290c8d9`. Commits locaux pas encore poussés :
 
 ```
-38b81d49 Facture d'achat : la quantité d'une ligne se recalcule en direct
-37fce91a Carte « Écart des prix d'achat » (lot 2) : catalogue, réglage, lecture des achats et série
-8e9df41e Carte « Écart des prix d'achat » (lot 1) : calcul pur, textes, formats, dessin et fixtures figées
 ```
 
 Derniers commits poussés :
 
 ```
-075b9f20 Retour à Ubuntu 24.04 : l'essai d'« ubuntu-latest » échoue au semis
-de1e2c95 Essai de la CI sur « ubuntu-latest » (Ubuntu 26.04) avec Playwright 1.65.1
-c571221e Montée de Playwright de 1.59.1 à 1.65.1
-fca01c39 Réparation de la CI rouge de a4ca0549
-a4ca0549 Réparation de la CI rouge de 7c5edc7a
-7c5edc7a Relecture du lot DEMO-COPIE-3
-7d521432 Démonstration : bandeau, e-mails captés, tâches et mises à jour des copies
-33c56754 Réparation de la CI rouge de 52dab0ff
-52dab0ff Relecture du lot DEMO-COPIE-2
-b5ded45c Démonstration : site séparé, une base par copie, demande depuis le compte
-7f9e16ca Relecture du lot DEMO-COPIE-1
-4091e8b2 Démonstration : retrait du magasin de démonstration intérieur
-3bdfe83b Réparation de la CI rouge de d15af36
-d15af36b Relecture du lot DATEOP
-ad18faca Date de la livraison ou de la prestation sur la facture (T49)
-5418d777 Graphiques : en-tête des cartes
-90f7ab33 Télécharger les documents : les charges et leurs pièces
-a9bb1a78 Charges : état téléchargeable en PDF et en Excel
-90a4426c Écrans : classes de style absentes de la feuille de Filament
-9e14f02f Semis complet de toutes les tables et de tous les cas
+b290c8d9 Fusion du lot « gestes des cartes sans attente » (lot/clic-mois)
+05da4362 Correction de la relecture du clic sur un mois
+fb1d644c Cartes du tableau de bord : le mois, le type, l'ordre, la croix, « Classer par » et « Afficher » changent aussitôt dans la page
+36b2388c Protocole : un écran fait ce que fait sa maquette, geste par geste (point 8)
+fc3786bc Fusionne main dans la branche de travail (la PR n° 1 est de nouveau fusionnable)
+1e7e0f12 Fusion de DEVIS-RET : dépannage à domicile, rétractation, acceptation signée
+828e0adf Réparation de la CI rouge de c22db607 : trois tests de ReglesDuCalendrierTest
+ea4be712 Correction de la relecture de DEVIS-RET (tour 2)
+e6f7ba7e Correction de la relecture de DEVIS-RET (tour 1)
+00980ebd Correction de l'arrondi du prix de vente après vérification
+86bcc52f Correction des 14 défauts de la relecture de DEVIS-RET
+79d9d7de Devis : dépannage à domicile, rétractation et acceptation signée
+f4111ef3 Correction de la relecture de l'arrondi du prix de vente (tour 1)
+db5ae583 Arrondi du prix de vente : trois formules
+55ddf931 Correction de la relecture du passage à PHP 8.5 et PostgreSQL 18
+843c684b Corrections de typage révélées par PHP 8.5
+2679bf12 Ne vise plus que PHP 8.5 et PostgreSQL 18 (décision de l'éditeur du 12/11/2026)
+b300e2a1 Réparation de la CI rouge de 12539cb2
+e68f36b3 Correction de la relecture de la carte « Écart des prix d'achat » (tour 3)
+d92d46b5 Protocole : la règle des types en ligne est écrite dans CLAUDE.md
 ```
 
 ## Travail non commité dans l'arbre (agent en cours, ne jamais le committer à sa place)
 
 ```
- M app/Domain/TableauDeBord/Support/DessinDeLEcartDesPrixDAchat.php
- M app/Filament/GrilleDesGraphiques.php
- M public/css/app/graphiques.css
- M resources/css/graphiques.css
- M resources/views/filament/graphiques-du-panneau.blade.php
- M resources/views/filament/grille-des-graphiques.blade.php
- M tests/Browser/InventaireDesActionsTest.php
- M tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php
- M tests/Browser/Support/ActionsDeLInterface.php
- M tests/Browser/inventaire-des-actions.php
-?? app/Domain/TableauDeBord/Support/SvgDeLEcartDesPrixDAchat.php
-?? resources/views/filament/ecart-des-prix-d-achat.blade.php
-?? tests/Browser/Balayage/ContrasteDeLaCarteEcartDesPrixDAchatTest.php
-?? tests/Browser/Parcours/EcartDesPrixDAchatTest.php
-?? tests/Browser/Support/CarteDeLEcartDesPrixDAchat.php
-?? tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php
-?? tests/Feature/TableauDeBord/EcartDesPrixDAchatVolumeDeLaPageTest.php
-?? tests/Feature/TableauDeBord/SvgDeLEcartDesPrixDAchatTest.php
-?? tests/Fixtures/EcartDesPrixDAchat/LectureDeLaPage.php
-?? tests/Unit/EcartDesPrixDAchatVolumeTest.php
 ```
 
 ## Dernière course de la chaîne
 
-Course `wf_bbdbefd3-771`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_3bcd5cc9-d31`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-lot-1:implementation
-lot-2:implementation
-lot-3:implementation
+MDP:code
+MDP:relecture
+MDP:correction
+IDENT:code
+IDENT:relecture
+IDENT:correction
+CESSION:code
 ```

@@ -1,0 +1,752 @@
+<title>Fermer la caisse</title>
+<meta name="color-scheme" content="light dark">
+
+<style>
+  /* Plan : la page « Ma caisse » (vendeur) ou « Les caisses » (responsable, propriétaire) du panneau d'un magasin, avec ses deux boutons
+     « Fermer ma caisse » et « Fermer la caisse d'un vendeur ». Une caisse n'est ouverte que si elle a une vente émise, un encaissement ou une
+     contre-passation non comptés : sinon le bouton reste visible, grisé, avec une info-bulle. Tout est en variables de couleur (clair, sombre).
+     Le « pupitre » (cadre en pointillés) n'est pas dans PILIQI : il sert à ouvrir ou fermer la caisse de chacun et à envoyer des demandes au serveur. */
+  :root {
+    color-scheme: light;
+    --bg: #f4f4f5;
+    --cadre: #ececee;
+    --carte: #ffffff;
+    --anneau: #d4d4d8;
+    --texte: #18181b;
+    --doux: #52525b;
+    --champ: #ffffff;
+    --champ-bord: #71717a;
+    --grille: #e4e4e7;
+    --focus: #1d4ed8;
+    --accent: #4f46e5;
+    --accent-texte: #ffffff;
+    --grise-fond: #e4e4e7;
+    --grise-texte: #52525b;
+    --grise-bord: #7c7c86;
+    --ok: #15803d;
+    --alerte: #b45309;
+    --erreur: #b91c1c;
+    --badge-fond: #f4f4f5;
+    --badge-texte: #3f3f46;
+    --badge-auto-fond: #fef3c7;
+    --badge-auto-texte: #92400e;
+    --bulle-fond: #18181b;
+    --bulle-texte: #fafafa;
+    --bulle-bord: #18181b;
+    --fond-fenetre: rgba(24, 24, 27, .55);
+    --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #09090b; --cadre: #111113; --carte: #18181b; --anneau: #3f3f46; --texte: #fafafa; --doux: #a1a1aa;
+      --champ: #18181b; --champ-bord: #8e8e98; --grille: #2e2e33; --focus: #93c5fd;
+      --accent: #818cf8; --accent-texte: #09090b;
+      --grise-fond: #27272a; --grise-texte: #a1a1aa; --grise-bord: #71717a;
+      --ok: #4ade80; --alerte: #fbbf24; --erreur: #f87171;
+      --badge-fond: #27272a; --badge-texte: #d4d4d8; --badge-auto-fond: #422006; --badge-auto-texte: #fcd34d;
+      --bulle-fond: #000000; --bulle-texte: #fafafa; --bulle-bord: #8e8e98;
+      --fond-fenetre: rgba(0, 0, 0, .7);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #09090b; --cadre: #111113; --carte: #18181b; --anneau: #3f3f46; --texte: #fafafa; --doux: #a1a1aa;
+    --champ: #18181b; --champ-bord: #8e8e98; --grille: #2e2e33; --focus: #93c5fd;
+    --accent: #818cf8; --accent-texte: #09090b;
+    --grise-fond: #27272a; --grise-texte: #a1a1aa; --grise-bord: #71717a;
+    --ok: #4ade80; --alerte: #fbbf24; --erreur: #f87171;
+    --badge-fond: #27272a; --badge-texte: #d4d4d8; --badge-auto-fond: #422006; --badge-auto-texte: #fcd34d;
+    --bulle-fond: #000000; --bulle-texte: #fafafa; --bulle-bord: #8e8e98;
+    --fond-fenetre: rgba(0, 0, 0, .7);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--texte); font-family: var(--police); font-size: 15px; line-height: 1.5;
+    padding-block: 24px 64px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  main { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+  h1 { font-size: 24px; line-height: 1.25; margin: 0; text-wrap: balance; }
+  h2 { font-size: 17px; line-height: 1.3; margin: 0; text-wrap: balance; }
+  h3 { font-size: 15px; margin: 0; }
+  p { margin: 0; }
+  .doux { color: var(--doux); }
+  .petit { font-size: 13px; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  .panneau { background: var(--carte); border-radius: 12px; box-shadow: 0 0 0 1px var(--anneau); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .decisions, .questions { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; }
+  .decisions li::marker, .questions li::marker { font-weight: 700; }
+  .voir { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 4px; }
+
+  .btn {
+    font: inherit; font-size: 14px; font-weight: 600; color: var(--texte); background: var(--champ); border: 1px solid var(--champ-bord);
+    border-radius: 8px; min-height: 38px; padding: 6px 14px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; max-width: 100%;
+  }
+  .btn svg { width: 20px; height: 20px; flex: none; }
+  .btn.primaire { background: var(--accent); color: var(--accent-texte); border-color: var(--accent); }
+  .btn.petit-btn { min-height: 32px; padding: 3px 10px; font-size: 13px; }
+  .btn[aria-disabled="true"] { background: var(--grise-fond); color: var(--grise-texte); border-color: var(--grise-bord); cursor: not-allowed; }
+  .btn[aria-disabled="true"]:hover { filter: none; }
+  select {
+    font: inherit; font-size: 14px; color: var(--texte); background: var(--champ); border: 1px solid var(--champ-bord);
+    border-radius: 8px; min-height: 38px; padding: 5px 8px; max-width: 100%;
+  }
+  label.filtre { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; min-width: 0; }
+
+  /* Pupitre de la maquette : pas dans PILIQI. */
+  .pupitre { border: 2px dashed var(--champ-bord); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; background: var(--carte); min-width: 0; }
+  .pupitre h2 { font-size: 16px; }
+  .pupitre .ligne { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; }
+  .equipe { display: flex; flex-direction: column; border-top: 1px solid var(--grille); }
+  .membre { display: grid; grid-template-columns: minmax(10rem, 15rem) minmax(0, 1fr) auto; gap: 6px 14px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--grille); }
+  .membre .qui strong { display: block; font-size: 14px; }
+  .membre .etat { font-size: 13px; color: var(--doux); }
+  .membre .etat b { color: var(--texte); }
+  .membre .gestes { display: flex; flex-wrap: wrap; gap: 6px; }
+  @media (max-width: 760px) { .membre { grid-template-columns: minmax(0, 1fr); } }
+  .journal { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13px; max-height: 12rem; overflow-y: auto; }
+  .journal li { padding: 4px 8px; border-radius: 6px; background: var(--cadre); overflow-wrap: anywhere; }
+
+  /* L'écran de PILIQI (panneau d'un magasin). */
+  .ecran { background: var(--cadre); border-radius: 14px; box-shadow: 0 0 0 1px var(--anneau); padding: 14px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .barre-haut { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .barre-haut strong { color: var(--accent); font-size: 16px; }
+  .barre-haut .compte { margin-left: auto; font-size: 13px; }
+  .fil { font-size: 13px; color: var(--doux); }
+  .entete-page { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+  .entete-page h2 { font-size: 22px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  @media (max-width: 520px) { .actions { width: 100%; } .actions .btn { flex: 1 1 100%; } }
+
+  .carte { background: var(--carte); border-radius: 12px; box-shadow: 0 0 0 1px var(--anneau), 0 1px 2px rgba(0, 0, 0, .05); padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .stat-nom { font-size: 13px; color: var(--doux); font-weight: 500; }
+  .stat-val { font-size: 28px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .stat-desc { font-size: 13px; font-weight: 500; }
+  .stat-desc.ok { color: var(--ok); }
+  .stat-desc.alerte { color: var(--alerte); }
+
+  .tableau { padding: 0; overflow: hidden; gap: 0; }
+  .defiler { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 980px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 10px 12px; border-bottom: 1px solid var(--grille); font-size: 13px; text-align: left; vertical-align: top; }
+  thead th { font-size: 12px; font-weight: 600; color: var(--doux); background: var(--cadre); white-space: nowrap; }
+  td.num, th.num { text-align: right; }
+  td.date { white-space: nowrap; }
+  .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--badge-fond); color: var(--badge-texte); box-shadow: 0 0 0 1px var(--anneau); white-space: nowrap; }
+  .badge.auto { background: var(--badge-auto-fond); color: var(--badge-auto-texte); box-shadow: none; }
+  .pied-tableau { padding: 10px 12px; font-size: 13px; color: var(--doux); }
+  .enc { display: inline-grid; grid-template-columns: auto auto; column-gap: .5rem; vertical-align: top; }
+  .enc abbr { text-decoration: none; cursor: help; }
+  .enc .m { text-align: right; white-space: nowrap; }
+  .enc .tot { font-weight: 600; }
+
+  /* Info-bulle : sombre dans les deux modes, avec un bord ; au survol, à la prise de focus et à l'appui du doigt. */
+  #bulle {
+    position: fixed; z-index: 90; left: 0; top: 0; max-width: min(22rem, calc(100vw - 16px)); padding: 8px 12px; border-radius: 8px;
+    background: var(--bulle-fond); color: var(--bulle-texte); border: 1px solid var(--bulle-bord); box-shadow: 0 8px 22px rgba(0, 0, 0, .3);
+    font-size: 13px; line-height: 1.4; pointer-events: none; overflow-wrap: anywhere;
+  }
+
+  /* Fenêtres (native dialog). */
+  dialog { border: 0; padding: 0; border-radius: 12px; background: var(--carte); color: var(--texte); width: min(34rem, calc(100vw - 32px)); max-height: calc(100dvh - 32px); box-shadow: 0 0 0 1px var(--anneau), 0 20px 50px rgba(0, 0, 0, .35); }
+  dialog::backdrop { background: var(--fond-fenetre); }
+  .dlg-corps { padding: 20px 22px 8px; display: flex; flex-direction: column; gap: 12px; }
+  .dlg-corps h2 { font-size: 18px; }
+  .dlg-pied { padding: 12px 22px 20px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .recap { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+  .recap .note { color: var(--doux); font-size: 13px; margin-top: 6px; }
+  .champ { font-size: 14px; font-weight: 600; }
+  .etoile { color: var(--erreur); }
+  .erreur { color: var(--erreur); font-size: 13px; }
+
+  /* Notifications (en haut à droite, comme celles de Filament). */
+  #toasts { position: fixed; z-index: 100; top: 16px; right: 16px; width: min(24rem, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+  .toast { pointer-events: auto; display: flex; gap: 10px; align-items: flex-start; background: var(--carte); color: var(--texte); border-radius: 10px; padding: 12px 14px; box-shadow: 0 0 0 1px var(--anneau), 0 10px 25px rgba(0, 0, 0, .25); font-size: 14px; font-weight: 600; }
+  .toast svg { width: 22px; height: 22px; flex: none; margin-top: 1px; }
+  .toast.succes svg { color: var(--ok); }
+  .toast.alerte svg { color: var(--alerte); }
+  .toast.danger svg { color: var(--erreur); }
+  .toast .fermer { margin-left: auto; font: inherit; font-size: 20px; line-height: 1; color: var(--doux); background: none; border: 0; padding: 0 4px; cursor: pointer; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+</style>
+<main>
+  <header class="panneau">
+    <h1>Fermer la caisse : le bouton reste grisé tant que la caisse n’est pas ouverte</h1>
+    <p class="doux">Page « Ma caisse » ou « Les caisses » du panneau d’un magasin (Maison Ferrand République). Une caisse personnelle s’ouvre à la première vente ; avant, et après chaque fermeture, le bouton « Fermer ma caisse » reste visible mais grisé, avec une info-bulle. Les noms, les montants et les dates de cette page sont fictifs ; « aujourd’hui » est le dimanche 22/11/2026.</p>
+    <label class="filtre" style="align-self:flex-start">Affichage de la page (confort de la maquette)
+      <select id="affichage">
+        <option value="auto">Comme mon appareil</option>
+        <option value="light">Clair</option>
+        <option value="dark">Sombre</option>
+      </select>
+    </label>
+  </header>
+
+  <section class="panneau" aria-labelledby="t-decisions">
+    <h2 id="t-decisions">Ce que vous avez décidé, et où le voir</h2>
+    <p class="doux petit">Chaque bouton « Voir » règle la maquette sur le cas et vous y emmène. Rien d’autre n’est dans la maquette.</p>
+    <ol class="decisions">
+      <li><strong>La caisse s’ouvre à la première vente.</strong> Une caisse personnelle est ouverte seulement quand elle a au moins une vente émise, un encaissement ou une contre-passation non comptés.
+        <div class="voir"><button class="btn petit-btn" data-voir="sans-vente">Voir : pas encore de vente</button><button class="btn petit-btn" data-voir="apres-vente">Voir : après une vente</button></div></li>
+      <li><strong>« Fermer ma caisse » reste visible mais grisé</strong> quand la caisse n’est pas ouverte, avec l’info-bulle « Aucune vente ni encaissement à fermer. » (la phrase grise sous le bouton n’est plus là).
+        <div class="voir"><button class="btn petit-btn" data-voir="sans-vente">Voir : bouton grisé et info-bulle</button></div></li>
+      <li><strong>Après chaque fermeture, le bouton se grise de nouveau</strong> jusqu’à la vente suivante (plusieurs fermetures dans la journée, comme au marché : on ouvre, on vend, on ferme, on revient, on vend, on ferme).
+        <div class="voir"><button class="btn petit-btn" data-voir="a-fermer">Voir : une caisse à fermer, puis fermez-la</button></div></li>
+      <li><strong>« Fermer la caisse d’un vendeur » ne propose que les vendeurs dont la caisse est ouverte.</strong>
+        <div class="voir"><button class="btn petit-btn" data-voir="liste-vendeurs">Voir : la fenêtre, avec un seul vendeur proposé</button></div></li>
+      <li><strong>Grisé quand aucun vendeur n’a de caisse ouverte</strong>, avec « Aucune caisse de vendeur à fermer : aucune vente ni encaissement. »
+        <div class="voir"><button class="btn petit-btn" data-voir="aucun-vendeur">Voir : responsable, aucune caisse ouverte</button><button class="btn petit-btn" data-voir="proprietaire">Voir : propriétaire</button></div></li>
+      <li><strong>Refus serveur d’une demande forgée</strong> (envoyée sans passer par le bouton) : « Rien à fermer : aucune vente ni encaissement depuis votre dernière fermeture. »
+        <div class="voir"><button class="btn petit-btn" data-voir="forgee">Voir : demande forgée</button></div></li>
+      <li><strong>Double clic = relevé déjà fermé (jeton).</strong> La seconde demande rend le relevé déjà fermé : un seul relevé est écrit.
+        <div class="voir"><button class="btn petit-btn" data-voir="double-clic">Voir : double clic</button></div></li>
+      <li><strong>Fermeture d’office inchangée</strong> (clôture de la journée ou minuit) : une caisse ouverte est fermée avec « Fermée automatiquement » ; une caisse sans rien à compter ne donne aucun relevé.
+        <div class="voir"><button class="btn petit-btn" data-voir="d-office">Voir : fermeture d’office</button></div></li>
+      <li><strong>L’info-bulle est annoncée aux lecteurs d’écran et se lit en clair comme en sombre.</strong> Le bouton garde son texte ; le message est sa description.
+        <div class="voir"><button class="btn petit-btn" data-voir="clair">Voir en clair</button><button class="btn petit-btn" data-voir="sombre">Voir en sombre</button></div></li>
+    </ol>
+  </section>
+
+  <section class="pupitre" aria-labelledby="t-pupitre">
+    <h2 id="t-pupitre">Pupitre de la maquette <span class="doux petit" style="font-weight:400">Ces réglages ne sont pas dans PILIQI : ils servent à montrer chaque cas.</span></h2>
+    <div class="ligne">
+      <label class="filtre">Qui regarde
+        <select id="qui">
+          <option value="hugo">Hugo Lefebvre, responsable du magasin</option>
+          <option value="sarah">Sarah Petit, vendeuse</option>
+          <option value="karim">Karim Haddad, vendeur</option>
+          <option value="elise">Élise Ferrand, propriétaire de la société</option>
+        </select>
+      </label>
+      <span class="doux petit" id="horloge" aria-live="off"></span>
+    </div>
+    <div>
+      <h3>La caisse de chacun (opérations non comptées par une fermeture)</h3>
+      <div class="equipe" id="equipe"></div>
+      <p class="doux petit" style="margin-top:6px">Élise Ferrand, propriétaire, ne vend jamais : elle n’a pas de caisse personnelle.</p>
+    </div>
+    <div class="ligne">
+      <button class="btn petit-btn" id="tout-fermer" type="button">Aucune caisse ouverte</button>
+      <button class="btn petit-btn" id="depart" type="button">Revenir à l’état de départ</button>
+    </div>
+    <div>
+      <h3>Demandes que le serveur reçoit sans passer par un bouton</h3>
+      <div class="ligne" style="margin-top:8px">
+        <button class="btn petit-btn" id="forger-ma" type="button">Fermer ma caisse (sans le bouton)</button>
+        <label class="filtre">Caisse à fermer sans la fenêtre
+          <span style="display:flex;gap:8px;flex-wrap:wrap"><select id="forger-qui"></select><button class="btn petit-btn" id="forger-vendeur" type="button">Envoyer</button></span>
+        </label>
+        <button class="btn petit-btn" id="double" type="button">Double clic sur « Confirmer »</button>
+        <button class="btn petit-btn" id="office" type="button">Fermeture d’office</button>
+      </div>
+    </div>
+    <div>
+      <h3>Ce que le serveur a répondu</h3>
+      <ul class="journal" id="journal" aria-live="polite"><li class="doux">Rien encore.</li></ul>
+    </div>
+  </section>
+
+  <section class="ecran" id="ecran" data-ecran="magasin" aria-label="Écran de PILIQI : panneau du magasin">
+    <div class="barre-haut"><strong>Panneau du magasin</strong><span class="doux">Maison Ferrand République</span><span class="compte" id="compte"></span></div>
+    <div class="fil">Ventes › <span id="fil"></span></div>
+    <div class="entete-page"><h2 id="titre-page"></h2><div class="actions" id="actions"></div></div>
+    <div id="widget"></div>
+    <div class="carte tableau">
+      <div class="defiler" tabindex="0" role="region" aria-label="Relevés de caisse">
+        <table>
+          <thead><tr><th scope="col">Vendeur</th><th scope="col">Depuis</th><th scope="col">Jusqu’à</th><th scope="col">Fermeture</th><th scope="col" class="num">Ventes</th><th scope="col" class="num">TTC vendu</th><th scope="col" class="num">Encaissé</th><th scope="col" class="num">Crédit d’avoir</th><th scope="col" class="num">Reste dû</th></tr></thead>
+          <tbody id="releves"></tbody>
+        </table>
+      </div>
+      <p class="pied-tableau" id="pied-tableau"></p>
+    </div>
+  </section>
+
+  <section class="panneau" aria-labelledby="t-questions">
+    <h2 id="t-questions">Questions ouvertes</h2>
+    <ol class="questions">
+      <li><strong>Demande forgée pour la caisse d’un autre vendeur.</strong> Le message décidé parle de « votre dernière fermeture » : il convient à sa propre caisse. Pour la caisse d’un vendeur qui n’est plus (ou n’a jamais été) ouverte, la maquette garde le message déjà en place, « La caisse de ce vendeur n’est plus ouverte. » (bouton « Envoyer » du pupitre, avec Karim Haddad). Le garder, ou le remplacer par « Rien à fermer : aucune vente ni encaissement depuis sa dernière fermeture. » ?</li>
+      <li><strong>Info-bulle au clavier et au doigt.</strong> Décidé : une info-bulle, annoncée aux lecteurs d’écran. Pour qu’elle existe aussi sans souris, la maquette l’ouvre à la prise de focus au clavier et à l’appui du doigt sur le bouton grisé (comme pour les noms longs des graphiques) ; le bouton est « désactivé » par aria-disabled, pour rester atteignable. Vous n’en avez pas parlé : à confirmer.</li>
+      <li><strong>Le propriétaire.</strong> Il ne vend jamais : il n’a pas de caisse, donc pas de bouton « Fermer ma caisse », comme aujourd’hui (le bouton n’est pas grisé, il n’existe pas pour lui). À confirmer.</li>
+      <li><strong>Double clic.</strong> La seconde demande rend le relevé déjà fermé, sans message (comme aujourd’hui). Un message est-il voulu ?</li>
+      <li><strong>Une caisse ouverte la veille.</strong> Les opérations non comptées d’un jour précédent gardent la caisse ouverte (le relevé les compte, « y compris ceux d’un jour précédent », comme aujourd’hui) jusqu’à la fermeture d’office de minuit. Rien à changer ?</li>
+    </ol>
+  </section>
+</main>
+
+<div id="bulle" role="presentation" aria-hidden="true" hidden></div>
+<div id="toasts" aria-live="polite"></div>
+
+<dialog id="dlg-ma" aria-labelledby="dlg-ma-titre">
+  <div class="dlg-corps">
+    <h2 id="dlg-ma-titre">Fermer ma caisse</h2>
+    <div class="recap" id="dlg-ma-recap"></div>
+  </div>
+  <div class="dlg-pied">
+    <button type="button" class="btn primaire" id="ma-confirmer">Confirmer</button>
+    <button type="button" class="btn" id="ma-annuler">Annuler</button>
+  </div>
+</dialog>
+
+<dialog id="dlg-v" aria-labelledby="dlg-v-titre">
+  <div class="dlg-corps">
+    <h2 id="dlg-v-titre">Fermer la caisse d’un vendeur</h2>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <label class="champ" for="v-select">Vendeur <span class="etoile" aria-hidden="true">*</span><span class="sr"> (obligatoire)</span></label>
+      <select id="v-select" aria-describedby="v-erreur" style="width:100%"></select>
+      <p class="erreur" id="v-erreur" role="alert" hidden>Le champ vendeur est obligatoire.</p>
+    </div>
+    <div class="recap" id="dlg-v-recap" hidden></div>
+  </div>
+  <div class="dlg-pied">
+    <button type="button" class="btn primaire" id="v-confirmer">Fermer sa caisse</button>
+    <button type="button" class="btn" id="v-annuler">Annuler</button>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const euros = (c) => (c / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+  const pad = (n) => String(n).padStart(2, '0');
+  const D = (j, h, m) => new Date(Date.UTC(2026, 10, j, h, m));
+  const fmt = (d) => `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  const heure = (d) => `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+
+  /* Les textes décidés par l'éditeur. */
+  const INFO_MA = 'Aucune vente ni encaissement à fermer.';
+  const INFO_VENDEUR = 'Aucune caisse de vendeur à fermer : aucune vente ni encaissement.';
+  const REFUS_PROPRE = 'Rien à fermer : aucune vente ni encaissement depuis votre dernière fermeture.';
+  /* Message déjà en place dans la page, inchangé (voir « Questions ouvertes », n° 1). */
+  const REFUS_VENDEUR = 'La caisse de ce vendeur n’est plus ouverte.';
+
+  const MODES = { ESP: 'Espèces', CB: 'Carte bancaire', CHQ: 'Chèque', VIR: 'Virement', PRLV: 'Prélèvement' };
+  const ORDRE = ['ESP', 'CB', 'CHQ', 'VIR', 'PRLV'];
+
+  /* Les comptes. « vend » : tient une caisse ; « gere » : peut clôturer la journée (ferme la caisse d'un vendeur) ; « voitToutes » : voit les relevés de toute l'équipe. */
+  const M = {
+    hugo: { id: 'hugo', nom: 'Hugo Lefebvre', role: 'Responsable', vend: true, gere: true, voitToutes: true },
+    sarah: { id: 'sarah', nom: 'Sarah Petit', role: 'Vendeuse', vend: true, gere: false, voitToutes: false },
+    karim: { id: 'karim', nom: 'Karim Haddad', role: 'Vendeur', vend: true, gere: false, voitToutes: false },
+    elise: { id: 'elise', nom: 'Élise Ferrand', role: 'Propriétaire', vend: false, gere: true, voitToutes: true },
+  };
+  const VENDEURS = ['hugo', 'sarah', 'karim'];
+
+  const V = (ttc, p, credit = 0) => ({ t: 'vente', ttc, p, credit });
+  const ENC = (m, c) => ({ t: 'enc', m, c });
+  const CONTRE = (m, c) => ({ t: 'contre', m, c });
+
+  /* L'historique : chaque relevé a au moins une vente ou un encaissement ; Karim a fermé deux fois dimanche, avec des ventes entre les deux. */
+  const HISTORIQUE = [
+    { v: 'sarah', depuis: D(21, 23, 59), jusqu: D(22, 12, 40), mode: 'vendeur', ops: [V(4890, [['CB', 4890]]), V(12900, [['CB', 10000], ['ESP', 2900]]), V(2650, [['ESP', 2650]])] },
+    { v: 'karim', depuis: D(22, 11, 55), jusqu: D(22, 13, 30), mode: 'vendeur', ops: [V(15800, [['CB', 15800]]), V(9900, [['CHQ', 9900]]), V(2490, [['ESP', 1000]])] },
+    { v: 'karim', depuis: D(21, 18, 10), jusqu: D(22, 11, 55), mode: 'vendeur', ops: [V(7600, [['CB', 7600]]), V(3190, [['ESP', 3190]])] },
+    { v: 'hugo', depuis: D(20, 18, 45), jusqu: D(21, 23, 59), mode: 'auto', ops: [V(23400, [['VIR', 23400]]), V(6850, [['CB', 6850]]), ENC('ESP', 5000)] },
+    { v: 'sarah', depuis: D(20, 19, 5), jusqu: D(21, 23, 59), mode: 'auto', ops: [V(3990, [['CB', 3990]]), V(8450, [['CB', 4000], ['ESP', 4450]]), V(5600, [['CB', 3100]], 2500)] },
+    { v: 'karim', depuis: D(20, 16, 20), jusqu: D(21, 18, 10), mode: 'responsable', par: 'Hugo Lefebvre', ops: [V(11250, [['CB', 11250]]), V(1990, [['ESP', 1990]]), CONTRE('ESP', 1200), ENC('CB', 1200)] },
+    { v: 'sarah', depuis: D(20, 0, 0), jusqu: D(20, 19, 5), mode: 'vendeur', ops: [V(9800, [['CB', 9800]]), V(2200, [['ESP', 2200]]), V(17600, [['CB', 17600]]), V(4300, [['ESP', 4300]])] },
+    { v: 'hugo', depuis: D(20, 0, 0), jusqu: D(20, 18, 45), mode: 'vendeur', ops: [V(36500, [['VIR', 36500]]), V(1850, [['ESP', 1850]])] },
+    { v: 'karim', depuis: D(20, 0, 0), jusqu: D(20, 16, 20), mode: 'vendeur', ops: [V(12400, [['CB', 12400]]), V(3600, [['ESP', 3600]])] },
+  ];
+
+  /* Les opérations proposées par le pupitre, tour à tour. */
+  const VENTES = [
+    V(3290, [['CB', 3290]]), V(8900, [['ESP', 8900]]), V(14500, [['CB', 10000], ['ESP', 4500]]), V(2190, [['ESP', 2190]]),
+    V(6700, [['CB', 6700]]), V(21000, [['VIR', 21000]]), V(4590, [['CB', 4590]]),
+  ];
+  const ENCAISSEMENTS = [ENC('CB', 3500), ENC('ESP', 2000), ENC('CHQ', 6000)];
+  const CONTRES = [CONTRE('ESP', 2000), CONTRE('CB', 1500)];
+  const rang = { vente: 0, enc: 0, contre: 0 };
+
+  /* L'état. */
+  let releves, now, jetons, etat, qui;
+  const depart = () => {
+    releves = HISTORIQUE.map((r, i) => ({ ...r, id: i + 1 }));
+    now = D(22, 14, 5);
+    jetons = new Map();
+    etat = {
+      hugo: { ops: [], last: D(21, 23, 59) },
+      sarah: { ops: [V(5490, [['CB', 5490]]), V(18200, [['CB', 10000], ['ESP', 8200]]), ENC('CHQ', 4500)], last: D(22, 12, 40) },
+      karim: { ops: [], last: D(22, 13, 30) },
+    };
+    qui = 'hugo';
+  };
+  depart();
+  let prochain = 100;
+
+  const ouverte = (id) => etat[id] !== undefined && etat[id].ops.length > 0;
+  const aSaCaisse = (id) => M[id].vend;
+  const neVoitQueSaCaisse = (id) => !M[id].voitToutes && M[id].vend;
+  const optionsVendeurs = (id) => VENDEURS.filter((v) => v !== id && ouverte(v));
+
+  function totaux(ops) {
+    const r = { nb: 0, ttc: 0, credit: 0, reste: 0, enc: {} };
+    for (const o of ops) {
+      if (o.t === 'vente') {
+        r.nb += 1; r.ttc += o.ttc; r.credit += o.credit; let payes = 0;
+        for (const [m, c] of o.p) { r.enc[m] = (r.enc[m] || 0) + c; payes += c; }
+        r.reste += o.ttc - payes - o.credit;
+      } else if (o.t === 'enc') { r.enc[o.m] = (r.enc[o.m] || 0) + o.c; } else { r.enc[o.m] = (r.enc[o.m] || 0) - o.c; }
+    }
+    return r;
+  }
+  const totalEnc = (enc) => Object.values(enc).reduce((a, b) => a + b, 0);
+  function encHtml(enc) {
+    const modes = ORDRE.filter((m) => enc[m] !== undefined);
+    if (!modes.length) return `<span class="enc"><span></span><span class="m">${euros(0)}</span></span>`;
+    let h = '<span class="enc">';
+    for (const m of modes) h += `<abbr title="${MODES[m]}">${m}</abbr><span class="m">${euros(enc[m])}</span>`;
+    if (modes.length > 1) h += `<span class="tot">Total</span><span class="m tot">${euros(totalEnc(enc))}</span>`;
+    return h + '</span>';
+  }
+
+  /* L'info-bulle. */
+  const bulle = $('#bulle');
+  let cibleBulle = null;
+  let ouverteAuDoigt = false;
+  let dernierPointeur = 'mouse';
+  function placerBulle() {
+    if (!cibleBulle || bulle.hidden) return;
+    const c = cibleBulle.getBoundingClientRect();
+    const b = bulle.getBoundingClientRect();
+    let x = c.left + c.width / 2 - b.width / 2;
+    x = Math.max(8, Math.min(x, innerWidth - b.width - 8));
+    let y = c.top - b.height - 8;
+    if (y < 8) y = c.bottom + 8;
+    bulle.style.left = x + 'px';
+    bulle.style.top = y + 'px';
+  }
+  function montrerBulle(el, auDoigt = false) {
+    const texte = el.dataset.info;
+    if (!texte) return;
+    cibleBulle = el;
+    ouverteAuDoigt = auDoigt;
+    bulle.textContent = texte;
+    bulle.hidden = false;
+    placerBulle();
+  }
+  function cacherBulle() { bulle.hidden = true; cibleBulle = null; }
+  document.addEventListener('pointerdown', (e) => { dernierPointeur = e.pointerType; if (cibleBulle && !cibleBulle.contains(e.target)) cacherBulle(); }, true);
+  document.addEventListener('pointerover', (e) => {
+    if (e.pointerType === 'touch') return;
+    const el = e.target.closest && e.target.closest('[data-info]');
+    if (el) montrerBulle(el);
+  });
+  document.addEventListener('pointerout', (e) => {
+    if (e.pointerType === 'touch') return;
+    const el = e.target.closest && e.target.closest('[data-info]');
+    if (el && !(e.relatedTarget && el.contains(e.relatedTarget))) cacherBulle();
+  });
+  document.addEventListener('focusin', (e) => {
+    const el = e.target.closest && e.target.closest('[data-info]');
+    if (el && el.matches(':focus-visible')) montrerBulle(el);
+  });
+  document.addEventListener('focusout', (e) => { if (e.target.closest && e.target.closest('[data-info]')) cacherBulle(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !bulle.hidden) cacherBulle(); });
+  addEventListener('scroll', placerBulle, { passive: true });
+  addEventListener('resize', placerBulle);
+
+  /* Les notifications. */
+  const ICONES = {
+    succes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M8 12.5l3 3 5-6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    alerte: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3.5l9.5 16.5h-19z" stroke-linejoin="round"/><path d="M12 10v4.5M12 17.2v.1" stroke-linecap="round"/></svg>',
+    danger: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5.5M12 16.3v.1" stroke-linecap="round"/></svg>',
+  };
+  function toast(titre, type) {
+    const conteneur = $('#toasts');
+    const t = document.createElement('div');
+    t.className = 'toast ' + type;
+    t.setAttribute('role', type === 'succes' ? 'status' : 'alert');
+    t.innerHTML = `${ICONES[type]}<span>${esc(titre)}</span><button type="button" class="fermer" aria-label="Fermer la notification">×</button>`;
+    t.querySelector('.fermer').addEventListener('click', () => t.remove());
+    conteneur.prepend(t);
+    while (conteneur.children.length > 3) conteneur.lastElementChild.remove();
+    setTimeout(() => t.remove(), 9000);
+  }
+
+  /* Le serveur de la maquette. */
+  const jeton = () => Math.random().toString(16).slice(2, 10) + Math.random().toString(16).slice(2, 10);
+  function noter(texte) {
+    const j = $('#journal');
+    if (j.firstElementChild && j.firstElementChild.classList.contains('doux')) j.innerHTML = '';
+    const li = document.createElement('li');
+    li.textContent = `${heure(now)} · ${texte}`;
+    j.prepend(li);
+    while (j.children.length > 12) j.lastElementChild.remove();
+  }
+  const avancer = () => { now = new Date(now.getTime() + 7 * 60000); };
+
+  function creerReleve(v, mode, parId) {
+    const r = { id: prochain++, v, depuis: etat[v].last, jusqu: new Date(now), mode, par: parId ? M[parId].nom : null, ops: etat[v].ops };
+    etat[v].ops = [];
+    etat[v].last = new Date(now);
+    releves.unshift(r);
+    return r;
+  }
+  function fermerCaisse(auteur, vendeur, token) {
+    const propre = auteur === vendeur;
+    const geste = `${M[auteur].nom} · ${propre ? 'fermer sa caisse' : 'fermer la caisse de ' + M[vendeur].nom} · jeton ${token.slice(0, 6)}…`;
+    if (jetons.has(token)) {
+      noter(`${geste} · le relevé déjà fermé est rendu, aucun nouveau relevé`);
+      return { ok: true, deja: true, releve: jetons.get(token) };
+    }
+    if (!ouverte(vendeur)) {
+      const refus = propre ? REFUS_PROPRE : REFUS_VENDEUR;
+      noter(`${geste} · refusée : « ${refus} »`);
+      return { ok: false, refus, propre };
+    }
+    avancer();
+    const r = creerReleve(vendeur, propre ? 'vendeur' : 'responsable', propre ? null : auteur);
+    jetons.set(token, r);
+    const t = totaux(r.ops);
+    noter(`${geste} · relevé fermé (${t.nb} vente${t.nb > 1 ? 's' : ''}, ${euros(t.ttc)} TTC)`);
+    return { ok: true, releve: r };
+  }
+  function fermetureDOffice() {
+    avancer();
+    const nommes = [];
+    for (const v of VENDEURS) {
+      if (ouverte(v)) { const r = creerReleve(v, 'auto', null); const t = totaux(r.ops); nommes.push(M[v].nom); noter(`Fermeture d’office · ${M[v].nom} · relevé « Fermée automatiquement » (${t.nb} vente${t.nb > 1 ? 's' : ''}, ${euros(t.ttc)} TTC)`); }
+      else noter(`Fermeture d’office · ${M[v].nom} · rien à compter : aucun relevé écrit`);
+    }
+    return nommes;
+  }
+
+  /* Rendu. */
+  const CADENAS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>';
+  const UTILISATEUR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M22 10.5h-6m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z"/></svg>';
+  function bouton(id, libelle, classe, icone, info) {
+    const grise = info ? ` aria-disabled="true" data-info="${esc(info)}" aria-describedby="${id}-desc"` : '';
+    const desc = info ? `<span class="sr" id="${id}-desc">${esc(info)}</span>` : '';
+    return `<button type="button" class="btn ${classe}" id="${id}" data-geste="${id}"${grise}>${icone}<span>${esc(libelle)}</span></button>${desc}`;
+  }
+  function rendreActions() {
+    const m = M[qui];
+    let h = '';
+    if (aSaCaisse(qui)) h += bouton('fermer-ma-caisse', 'Fermer ma caisse', 'primaire', CADENAS, ouverte(qui) ? '' : INFO_MA);
+    if (m.gere) h += bouton('fermer-la-caisse-d-un-vendeur', 'Fermer la caisse d’un vendeur', '', UTILISATEUR, optionsVendeurs(qui).length ? '' : INFO_VENDEUR);
+    $('#actions').innerHTML = h;
+  }
+  function rendreWidget() {
+    const w = $('#widget');
+    if (neVoitQueSaCaisse(qui)) { w.innerHTML = ''; return; }
+    const ouverts = VENDEURS.filter(ouverte);
+    w.innerHTML = `<div class="carte"><span class="stat-nom">Caisses personnelles ouvertes</span><span class="stat-val">${ouverts.length}</span>`
+      + (ouverts.length
+        ? `<span class="stat-desc alerte">Fermées automatiquement à la clôture de la journée : ${esc(ouverts.map((v) => M[v].nom).join(', '))}</span>`
+        : '<span class="stat-desc ok">Toutes les caisses personnelles sont fermées.</span>') + '</div>';
+  }
+  function rendreTableau() {
+    const visibles = neVoitQueSaCaisse(qui) ? releves.filter((r) => r.v === qui) : releves;
+    $('#releves').innerHTML = visibles.map((r) => {
+      const t = totaux(r.ops);
+      const libelle = r.mode === 'vendeur' ? 'Fermée par le vendeur' : r.mode === 'responsable' ? 'Fermée par ' + r.par : 'Fermée automatiquement';
+      return `<tr><td>${esc(M[r.v].nom)}</td><td class="date">${fmt(r.depuis)}</td><td class="date">${fmt(r.jusqu)}</td><td><span class="badge${r.mode === 'auto' ? ' auto' : ''}">${esc(libelle)}</span></td>`
+        + `<td class="num">${t.nb}</td><td class="num">${euros(t.ttc)}</td><td class="num">${encHtml(t.enc)}</td><td class="num">${euros(t.credit)}</td><td class="num">${euros(t.reste)}</td></tr>`;
+    }).join('');
+    $('#pied-tableau').textContent = `${visibles.length} relevé${visibles.length > 1 ? 's' : ''}`;
+  }
+  function libelleEtat(id) {
+    const o = etat[id].ops;
+    if (!o.length) return '<b>Caisse pas ouverte</b> : rien de non compté.';
+    const n = (t) => o.filter((x) => x.t === t).length;
+    const parts = [];
+    if (n('vente')) parts.push(`${n('vente')} vente${n('vente') > 1 ? 's' : ''}`);
+    if (n('enc')) parts.push(`${n('enc')} encaissement${n('enc') > 1 ? 's' : ''}`);
+    if (n('contre')) parts.push(`${n('contre')} contre-passation${n('contre') > 1 ? 's' : ''}`);
+    return `<b>Caisse ouverte</b> : ${parts.join(', ')} non compté${o.length > 1 ? 's' : ''}.`;
+  }
+  function rendrePupitre() {
+    for (const id of VENDEURS) $(`[data-etat="${id}"]`).innerHTML = libelleEtat(id);
+    $('#horloge').textContent = `Heure de la maquette : dimanche 22/11/2026 ${heure(now)}`;
+    const forgerQui = $('#forger-qui');
+    const choisi = forgerQui.value;
+    forgerQui.innerHTML = VENDEURS.filter((v) => v !== qui).map((v) => `<option value="${v}">${esc(M[v].nom)}</option>`).join('');
+    if ([...forgerQui.options].some((o) => o.value === choisi)) forgerQui.value = choisi; else if ([...forgerQui.options].some((o) => o.value === 'karim')) forgerQui.value = 'karim';
+    $('#forger-ma').disabled = !aSaCaisse(qui);
+    $('#double').disabled = !aSaCaisse(qui);
+    $('#forger-vendeur').disabled = !M[qui].gere;
+    forgerQui.disabled = !M[qui].gere;
+    $('#qui').value = qui;
+  }
+  function rendre() {
+    cacherBulle();
+    const m = M[qui];
+    $('#compte').textContent = `${m.nom} · ${m.role}`;
+    const titre = neVoitQueSaCaisse(qui) ? 'Ma caisse' : 'Les caisses';
+    $('#titre-page').textContent = titre;
+    $('#fil').textContent = titre;
+    rendreActions(); rendreWidget(); rendreTableau(); rendrePupitre();
+  }
+
+  /* Le pupitre : les caisses de chacun. */
+  $('#equipe').innerHTML = VENDEURS.map((id) => `<div class="membre"><div class="qui"><strong>${esc(M[id].nom)}</strong><span class="doux petit">${esc(M[id].role)}</span></div>`
+    + `<div class="etat" data-etat="${id}"></div>`
+    + `<div class="gestes"><button type="button" class="btn petit-btn" data-op="vente" data-id="${id}" aria-label="Ajouter une vente émise à la caisse de ${esc(M[id].nom)}">+ une vente</button>`
+    + `<button type="button" class="btn petit-btn" data-op="enc" data-id="${id}" aria-label="Ajouter un encaissement à la caisse de ${esc(M[id].nom)}">+ un encaissement</button>`
+    + `<button type="button" class="btn petit-btn" data-op="contre" data-id="${id}" aria-label="Ajouter une contre-passation à la caisse de ${esc(M[id].nom)}">+ une contre-passation</button></div></div>`).join('');
+  function ajouter(id, type) {
+    const liste = type === 'vente' ? VENTES : type === 'enc' ? ENCAISSEMENTS : CONTRES;
+    etat[id].ops.push(liste[rang[type] % liste.length]);
+    rang[type] += 1;
+  }
+  $('#equipe').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-op]');
+    if (!b) return;
+    ajouter(b.dataset.id, b.dataset.op);
+    rendre();
+    const nouveau = $(`[data-op="${b.dataset.op}"][data-id="${b.dataset.id}"]`);
+    if (nouveau) nouveau.focus();
+  });
+  $('#qui').addEventListener('change', (e) => { qui = e.target.value; rendre(); });
+  $('#tout-fermer').addEventListener('click', () => { for (const id of VENDEURS) etat[id].ops = []; rendre(); });
+  $('#depart').addEventListener('click', () => { const t = $('#journal'); t.innerHTML = '<li class="doux">Rien encore.</li>'; depart(); rendre(); });
+
+  /* Fenêtre « Fermer ma caisse ». */
+  const dlgMa = $('#dlg-ma');
+  let jetonMa = null;
+  let ouvreur = null;
+  function recapitulatif(id, possessif) {
+    const t = totaux(etat[id].ops);
+    const ses = possessif === 'votre' ? 'vos' : 'ses';
+    return `<div>TTC vendu : ${euros(t.ttc)} (${t.nb} vente${t.nb > 1 ? 's' : ''})</div>`
+      + `<div>Encaissé : ${encHtml(t.enc)}</div>`
+      + `<div>Crédit d’avoir utilisé : ${euros(t.credit)}</div>`
+      + `<div>Reste dû : ${euros(t.reste)}</div>`
+      + `<p class="note">Ce relevé compte ${ses} ventes et ${ses} paiements qu’aucune fermeture n’a encore comptés, y compris ceux d’un jour précédent. Il part de ${possessif} dernière fermeture de caisse (ou du début de la journée si c’est la première), ou de ${possessif} plus ancienne opération non comptée si elle est antérieure. Ceci ne clôture pas la journée du magasin.</p>`;
+  }
+  function ouvrirMa() {
+    jetonMa = jeton();
+    $('#dlg-ma-recap').innerHTML = recapitulatif(qui, 'votre');
+    ouvreur = $('#fermer-ma-caisse');
+    dlgMa.showModal();
+    $('#ma-confirmer').focus();
+  }
+  $('#ma-confirmer').addEventListener('click', () => {
+    const res = fermerCaisse(qui, qui, jetonMa);
+    if (!res.ok) toast(res.refus, 'danger');
+    rendre();
+    clearTimeout(ouvrirMa.minuterie);
+    ouvrirMa.minuterie = setTimeout(() => { if (dlgMa.open) dlgMa.close(); }, 400);
+  });
+  $('#ma-annuler').addEventListener('click', () => dlgMa.close());
+  dlgMa.addEventListener('close', () => { const el = $('#fermer-ma-caisse'); if (el) el.focus(); });
+
+  /* Fenêtre « Fermer la caisse d'un vendeur ». */
+  const dlgV = $('#dlg-v');
+  let jetonV = null;
+  function remplirVendeurs() {
+    const sel = $('#v-select');
+    sel.innerHTML = '<option value="">Sélectionner une option</option>' + optionsVendeurs(qui).map((v) => `<option value="${v}">${esc(M[v].nom)}</option>`).join('');
+  }
+  function ouvrirVendeur() {
+    jetonV = jeton();
+    remplirVendeurs();
+    $('#v-erreur').hidden = true;
+    $('#dlg-v-recap').hidden = true;
+    dlgV.showModal();
+    $('#v-select').focus();
+  }
+  $('#v-select').addEventListener('change', (e) => {
+    const v = e.target.value;
+    $('#v-erreur').hidden = true;
+    const r = $('#dlg-v-recap');
+    if (v && ouverte(v)) { r.innerHTML = recapitulatif(v, 'sa'); r.hidden = false; } else { r.hidden = true; }
+  });
+  $('#v-confirmer').addEventListener('click', () => {
+    const v = $('#v-select').value;
+    if (!v) { $('#v-erreur').hidden = false; $('#v-select').focus(); return; }
+    if (!optionsVendeurs(qui).includes(v)) { toast(REFUS_VENDEUR, 'alerte'); dlgV.close(); rendre(); return; }
+    const res = fermerCaisse(qui, v, jetonV);
+    if (res.ok) toast(`Caisse de ${M[v].nom} fermée`, 'succes');
+    else toast(res.refus, 'alerte');
+    dlgV.close();
+    rendre();
+  });
+  $('#v-annuler').addEventListener('click', () => dlgV.close());
+  dlgV.addEventListener('close', () => { const el = $('#fermer-la-caisse-d-un-vendeur'); if (el) el.focus(); });
+
+  /* Les boutons de la page d'écran. */
+  $('#actions').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.getAttribute('aria-disabled') === 'true') {
+      if (dernierPointeur === 'touch') { if (cibleBulle === b && ouverteAuDoigt) cacherBulle(); else montrerBulle(b, true); }
+      return;
+    }
+    if (b.id === 'fermer-ma-caisse') ouvrirMa();
+    if (b.id === 'fermer-la-caisse-d-un-vendeur') ouvrirVendeur();
+  });
+  $('#actions').addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.getAttribute && e.target.getAttribute('aria-disabled') === 'true') e.preventDefault();
+  });
+
+  /* Demandes envoyées sans passer par un bouton. */
+  function forgerMa() { const res = fermerCaisse(qui, qui, jeton()); if (!res.ok) toast(res.refus, 'danger'); rendre(); }
+  function forgerVendeur() {
+    const v = $('#forger-qui').value;
+    if (!v) return;
+    const res = fermerCaisse(qui, v, jeton());
+    if (res.ok) toast(`Caisse de ${M[v].nom} fermée`, 'succes'); else toast(res.refus, 'alerte');
+    rendre();
+  }
+  function doubleClic() {
+    const t = jeton();
+    const a = fermerCaisse(qui, qui, t);
+    const b = fermerCaisse(qui, qui, t);
+    if (!a.ok) toast(a.refus, 'danger');
+    rendre();
+    return [a, b];
+  }
+  function office() { const n = fermetureDOffice(); rendre(); return n; }
+  $('#forger-ma').addEventListener('click', forgerMa);
+  $('#forger-vendeur').addEventListener('click', forgerVendeur);
+  $('#double').addEventListener('click', doubleClic);
+  $('#office').addEventListener('click', office);
+
+  /* Les boutons « Voir ». */
+  function theme(v) { if (v === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = v; $('#affichage').value = v; }
+  $('#affichage').addEventListener('change', (e) => theme(e.target.value));
+  const toutFermer = () => { for (const id of VENDEURS) etat[id].ops = []; };
+  const PRESETS = {
+    'sans-vente': () => { toutFermer(); qui = 'sarah'; return 'info'; },
+    'apres-vente': () => { toutFermer(); qui = 'sarah'; ajouter('sarah', 'vente'); return 'bouton'; },
+    'a-fermer': () => { toutFermer(); qui = 'sarah'; ajouter('sarah', 'vente'); ajouter('sarah', 'vente'); ajouter('sarah', 'enc'); return 'bouton'; },
+    'liste-vendeurs': () => { toutFermer(); qui = 'hugo'; ajouter('sarah', 'vente'); ajouter('sarah', 'enc'); return 'liste'; },
+    'aucun-vendeur': () => { toutFermer(); qui = 'hugo'; return 'info-vendeur'; },
+    'proprietaire': () => { toutFermer(); qui = 'elise'; return 'info-vendeur'; },
+    'forgee': () => { toutFermer(); qui = 'sarah'; return 'forgee'; },
+    'double-clic': () => { toutFermer(); qui = 'sarah'; ajouter('sarah', 'vente'); ajouter('sarah', 'vente'); return 'double'; },
+    'd-office': () => { toutFermer(); qui = 'hugo'; ajouter('sarah', 'vente'); ajouter('sarah', 'vente'); ajouter('karim', 'vente'); ajouter('karim', 'enc'); return 'office'; },
+    'clair': () => { theme('light'); return PRESETS['sans-vente'](); },
+    'sombre': () => { theme('dark'); return PRESETS['sans-vente'](); },
+  };
+  $$('[data-voir]').forEach((b) => b.addEventListener('click', () => {
+    const suite = PRESETS[b.dataset.voir]();
+    rendre();
+    $('#ecran').scrollIntoView({ block: 'start' });
+    requestAnimationFrame(() => {
+      if (suite === 'info') montrerBulle($('#fermer-ma-caisse'));
+      if (suite === 'info-vendeur') montrerBulle($('#fermer-la-caisse-d-un-vendeur'));
+      if (suite === 'liste') ouvrirVendeur();
+      if (suite === 'forgee') forgerMa();
+      if (suite === 'double') doubleClic();
+      if (suite === 'office') office();
+    });
+  }));
+
+  rendre();
+  /* Pour la vérification de la maquette seulement : les états et les gestes. */
+  window.__maquette = { etat: () => ({ qui, ouvertes: VENDEURS.filter(ouverte), releves: releves.length }), jetons: () => jetons.size };
+})();
+</script>

@@ -29,10 +29,30 @@ use RuntimeException;
  *    libellé accessible est lu, son texte vaut null ;
  *  - le mois choisi (`mois`) se lit sur la colonne du dessin dont
  *    `aria-pressed` vaut « true », null quand la page n'a pas de dessin ;
- *  - la page n'écrit que l'affichage choisi : par mois, ni les cartes de
- *    chiffres des douze mois (`stats` vaut null) ; sur douze mois, ni le
- *    dessin ni ses légendes (`dessin` et `legendes` valent null), ni le
- *    tableau « Voir les chiffres » ;
+ *  - par mois, la page écrit les douze lectures du mois, chacune dans un
+ *    bloc `data-ecart-mois` (le titre du mois, le grand chiffre, la
+ *    pastille et le détail ; le calcul achat par achat) que la donnée Alpine
+ *    `mois` de la carte montre ou cache sans appeler le serveur (décision
+ *    de l'éditeur du 23/11/2026) : la lecture ne garde que ceux que la page
+ *    montre, ni `x-cloak` ni `display: none` écrit, ou, quand un mois est
+ *    donné à lire(), ceux de ce mois ; elle refuse une page qui en montre
+ *    plusieurs à la fois ;
+ *  - la page écrit les deux affichages (décision de l'éditeur du 23/11/2026 :
+ *    le menu « Afficher : » ne rappelle pas le serveur), chacun dans un bloc
+ *    `data-ecart-affichage` que la donnée Alpine `affichage` de la carte
+ *    montre ou cache : la lecture ne garde que celui que la page montre,
+ *    ni `x-cloak` ni `display: none` écrit, ou celui qu'on lui demande ; par
+ *    mois, ni les cartes de chiffres des douze mois (`stats` vaut null) ;
+ *    sur douze mois, ni le dessin ni ses légendes (`dessin` et `legendes`
+ *    valent null), ni le tableau « Voir les chiffres » ;
+ *  - les lignes du calcul achat par achat ne sont pas écrites en HTML : la
+ *    page les porte en JSON compact (le `script` de la vue de la carte, qui
+ *    écrit chaque classe une seule fois, avec son préfixe, dans sa table
+ *    `classes`, chaque ligne et chaque cellule en donnant le rang) et le
+ *    navigateur les pose dans le tableau quand le calcul est ouvert ; la
+ *    lecture prend les lignes du tableau quand il en a, sinon celles du JSON,
+ *    qui sont les mêmes ; une ligne ou une cellule posée dont une classe n'a
+ *    pas le préfixe est refusée, puisque la feuille ne la connaîtrait pas ;
  *  - le texte d'un lien « Voir… » ouvert est celui de son `x-text`.
  *
  * Le HTML est lu par un analyseur HTML5 (les commentaires de Livewire et le
@@ -49,11 +69,15 @@ final class LectureDeLaPage
     ) {}
 
     /**
-     * La carte de ce graphique dans cette page.
+     * La carte de ce graphique dans cette page, avec les blocs du mois que
+     * la page montre, ou ceux de ce mois s'il est donné (la page écrite par
+     * le serveur ne montre que le mois de départ ; ce qu'elle écrit pour les
+     * autres mois se lit ainsi).
      *
+     * @param  'avant'|'debut'|null  $affichage  celui à lire ; null : celui que la page montre
      * @return array<string, mixed>
      */
-    public static function lire(string $html, string $graphique = 'ecart_des_prix_d_achat'): array
+    public static function lire(string $html, string $graphique = 'ecart_des_prix_d_achat', ?int $mois = null, ?string $affichage = null): array
     {
         $document = (new HTML5(['disable_html_ns' => true]))->loadHTML('<!DOCTYPE html><html><body>'.$html.'</body></html>');
         $chemin = new DOMXPath($document);
@@ -63,7 +87,34 @@ final class LectureDeLaPage
             throw new RuntimeException('La page ne porte pas exactement une carte « '.$graphique.' ».');
         }
 
-        return (new self($document, $chemin, $cartes->item(0)))->lecture();
+        $lecteur = new self($document, $chemin, $cartes->item(0));
+        $lecteur->garderLAffichage($affichage);
+        $lecteur->garderLesBlocsDuMois($mois);
+
+        return $lecteur->lecture();
+    }
+
+    /**
+     * Le premier écart entre ce que la page écrit pour un mois de l'affichage
+     * par mois (le titre du mois, le grand chiffre, la pastille, le détail
+     * et le calcul achat par achat) et le relevé de la maquette pour ce mois ;
+     * null quand c'est la maquette. Le dessin, que le mois choisi change dans
+     * le navigateur, n'en fait pas partie.
+     *
+     * @param  array<string, mixed>  $lue  ce que lire() a rendu, pour ce mois
+     */
+    public static function premierEcartDuMois(array $lue, int $mois): ?string
+    {
+        $attendu = LectureDesFixtures::verite()['etats']['avant'][$mois];
+        $extrait = fn (array $lecture): array => [
+            'moisChoisi' => $lecture['moisChoisi'],
+            'grand' => $lecture['grand'],
+            'pastille' => $lecture['pastille'],
+            'detail' => $lecture['detail'],
+            'calcul' => array_diff_key($lecture['calcul'], ['lien' => true]),
+        ];
+
+        return LectureDesFixtures::premierEcart($extrait($lue), $extrait($attendu));
     }
 
     /**
@@ -90,6 +141,69 @@ final class LectureDeLaPage
         }
 
         return LectureDesFixtures::premierEcart($lue, $attendu);
+    }
+
+    /**
+     * Retire le bloc `data-ecart-affichage` qui n'est pas celui de
+     * l'affichage lu : celui qu'on demande, sinon celui que la page montre
+     * (ni `x-cloak`, que la page n'a pas encore levé, ni `display: none`,
+     * que la donnée Alpine `affichage` écrit).
+     */
+    private function garderLAffichage(?string $affichage): void
+    {
+        $blocs = $this->chemin->query('.//*[@data-ecart-affichage]', $this->carte);
+
+        foreach ($blocs === false ? [] : iterator_to_array($blocs) as $bloc) {
+            if (! $bloc instanceof DOMElement) {
+                continue;
+            }
+
+            $garde = $affichage === null
+                ? ! $bloc->hasAttribute('x-cloak') && preg_match('/display:\s*none/i', $bloc->getAttribute('style')) !== 1
+                : $bloc->getAttribute('data-ecart-affichage') === $affichage;
+
+            if (! $garde) {
+                $bloc->parentNode?->removeChild($bloc);
+            }
+        }
+
+        $restants = $this->chemin->query('.//*[@data-ecart-affichage]', $this->carte);
+
+        if ($restants !== false && $restants->length > 1) {
+            throw new RuntimeException('La carte montre '.$restants->length.' affichages à la fois.');
+        }
+    }
+
+    /**
+     * Retire les blocs `data-ecart-mois` qui ne sont pas ceux du mois lu :
+     * ceux de ce mois s'il est donné, sinon ceux que la page montre (ni
+     * `x-cloak`, que la page n'a pas encore levé, ni `display: none`, que la
+     * donnée Alpine `mois` écrit). Il en reste deux par mois (la lecture et
+     * le calcul), aucun sur douze mois.
+     */
+    private function garderLesBlocsDuMois(?int $mois): void
+    {
+        $blocs = $this->chemin->query('.//*[@data-ecart-mois]', $this->carte);
+
+        foreach ($blocs === false ? [] : iterator_to_array($blocs) as $bloc) {
+            if (! $bloc instanceof DOMElement) {
+                continue;
+            }
+
+            $garde = $mois === null
+                ? ! $bloc->hasAttribute('x-cloak') && preg_match('/display:\s*none/i', $bloc->getAttribute('style')) !== 1
+                : (int) $bloc->getAttribute('data-ecart-mois') === $mois;
+
+            if (! $garde) {
+                $bloc->parentNode?->removeChild($bloc);
+            }
+        }
+
+        $restants = $this->chemin->query('.//*[@data-ecart-mois]', $this->carte);
+
+        if ($restants !== false && ! in_array($restants->length, [0, 2], true)) {
+            throw new RuntimeException('La carte montre '.$restants->length.' blocs de mois à la fois : la lecture d\'un mois et son calcul, deux au plus.');
+        }
     }
 
     /**
@@ -137,7 +251,7 @@ final class LectureDeLaPage
                 'titre' => $this->texteDe($this->un('calcul-titre')),
                 'classeDefiler' => $this->classes($this->premier('.//*[@data-ecart="calcul"]//*[contains(concat(" ", normalize-space(@class), " "), " '.self::PREFIXE_DES_CLASSES.'defiler ")]')),
                 'tete' => $this->entetes($this->un('calcul-tete')),
-                'lignes' => $this->lignes($this->un('calcul-corps')),
+                'lignes' => $this->lignesDuCalcul($this->un('calcul-corps')),
                 'notes' => array_map($this->texte(...), $this->enfants($this->un('calcul-notes'))),
             ],
             'stats' => $vueDeLaPeriode ? [
@@ -238,6 +352,56 @@ final class LectureDeLaPage
     }
 
     /**
+     * Les lignes du tableau du calcul : celles que le navigateur y a posées,
+     * sinon celles que la page porte en JSON pour ce mois (ou pour les douze
+     * mois), qui sont les mêmes.
+     *
+     * @return list<array{classe: string, cellules: list<array{t: string, c: string, colspan: int}>}>
+     */
+    private function lignesDuCalcul(DOMElement $corps): array
+    {
+        $posees = $this->lignes($corps);
+
+        if ($posees !== []) {
+            return $posees;
+        }
+
+        $mois = null;
+        $bloc = $corps->parentNode;
+
+        while ($bloc !== null && ! ($bloc instanceof DOMElement && ($bloc->hasAttribute('data-ecart-mois') || $bloc->hasAttribute('data-ecart-affichage')))) {
+            $bloc = $bloc->parentNode;
+        }
+
+        if ($bloc instanceof DOMElement && $bloc->hasAttribute('data-ecart-mois')) {
+            $mois = (int) $bloc->getAttribute('data-ecart-mois');
+        }
+
+        $script = $this->premier('.//script[@data-ecart="calculs"]');
+        $calculs = json_decode($script->textContent, true, 512, JSON_THROW_ON_ERROR);
+        $rangees = is_array($calculs) ? ($mois === null ? ($calculs['debut'][0] ?? null) : ($calculs['avant'][$mois] ?? null)) : null;
+
+        if (! is_array($rangees)) {
+            throw new RuntimeException('La carte ne porte pas les lignes de ce calcul en JSON.');
+        }
+
+        $classes = $calculs['classes'] ?? null;
+
+        if (! is_array($classes)) {
+            throw new RuntimeException('La carte ne porte pas la table des classes de ses lignes en JSON.');
+        }
+
+        return array_map(fn (array $ligne): array => [
+            'classe' => $this->sansPrefixe((string) $classes[(int) $ligne[0]]),
+            'cellules' => array_map(function (array|string $cellule) use ($classes): array {
+                [$texte, $rang, $etendue] = is_string($cellule) ? [$cellule, 0, 1] : [$cellule[0], $cellule[1] ?? 0, $cellule[2] ?? 1];
+
+                return ['t' => (string) $texte, 'c' => $this->sansPrefixe((string) $classes[(int) $rang]), 'colspan' => (int) $etendue];
+            }, $ligne[1]),
+        ], array_values($rangees));
+    }
+
+    /**
      * @return list<array{classe: string, cellules: list<array{t: string, c: string, colspan: int}>}>
      */
     private function lignes(DOMElement $corps): array
@@ -248,10 +412,10 @@ final class LectureDeLaPage
             $cellules = [];
 
             foreach ($this->enfants($ligne, 'td') as $cellule) {
-                $cellules[] = ['t' => (string) $cellule->textContent, 'c' => $this->classes($cellule), 'colspan' => $cellule->hasAttribute('colspan') ? (int) $cellule->getAttribute('colspan') : 1];
+                $cellules[] = ['t' => (string) $cellule->textContent, 'c' => $this->classesPrefixees($cellule), 'colspan' => $cellule->hasAttribute('colspan') ? (int) $cellule->getAttribute('colspan') : 1];
             }
 
-            $lignes[] = ['classe' => $this->classes($ligne), 'cellules' => $cellules];
+            $lignes[] = ['classe' => $this->classesPrefixees($ligne), 'cellules' => $cellules];
         }
 
         return $lignes;
@@ -273,9 +437,32 @@ final class LectureDeLaPage
      */
     private function classes(DOMElement $element): string
     {
-        $classes = preg_split('/\s+/', trim($element->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        return $this->sansPrefixe($element->getAttribute('class'));
+    }
 
-        return implode(' ', array_map(fn (string $classe): string => str_starts_with($classe, self::PREFIXE_DES_CLASSES) ? substr($classe, strlen(self::PREFIXE_DES_CLASSES)) : $classe, $classes));
+    /**
+     * Les classes d'une ligne ou d'une cellule d'un tableau, sans le préfixe
+     * de la feuille des graphiques ; une classe qui ne l'a pas est refusée.
+     */
+    private function classesPrefixees(DOMElement $element): string
+    {
+        foreach (preg_split('/\s+/', trim($element->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $classe) {
+            if (! str_starts_with($classe, self::PREFIXE_DES_CLASSES)) {
+                throw new RuntimeException('La classe « '.$classe.' » d\'une ligne ou d\'une cellule du tableau n\'a pas le préfixe « '.self::PREFIXE_DES_CLASSES.' » : la feuille des graphiques ne la connaît pas.');
+            }
+        }
+
+        return $this->classes($element);
+    }
+
+    /**
+     * Ces classes, sans le préfixe de la feuille des graphiques.
+     */
+    private function sansPrefixe(string $classes): string
+    {
+        $noms = preg_split('/\s+/', trim($classes), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        return implode(' ', array_map(fn (string $classe): string => str_starts_with($classe, self::PREFIXE_DES_CLASSES) ? substr($classe, strlen(self::PREFIXE_DES_CLASSES)) : $classe, $noms));
     }
 
     private function libelleDeLaCroix(): string

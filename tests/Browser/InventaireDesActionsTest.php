@@ -149,12 +149,12 @@ test('la lecture du code trouve un bouton que le code écrit lui-même dans une 
         {
             public function colonne(): string
             {
-                return '<g wire:click="choisirLeMois(1)" x-on:keydown.enter.prevent="$wire.choisirLeMois(1)"></g>'
+                return '<g wire:click="ouvrirLaPiece(1)" x-on:keydown.enter.prevent="$wire.ouvrirLaPiece(1)"></g>'
                     .'<a href="#" wire:click.prevent="telechargerUnePiece(2)">pièce</a>'
                     .'<p>wire:click sans guillemet</p>';
             }
         }
         PHP;
 
-    expect(ActionsDeLInterface::declarees($code))->toBe(['clic:choisirLeMois', 'clic:telechargerUnePiece']);
+    expect(ActionsDeLInterface::declarees($code))->toBe(['clic:ouvrirLaPiece', 'clic:telechargerUnePiece']);
 });

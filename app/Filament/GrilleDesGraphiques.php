@@ -15,6 +15,7 @@ use App\Domain\TableauDeBord\Services\PreferencesDesGraphiques;
 use App\Domain\TableauDeBord\Services\SeriesDesGraphiques;
 use App\Domain\TableauDeBord\Support\CalculDesSeries;
 use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
+use App\Domain\TableauDeBord\Support\DessinDeLEcartDesPrixDAchat;
 use App\Domain\TableauDeBord\Support\EcartDesPrixDAchat;
 use App\Domain\TableauDeBord\Support\Mois;
 use App\Domain\TableauDeBord\Support\Perimetre;
@@ -31,6 +32,7 @@ use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
 use Illuminate\Auth\Access\AuthorizationException;
 use Livewire\Attributes\Locked;
+use Livewire\Mechanisms\DataStore;
 use LogicException;
 
 /**
@@ -71,13 +73,29 @@ use LogicException;
  * D76, B6 et B7) n'a pas de canevas : la vue écrit son contenu, avec un
  * `svg` calculé en PHP (voir TextesDeLEcartDesPrixDAchat et
  * SvgDeLEcartDesPrixDAchat). Son menu « Afficher : » (voir
- * changerLAffichage()) se retient comme le type ; le mois qu'on y choisit
- * (voir choisirLeMois()) vit dans l'écran, le temps de la page, sans rien
- * écrire en base, et revient au dernier mois de la période qui n'est pas à
- * venir quand la période ou le magasin change. Seuls le calcul de
- * l'affichage choisi et celui du mois choisi sont écrits dans la page.
+ * changerLAffichage()) se retient comme le type.
+ *
+ * Les gestes qui ne changent que l'affichage de ce que la page contient déjà
+ * ne rappellent ni la base ni le calcul de la grille (décision de l'éditeur
+ * du 23/11/2026) : choisir un mois de la carte « Écart des prix d'achat »,
+ * ouvrir « Voir les chiffres » ne passent jamais par le serveur ; changer le
+ * type d'un graphique, « Monter », « Descendre », la croix, « Classer par »
+ * et le menu « Afficher : » se font aussitôt dans la page (voir piliqiGrille()
+ * dans graphiques-du-panneau.blade.php), puis le serveur les retient ici, en
+ * arrière-plan, sans redessiner la grille : il rend ce qu'il a retenu (voir
+ * etat()), ou null quand il refuse, et la page en revient alors à ce qu'il
+ * avait retenu en dernier. La page écrit pour cela les deux classements des
+ * meilleurs produits, les deux affichages de l'écart des prix d'achat et,
+ * par mois, les douze lectures du mois (voir ecartDesPrixDAchat()). Les
+ * gestes qui changent ce que la grille calcule (la période, le magasin, la
+ * comparaison, un graphique ajouté) redessinent la grille.
  *
  * @phpstan-import-type Lecture from TextesDeLEcartDesPrixDAchat
+ * @phpstan-import-type DuMois from TextesDeLEcartDesPrixDAchat
+ *
+ * @phpstan-type EtatDesCartes array{ordre: list<string>, cartes: array<string, array{type: string, mesure?: string, affichage?: string}>}
+ * @phpstan-type Face array{serie: SerieDuGraphique, config: array{titre: string, etiquettes: list<string>, jeux: list<array{libelle: string, valeurs: list<float|int|null>, unite: string, en_ligne: bool, axe_de_droite: bool, pointilles: bool}>, info_bulles: array<int, string>}}
+ * @phpstan-type EcartDeLaCarte array{depart: int, parMois: Lecture, surDouzeMois: Lecture, mois: array<int, DuMois>, svg: string, cle: string, titres: array{avant: string, debut: string}}
  */
 class GrilleDesGraphiques extends Widget
 {
@@ -103,14 +121,19 @@ class GrilleDesGraphiques extends Widget
     public ?string $lien = null;
 
     /**
-     * Le mois (de 0 à 11) choisi dans la carte « Écart des prix d'achat »,
-     * par graphique ; vide tant que personne n'a cliqué sur un mois. Une
-     * valeur hors de 0 à 11, que le navigateur peut forger, est ignorée
-     * (voir moisDeLaCarte()).
-     *
-     * @var array<string, int>
+     * Un geste de cette requête a demandé que la grille soit redessinée : un
+     * geste de préférence qui vient après (ou avant) ne l'en empêche pas
+     * (voir sansRedessin()). Jamais envoyé à la page.
      */
-    public array $moisChoisis = [];
+    private bool $redessine = false;
+
+    /**
+     * Le périmètre du compte, relu une seule fois par requête : un geste qui
+     * enregistre puis redessine la grille le lisait deux fois (les magasins
+     * et la société du compte, deux requêtes de plus), alors que les droits
+     * ne changent pas pendant une requête. Jamais envoyé à la page.
+     */
+    private ?Perimetre $perimetreDeLaRequete = null;
 
     public function mount(string $ecran = 'magasin', ?string $lien = null): void
     {
@@ -126,14 +149,13 @@ class GrilleDesGraphiques extends Widget
      */
     public function choisirLaPeriode(string $periode): void
     {
+        $this->avecRedessin();
         $this->modifier(function (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre) use ($periode): ReglagesDuTableauDeBord {
             $choisie = PeriodeDuTableauDeBord::tryFrom($periode);
 
             if ($choisie === null || ! in_array($choisie, PeriodeDuTableauDeBord::duMenu($perimetre->moisDeFinDExercice()), true)) {
                 throw new LogicException(self::REFUS_DE_LA_VALEUR);
             }
-
-            $this->moisChoisis = [];
 
             return $reglages->avecLaPeriode($choisie);
         });
@@ -146,6 +168,7 @@ class GrilleDesGraphiques extends Widget
      */
     public function choisirLeMagasin(string $magasin): void
     {
+        $this->avecRedessin();
         $choisi = $magasin === '' ? null : $magasin;
 
         $this->modifier(function (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre) use ($choisi): ReglagesDuTableauDeBord {
@@ -154,7 +177,6 @@ class GrilleDesGraphiques extends Widget
             }
 
             $perimetre->restreintA($choisi);
-            $this->moisChoisis = [];
 
             return $reglages->avecLeMagasin($choisi);
         });
@@ -162,6 +184,7 @@ class GrilleDesGraphiques extends Widget
 
     public function comparer(bool $comparer): void
     {
+        $this->avecRedessin();
         $this->modifier(fn (ReglagesDuTableauDeBord $reglages): ReglagesDuTableauDeBord => $reglages->avecLaComparaison($comparer));
     }
 
@@ -174,6 +197,8 @@ class GrilleDesGraphiques extends Widget
      */
     public function ajouterUnGraphique(string $graphique): void
     {
+        $this->avecRedessin();
+
         if ($graphique === '') {
             return;
         }
@@ -181,14 +206,29 @@ class GrilleDesGraphiques extends Widget
         $this->modifier(fn (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre): ReglagesDuTableauDeBord => $reglages->avecLeGraphique($this->graphiqueVisible($graphique, $perimetre)));
     }
 
-    public function retirerLeGraphique(string $graphique): void
+    /**
+     * Les gestes de préférence : la page a déjà changé l'écran (voir
+     * piliqiGrille()), le serveur retient le choix sans redessiner la grille
+     * et rend ce qu'il a retenu (voir etat()), ou null quand il refuse (une
+     * alerte dit pourquoi) ; la page revient alors à ce qu'il avait retenu.
+     *
+     * @return EtatDesCartes|null
+     */
+    public function retirerLeGraphique(string $graphique): ?array
     {
-        $this->modifier(fn (ReglagesDuTableauDeBord $reglages): ReglagesDuTableauDeBord => $reglages->sansLeGraphique(Graphique::tryFrom($graphique) ?? throw new LogicException(self::REFUS_DE_LA_VALEUR)));
+        $this->sansRedessin();
+
+        return $this->modifier(fn (ReglagesDuTableauDeBord $reglages): ReglagesDuTableauDeBord => $reglages->sansLeGraphique(Graphique::tryFrom($graphique) ?? throw new LogicException(self::REFUS_DE_LA_VALEUR)));
     }
 
-    public function changerLeType(string $graphique, string $type): void
+    /**
+     * @return EtatDesCartes|null
+     */
+    public function changerLeType(string $graphique, string $type): ?array
     {
-        $this->modifier(function (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre) use ($graphique, $type): ReglagesDuTableauDeBord {
+        $this->sansRedessin();
+
+        return $this->modifier(function (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre) use ($graphique, $type): ReglagesDuTableauDeBord {
             $carte = $this->carteAffichee($reglages, $this->graphiqueVisible($graphique, $perimetre));
             $nouveau = TypeDeGraphique::tryFrom($type);
 
@@ -202,11 +242,15 @@ class GrilleDesGraphiques extends Widget
 
     /**
      * Ce qui classe les meilleurs produits : leur chiffre d'affaires HT ou
-     * leur quantité.
+     * leur quantité ; les deux classements sont dans la page.
+     *
+     * @return EtatDesCartes|null
      */
-    public function changerLaMesure(string $graphique, string $mesure): void
+    public function changerLaMesure(string $graphique, string $mesure): ?array
     {
-        $this->modifier(function (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre) use ($graphique, $mesure): ReglagesDuTableauDeBord {
+        $this->sansRedessin();
+
+        return $this->modifier(function (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre) use ($graphique, $mesure): ReglagesDuTableauDeBord {
             $carte = $this->carteAffichee($reglages, $this->graphiqueVisible($graphique, $perimetre));
 
             if ($carte->graphique !== Graphique::MeilleursProduits || ! in_array($mesure, [CarteDuTableauDeBord::PAR_CHIFFRE_D_AFFAIRES, CarteDuTableauDeBord::PAR_QUANTITE], true)) {
@@ -219,13 +263,17 @@ class GrilleDesGraphiques extends Widget
 
     /**
      * L'affichage de la carte « Écart des prix d'achat » : un total par
-     * mois ou un seul total pour les douze mois, retenu comme le type ; le
-     * mois choisi est gardé. Un autre graphique, ou une autre valeur, est
-     * refusé.
+     * mois ou un seul total pour les douze mois, retenu comme le type ; les
+     * deux affichages sont dans la page, et le mois choisi, qui vit dans la
+     * page, est gardé. Un autre graphique, ou une autre valeur, est refusé.
+     *
+     * @return EtatDesCartes|null
      */
-    public function changerLAffichage(string $graphique, string $valeur): void
+    public function changerLAffichage(string $graphique, string $valeur): ?array
     {
-        $this->modifier(function (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre) use ($graphique, $valeur): ReglagesDuTableauDeBord {
+        $this->sansRedessin();
+
+        return $this->modifier(function (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre) use ($graphique, $valeur): ReglagesDuTableauDeBord {
             $carte = $this->carteAffichee($reglages, $this->graphiqueVisible($graphique, $perimetre));
 
             if ($carte->graphique !== Graphique::EcartDesPrixDAchat || ! in_array($valeur, [CarteDuTableauDeBord::AFFICHAGE_PAR_MOIS, CarteDuTableauDeBord::AFFICHAGE_SUR_DOUZE_MOIS], true)) {
@@ -237,34 +285,19 @@ class GrilleDesGraphiques extends Widget
     }
 
     /**
-     * Le mois (de 0 à 11, 0 étant le premier de la période) que la carte
-     * « Écart des prix d'achat » montre, par un clic, Entrée ou Espace sur
-     * sa colonne : un geste de l'écran, jamais retenu en base. Un autre
-     * graphique, un graphique que le compte ne voit pas ou qui n'est pas
-     * affiché, un mois hors de 0 à 11 sont refusés, rien ne change.
+     * @return EtatDesCartes|null
      */
-    public function choisirLeMois(string $graphique, int $mois): void
+    public function monter(string $graphique): ?array
     {
-        static::executerSansCasser(function () use ($graphique, $mois): void {
-            $perimetre = $this->perimetre();
-            $carte = $this->carteAffichee($this->reglages($perimetre), $this->graphiqueVisible($graphique, $perimetre));
-
-            if ($carte->graphique !== Graphique::EcartDesPrixDAchat || $mois < 0 || $mois >= EcartDesPrixDAchat::NOMBRE_DE_MOIS) {
-                throw new LogicException(self::REFUS_DE_LA_VALEUR);
-            }
-
-            $this->moisChoisis[$carte->graphique->value] = $mois;
-        });
+        return $this->deplacer($graphique, -1);
     }
 
-    public function monter(string $graphique): void
+    /**
+     * @return EtatDesCartes|null
+     */
+    public function descendre(string $graphique): ?array
     {
-        $this->deplacer($graphique, -1);
-    }
-
-    public function descendre(string $graphique): void
-    {
-        $this->deplacer($graphique, 1);
+        return $this->deplacer($graphique, 1);
     }
 
     /**
@@ -272,9 +305,10 @@ class GrilleDesGraphiques extends Widget
      * et les préférences du compte : les chiffres clés, les filtres, le
      * menu des graphiques à ajouter et chaque carte avec sa série, prête
      * pour Chart.js (en euros) et pour le tableau « Voir les chiffres »
-     * (au centime) ; la carte « Écart des prix d'achat », qui n'a pas de
-     * canevas, avec sa lecture, son `svg` par mois et son mois choisi
-     * (voir ecartDesPrixDAchat()).
+     * (au centime) ; pour les meilleurs produits, les deux classements ; la
+     * carte « Écart des prix d'achat », qui n'a pas de canevas, avec ses
+     * deux affichages et les douze lectures de ses mois (voir
+     * ecartDesPrixDAchat()).
      *
      * @return array<string, mixed>
      */
@@ -287,10 +321,9 @@ class GrilleDesGraphiques extends Widget
         $calcul = new CalculDesSeries($filtre, $reglages, $cartes);
         $series = app(SeriesDesGraphiques::class)->pour($calcul);
         $euros = app(CalculateurLigne::class)->enEuros(...);
-        $affiches = array_map(fn (CarteDuTableauDeBord $carte): Graphique => $carte->graphique, $cartes);
-        $aujourdhui = $perimetre->aujourdhui();
         $moisDeFin = $perimetre->moisDeFinDExercice();
         $periodes = PeriodeDuTableauDeBord::duMenu($moisDeFin);
+        $aujourdhui = $perimetre->aujourdhui();
 
         return [
             'chiffres' => app(ChiffresDuTableauDeBord::class)->pour($calcul),
@@ -304,54 +337,109 @@ class GrilleDesGraphiques extends Widget
             'magasins' => $perimetre->ecran->montrePlusieursMagasins() && $perimetre->magasins()->count() > 1
                 ? $perimetre->magasins()->mapWithKeys(fn (Magasin $magasin): array => [(string) $magasin->uuid => Perimetre::nomDuMagasin($magasin)])->all()
                 : [],
-            'aAjouter' => array_values(array_filter($filtre->graphiquesVisibles(), fn (Graphique $graphique): bool => ! in_array($graphique, $affiches, true))),
+            'disponibles' => array_map(fn (Graphique $graphique): array => ['valeur' => $graphique->value, 'libelle' => $graphique->getLabel()], $filtre->graphiquesVisibles()),
+            'affiches' => array_map(fn (CarteDuTableauDeBord $carte): string => $carte->graphique->value, $cartes),
             'cartes' => array_map(fn (CarteDuTableauDeBord $carte): array => [
                 'carte' => $carte,
                 'serie' => $series[$carte->graphique->value],
-                'config' => $carte->graphique === Graphique::EcartDesPrixDAchat ? null : self::configuration($carte, $series[$carte->graphique->value]),
-                'ecart' => $carte->graphique === Graphique::EcartDesPrixDAchat ? $this->ecartDesPrixDAchat($carte, $series[$carte->graphique->value], $perimetre, $calcul->mois) : null,
+                'faces' => $carte->graphique === Graphique::EcartDesPrixDAchat ? [] : $this->faces($carte, $series[$carte->graphique->value]),
+                'ecart' => $carte->graphique === Graphique::EcartDesPrixDAchat ? $this->ecartDesPrixDAchat($series[$carte->graphique->value], $perimetre, $reglages, $calcul->mois) : null,
             ], $cartes),
         ];
     }
 
     /**
-     * Ce que la carte « Écart des prix d'achat » écrit : sa lecture (voir
-     * TextesDeLEcartDesPrixDAchat::lecture()) pour l'affichage retenu et le
-     * mois choisi, et, par mois seulement, son `svg`. Le dessin de
-     * l'affichage caché n'est pas écrit dans la page.
+     * Ce que le serveur a retenu des cartes que la grille montre : leur
+     * ordre et, pour chacune, son type, sa mesure (les meilleurs produits)
+     * et son affichage (l'écart des prix d'achat), tels que la page les relit
+     * (voir piliqiGrille()).
+     *
+     * @return EtatDesCartes
+     */
+    private function etat(ReglagesDuTableauDeBord $reglages, Perimetre $filtre): array
+    {
+        $etat = ['ordre' => [], 'cartes' => []];
+
+        foreach ($reglages->cartesVisibles($filtre) as $carte) {
+            $etat['ordre'][] = $carte->graphique->value;
+            $etat['cartes'][$carte->graphique->value] = ['type' => $carte->type->value]
+                + ($carte->graphique === Graphique::MeilleursProduits ? ['mesure' => $carte->mesure] : [])
+                + ($carte->graphique === Graphique::EcartDesPrixDAchat ? ['affichage' => $carte->affichage] : []);
+        }
+
+        return $etat;
+    }
+
+    /**
+     * Les faces d'une carte à canevas : une seule, ou, pour les meilleurs
+     * produits, leurs deux classements (le chiffre d'affaires d'abord), que
+     * la page montre l'un ou l'autre sans rappeler le serveur.
+     *
+     * @return array<string, Face>
+     */
+    private function faces(CarteDuTableauDeBord $carte, SerieDuGraphique $serie): array
+    {
+        if ($carte->graphique !== Graphique::MeilleursProduits) {
+            return ['defaut' => ['serie' => $serie, 'config' => self::configuration($carte->graphique, $serie)]];
+        }
+
+        $autre = $serie->autreClassement ?? throw new LogicException('Les meilleurs produits portent leurs deux classements.');
+        $classements = $carte->parQuantite()
+            ? [CarteDuTableauDeBord::PAR_CHIFFRE_D_AFFAIRES => $autre, CarteDuTableauDeBord::PAR_QUANTITE => $serie]
+            : [CarteDuTableauDeBord::PAR_CHIFFRE_D_AFFAIRES => $serie, CarteDuTableauDeBord::PAR_QUANTITE => $autre];
+
+        return array_map(fn (SerieDuGraphique $classement): array => ['serie' => $classement, 'config' => self::configuration($carte->graphique, $classement)], $classements);
+    }
+
+    /**
+     * Ce que la carte « Écart des prix d'achat » écrit : la lecture de chaque
+     * affichage au mois de départ (le dessin, les légendes, la méthode, le
+     * tableau « Voir les chiffres », que la page n'écrit qu'une fois), les
+     * douze lectures du mois (voir TextesDeLEcartDesPrixDAchat::duMois()),
+     * que la donnée Alpine `mois` de la carte montre l'une après l'autre sans
+     * appeler le serveur, et le `svg`, écrit une seule fois avec ce que le
+     * choix d'un mois change dans chaque colonne ; le menu « Afficher : »
+     * montre l'un ou l'autre affichage de la même façon.
+     *
+     * La clé de la vue de la carte change avec la période, le magasin et le
+     * premier mois de la période : la page remet alors le mois choisi au mois
+     * de départ.
      *
      * @param  list<string>  $moisDeLaPeriode  les douze mois « AAAA-MM » de la période
-     * @return array{lecture: Lecture, svg: string|null, mois: int}
+     * @return EcartDeLaCarte
      */
-    private function ecartDesPrixDAchat(CarteDuTableauDeBord $carte, SerieDuGraphique $serie, Perimetre $perimetre, array $moisDeLaPeriode): array
+    private function ecartDesPrixDAchat(SerieDuGraphique $serie, Perimetre $perimetre, ReglagesDuTableauDeBord $reglages, array $moisDeLaPeriode): array
     {
         $calcul = $serie->ecartDesPrixDAchat ?? throw new LogicException('La série de l\'écart des prix d\'achat porte son calcul.');
-        $mois = $this->moisDeLaCarte($carte->graphique, $moisDeLaPeriode, $perimetre);
-        $lecture = TextesDeLEcartDesPrixDAchat::lecture($calcul, $carte->affichage, $mois);
+        $depart = $this->moisDeDepart($moisDeLaPeriode, $perimetre);
+        $parMois = TextesDeLEcartDesPrixDAchat::lecture($calcul, CarteDuTableauDeBord::AFFICHAGE_PAR_MOIS, $depart);
+        $surDouzeMois = TextesDeLEcartDesPrixDAchat::lecture($calcul, CarteDuTableauDeBord::AFFICHAGE_SUR_DOUZE_MOIS, $depart);
+        $mois = [];
+
+        foreach (range(0, EcartDesPrixDAchat::NOMBRE_DE_MOIS - 1) as $rang) {
+            $mois[$rang] = TextesDeLEcartDesPrixDAchat::duMois($calcul, $rang);
+        }
 
         return [
-            'lecture' => $lecture,
-            'svg' => $carte->surDouzeMois() ? null : SvgDeLEcartDesPrixDAchat::ecrire($lecture['dessin']['enfants'], $lecture['dessin']['viewBox'], $lecture['dessin']['ariaLabel'], $carte->graphique->value),
+            'depart' => $depart,
+            'parMois' => $parMois,
+            'surDouzeMois' => $surDouzeMois,
             'mois' => $mois,
+            'svg' => SvgDeLEcartDesPrixDAchat::ecrire($parMois['dessin']['enfants'], DessinDeLEcartDesPrixDAchat::ceQueLeChoixChange($calcul), $parMois['dessin']['viewBox'], $parMois['dessin']['ariaLabel']),
+            'cle' => implode('|', [$reglages->periode->value, $this->magasinDuFiltre($reglages, $perimetre) ?? 'tous', $moisDeLaPeriode[0]]),
+            'titres' => ['avant' => $parMois['titreCarte'], 'debut' => $surDouzeMois['titreCarte']],
         ];
     }
 
     /**
-     * Le mois choisi de la carte : celui qu'on a cliqué s'il est de 0 à 11,
-     * sinon le dernier mois de la période qui n'est pas à venir (le dernier
-     * de la période quand elle est passée, le premier quand elle est tout
-     * entière à venir).
+     * Le mois de la carte au départ : le dernier mois de la période qui n'est
+     * pas à venir (le dernier de la période quand elle est passée, le premier
+     * quand elle est tout entière à venir).
      *
      * @param  list<string>  $mois  les douze mois « AAAA-MM » de la période
      */
-    private function moisDeLaCarte(Graphique $graphique, array $mois, Perimetre $perimetre): int
+    private function moisDeDepart(array $mois, Perimetre $perimetre): int
     {
-        $choisi = $this->moisChoisis[$graphique->value] ?? null;
-
-        if (is_int($choisi) && $choisi >= 0 && $choisi < EcartDesPrixDAchat::NOMBRE_DE_MOIS) {
-            return $choisi;
-        }
-
         $courant = Mois::duJour($perimetre->aujourdhui());
         $dernier = 0;
 
@@ -365,18 +453,17 @@ class GrilleDesGraphiques extends Widget
     }
 
     /**
-     * Ce que le script des graphiques reçoit pour une carte (voir
-     * graphiques-du-tableau-de-bord.blade.php) : le type, les étiquettes,
-     * les séries en euros (un nombre reste un nombre) et les précisions des
-     * info-bulles.
+     * Ce que le script des graphiques reçoit pour une face (voir
+     * graphiques-du-panneau.blade.php) : les étiquettes, les séries en
+     * euros (un nombre reste un nombre) et les précisions des info-bulles ;
+     * le type vient de la carte, que la page change sans le serveur.
      *
-     * @return array{type: string, titre: string, etiquettes: list<string>, jeux: list<array{libelle: string, valeurs: list<float|int|null>, unite: string, en_ligne: bool, axe_de_droite: bool, pointilles: bool}>, info_bulles: array<int, string>}
+     * @return array{titre: string, etiquettes: list<string>, jeux: list<array{libelle: string, valeurs: list<float|int|null>, unite: string, en_ligne: bool, axe_de_droite: bool, pointilles: bool}>, info_bulles: array<int, string>}
      */
-    public static function configuration(CarteDuTableauDeBord $carte, SerieDuGraphique $serie): array
+    public static function configuration(Graphique $graphique, SerieDuGraphique $serie): array
     {
         return [
-            'type' => $carte->type->value,
-            'titre' => $carte->graphique->getLabel(),
+            'titre' => $graphique->getLabel(),
             'etiquettes' => $serie->etiquettes,
             'jeux' => array_map(fn (array $jeu): array => [
                 ...$jeu,
@@ -388,11 +475,20 @@ class GrilleDesGraphiques extends Widget
 
     /**
      * Le périmètre de l'écran pour le compte connecté, relu à chaque
-     * requête ; refusé quand il n'y voit aucun graphique.
+     * requête (voir $perimetreDeLaRequete) ; refusé quand il n'y voit aucun
+     * graphique.
      *
      * @throws AuthorizationException
      */
     protected function perimetre(): Perimetre
+    {
+        return $this->perimetreDeLaRequete ??= $this->lirePerimetre();
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    private function lirePerimetre(): Perimetre
     {
         $compte = CompteConnecte::exiger();
         $graphiques = app(PerimetreDesGraphiques::class);
@@ -450,10 +546,14 @@ class GrilleDesGraphiques extends Widget
      * « Monter » ou « Descendre » : la carte change de rang parmi celles
      * que la grille montre, sur le magasin du filtre (voir
      * ReglagesDuTableauDeBord::avecLaCarteDeplacee()).
+     *
+     * @return EtatDesCartes|null
      */
-    private function deplacer(string $graphique, int $sens): void
+    private function deplacer(string $graphique, int $sens): ?array
     {
-        $this->modifier(fn (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre): ReglagesDuTableauDeBord => $reglages->avecLaCarteDeplacee(
+        $this->sansRedessin();
+
+        return $this->modifier(fn (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre): ReglagesDuTableauDeBord => $reglages->avecLaCarteDeplacee(
             Graphique::tryFrom($graphique) ?? throw new LogicException(self::REFUS_DE_LA_VALEUR),
             $sens,
             $perimetre->restreintA($this->magasinDuFiltre($reglages, $perimetre)),
@@ -461,16 +561,49 @@ class GrilleDesGraphiques extends Widget
     }
 
     /**
+     * Ce geste change ce que la grille calcule : elle est redessinée, même si
+     * un geste de préférence de la même requête, avant ou après, ne la
+     * redessine pas (Livewire saute le dessin de toute la requête dès qu'un
+     * appel le demande : sansRedessin() ne le demande donc que si aucun
+     * geste ne veut le dessin).
+     */
+    private function avecRedessin(): void
+    {
+        $this->redessine = true;
+        app(DataStore::class)->set($this, 'skipRender', false);
+    }
+
+    /**
+     * Ce geste de préférence n'a pas besoin du dessin de la grille : la page
+     * a déjà changé l'écran (voir piliqiGrille()).
+     */
+    private function sansRedessin(): void
+    {
+        if (! $this->redessine) {
+            $this->skipRender();
+        }
+    }
+
+    /**
      * Relit le périmètre et les préférences, applique le geste et retient
      * le résultat ; une valeur refusée s'affiche en alerte, rien ne change.
+     * Rend ce que le serveur a retenu des cartes, ou null quand le geste est
+     * refusé.
      *
      * @param  Closure(ReglagesDuTableauDeBord, Perimetre): ReglagesDuTableauDeBord  $geste
+     * @return EtatDesCartes|null
      */
-    private function modifier(Closure $geste): void
+    private function modifier(Closure $geste): ?array
     {
-        static::executerSansCasser(function () use ($geste): void {
+        $etat = null;
+
+        static::executerSansCasser(function () use ($geste, &$etat): void {
             $perimetre = $this->perimetre();
-            app(PreferencesDesGraphiques::class)->enregistrer(CompteConnecte::exiger(), $perimetre->ecran, $geste($this->reglages($perimetre), $perimetre));
+            $reglages = $geste($this->reglages($perimetre), $perimetre);
+            app(PreferencesDesGraphiques::class)->enregistrer(CompteConnecte::exiger(), $perimetre->ecran, $reglages);
+            $etat = $this->etat($reglages, $perimetre->restreintA($this->magasinDuFiltre($reglages, $perimetre)));
         });
+
+        return $etat;
     }
 }

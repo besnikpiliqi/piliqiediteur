@@ -591,6 +591,33 @@ class SeriesDesGraphiquesTest extends TestCase
     }
 
     /**
+     * Les meilleurs produits portent leurs deux classements, lus en une fois
+     * (décision de l'éditeur du 23/11/2026 : « Classer par » change dans la
+     * page sans rappeler le serveur) : la série rendue est celle de la
+     * mesure de la carte, avec l'autre classement, sur les mêmes lignes de
+     * vente ; aucun autre graphique n'en porte.
+     */
+    public function test_les_meilleurs_produits_portent_leurs_deux_classements_et_aucun_autre_graphique(): void
+    {
+        $perimetre = $this->perimetreDuProprietaire($this->preparer());
+
+        $parChiffreDAffaires = $this->series($perimetre, [Graphique::MeilleursProduits, Graphique::ChiffreDAffairesParMois])[Graphique::MeilleursProduits->value];
+        $this->assertSame(['Chiffre d\'affaires HT' => [5000, 4000, 3000]], $this->valeurs($parChiffreDAffaires));
+        $this->assertSame(['Réparation', 'Lampe', 'Câble'], $parChiffreDAffaires->etiquettes);
+        $this->assertNotNull($parChiffreDAffaires->autreClassement);
+        $this->assertSame(['Quantité vendue' => [3, 2, 1]], $this->valeurs($parChiffreDAffaires->autreClassement));
+        $this->assertSame(['Câble', 'Lampe', 'Réparation'], $parChiffreDAffaires->autreClassement->etiquettes);
+        $this->assertSame(SerieDuGraphique::NOMBRE, $parChiffreDAffaires->autreClassement->jeux[0]['unite']);
+
+        $cartes = [new CarteDuTableauDeBord(Graphique::MeilleursProduits, Graphique::MeilleursProduits->typeParDefaut(), CarteDuTableauDeBord::PAR_QUANTITE)];
+        $parQuantite = app(SeriesDesGraphiques::class)->pour(new CalculDesSeries($perimetre, new ReglagesDuTableauDeBord($cartes), $cartes))[Graphique::MeilleursProduits->value];
+        $this->assertSame(['Quantité vendue' => [3, 2, 1]], $this->valeurs($parQuantite));
+        $this->assertSame(['Chiffre d\'affaires HT' => [5000, 4000, 3000]], $this->valeurs($parQuantite->autreClassement ?? throw new \LogicException('Les meilleurs produits portent leurs deux classements.')));
+
+        $this->assertNull($this->series($perimetre, [Graphique::ChiffreDAffairesParMois])[Graphique::ChiffreDAffairesParMois->value]->autreClassement);
+    }
+
+    /**
      * Les séries de ces graphiques sur ce périmètre.
      *
      * @param  list<Graphique>  $graphiques

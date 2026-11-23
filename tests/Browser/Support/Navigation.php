@@ -4,6 +4,7 @@ namespace Tests\Browser\Support;
 
 use App\Domain\Calendrier\Calendrier;
 use Closure;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Pest\Browser\Api\PendingAwaitablePage;
@@ -270,6 +271,60 @@ final class Navigation
         return $this->attendreQue('window.__piliqi.lancees > '.$avant, $description.' n\'a appelé aucune fois le serveur')
             ->attendre()
             ->verifier();
+    }
+
+    /**
+     * Fait ce geste d'écran, qui ne change que l'affichage de données déjà
+     * présentes dans la page (décision de l'éditeur du 23/11/2026) et ne doit
+     * donc appeler ni le serveur ni la base : aucune requête (fetch ou
+     * XMLHttpRequest, celles de Livewire comprises) ne part de la page, le
+     * serveur n'en traite aucune et la base ne reçoit aucune requête SQL,
+     * pendant le geste et jusqu'au retour de la page au repos. La cloche des
+     * notifications, qui regarde le serveur d'elle-même à son rythme, doit
+     * être réglée à une heure pour le test (voir
+     * piliqi.intervalle_des_notifications_en_secondes). Puis attend la page au
+     * repos et la vérifie, comme geste().
+     */
+    public function gesteSansServeur(Closure $geste, string $description): self
+    {
+        $activite = $this->activiteDuGeste(fn () => $this->geste($geste, $description));
+
+        Assert::assertSame(0, $activite['lancees'], ucfirst($description).' a lancé '.$activite['lancees'].' requête(s) depuis la page (fetch ou XMLHttpRequest).');
+        Assert::assertSame([], $activite['reponses'], ucfirst($description).' a appelé le serveur : '.implode(' ; ', $activite['reponses']));
+        Assert::assertSame([], $activite['sql'], ucfirst($description).' a interrogé la base : '.implode(' ; ', $activite['sql']));
+
+        return $this;
+    }
+
+    /**
+     * Ce que ce geste a appelé : le nombre de requêtes que la page a lancées
+     * (fetch ou XMLHttpRequest, celles de Livewire comprises), les requêtes
+     * que le serveur a traitées (avec leur statut) et les requêtes SQL qu'il
+     * a envoyées à la base, dans ce processus, qui est celui du serveur de
+     * l'application.
+     *
+     * @return array{lancees: int, reponses: list<string>, sql: list<string>}
+     */
+    public function activiteDuGeste(Closure $geste): array
+    {
+        $lanceesAvant = (int) $this->page()->evaluate('() => window.__piliqi ? window.__piliqi.lancees : 0');
+        $reponsesAvant = $this->journal->nombre();
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+
+        try {
+            $geste();
+            $sql = array_map(fn (array $requete): string => (string) $requete['query'], DB::getQueryLog());
+        } finally {
+            DB::disableQueryLog();
+        }
+
+        return [
+            'lancees' => (int) $this->page()->evaluate('() => window.__piliqi ? window.__piliqi.lancees : 0') - $lanceesAvant,
+            'reponses' => $this->journal->depuis($reponsesAvant),
+            'sql' => $sql,
+        ];
     }
 
     /**

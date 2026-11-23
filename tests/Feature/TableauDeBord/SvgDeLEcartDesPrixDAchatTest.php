@@ -17,15 +17,16 @@ use Tests\Fixtures\EcartDesPrixDAchat\LectureDesFixtures;
  * chaque attribut et chaque texte sont échappés, un élément dont un
  * attribut vaut « NaN » n'est pas écrit (le reste l'est), et chaque colonne
  * porte, en plus des attributs de la maquette, le clic, Entrée et Espace
- * qui appellent le geste de la grille avec le graphique et le rang du mois.
- * L'arbre lui-même est prouvé contre le relevé de la maquette (voir
- * DessinDeLEcartDesPrixDAchatTest et EcartDesPrixDAchatGrilleTest).
+ * qui placent le mois choisi de la page sur son rang, et un `x-bind` pour
+ * chaque attribut que ce choix change : aucun appel du serveur (décision de
+ * l'éditeur du 23/11/2026). L'arbre lui-même est prouvé contre le relevé de
+ * la maquette (voir DessinDeLEcartDesPrixDAchatTest et
+ * EcartDesPrixDAchatGrilleTest), et ce que le choix d'un mois fait dans le
+ * navigateur par tests/Browser/Parcours/EcartDesPrixDAchatTest.php.
  */
 class SvgDeLEcartDesPrixDAchatTest extends TestCase
 {
-    private const CARTE = 'ecart_des_prix_d_achat';
-
-    public function test_chaque_colonne_porte_le_clic_entree_et_espace_avec_son_rang(): void
+    public function test_chaque_colonne_porte_le_clic_entree_et_espace_qui_placent_son_rang_sans_appeler_le_serveur(): void
     {
         $calcul = EcartDesPrixDAchat::calculer(LectureDesFixtures::verite()['jeu']['produits'], LectureDesFixtures::moisDeLaMaquette());
         $svg = $this->ecrire($calcul, 5);
@@ -34,17 +35,70 @@ class SvgDeLEcartDesPrixDAchatTest extends TestCase
         $this->assertCount(12, $colonnes);
 
         foreach ($colonnes as $rang => $colonne) {
-            $appel = "choisirLeMois('".self::CARTE."', {$rang})";
-
-            $this->assertSame($appel, $colonne->getAttribute('wire:click'));
-            $this->assertSame('$wire.'.$appel, $colonne->getAttribute('x-on:keydown.enter.prevent'));
-            $this->assertSame('$wire.'.$appel, $colonne->getAttribute('x-on:keydown.space.prevent'));
+            $this->assertSame("mois = {$rang}", $colonne->getAttribute('x-on:click'));
+            $this->assertSame("mois = {$rang}", $colonne->getAttribute('x-on:keydown.enter.prevent'));
+            $this->assertSame("mois = {$rang}", $colonne->getAttribute('x-on:keydown.space.prevent'));
             $this->assertSame('button', $colonne->getAttribute('role'));
             $this->assertSame('0', $colonne->getAttribute('tabindex'));
-            $this->assertSame($rang === 5 ? 'true' : 'false', $colonne->getAttribute('aria-pressed'));
+            $this->assertSame($rang === 5 ? 'true' : 'false', $colonne->getAttribute('aria-pressed'), 'Le dessin est écrit pour le mois de départ.');
         }
 
-        $this->assertSame(12, substr_count($svg, 'wire:click='), 'Seules les douze colonnes sont des gestes.');
+        $this->assertSame(12, substr_count($svg, 'x-on:click='), 'Seules les douze colonnes sont des gestes.');
+        $this->assertStringNotContainsString('wire:', $svg, 'Choisir un mois n\'appelle jamais le serveur.');
+        $this->assertStringNotContainsString('$wire', $svg);
+    }
+
+    /**
+     * Ce que le choix d'un mois change est lié au rang de sa colonne :
+     * `aria-pressed` du groupe, le trait du cadre, le poids et la couleur de
+     * l'étiquette du mois ; les valeurs du mois de départ restent écrites.
+     */
+    public function test_chaque_attribut_que_le_choix_du_mois_change_est_lie_au_rang_de_sa_colonne(): void
+    {
+        $calcul = EcartDesPrixDAchat::calculer(LectureDesFixtures::verite()['jeu']['produits'], LectureDesFixtures::moisDeLaMaquette());
+        $svg = $this->ecrire($calcul, 5);
+        $liees = 0;
+
+        foreach ($this->elements($svg, '//g') as $rang => $colonne) {
+            $choisi = "mois === {$rang} ? ";
+            $focus = $this->elements($svg, '//g['.($rang + 1).']/rect[@class="focus"]');
+            $etiquette = $this->elements($svg, '//g['.($rang + 1).']/text[@font-weight]');
+
+            $this->assertSame($choisi."'true' : 'false'", $colonne->getAttribute('x-bind:aria-pressed'));
+            $this->assertCount(1, $etiquette);
+            $this->assertSame($choisi."'700' : '400'", $etiquette[0]->getAttribute('x-bind:font-weight'));
+            $this->assertSame($choisi."'var(--texte)' : 'var(--doux)'", $etiquette[0]->getAttribute('x-bind:fill'));
+            $this->assertSame($rang === 5 ? '700' : '400', $etiquette[0]->getAttribute('font-weight'));
+
+            $liees += 3;
+
+            if ($focus !== []) {
+                $this->assertSame($choisi."'var(--texte)' : 'transparent'", $focus[0]->getAttribute('x-bind:stroke'));
+                $this->assertSame($rang === 5 ? 'var(--texte)' : 'transparent', $focus[0]->getAttribute('stroke'));
+                $liees++;
+            }
+        }
+
+        $this->assertSame($liees, substr_count($svg, 'x-bind:'), 'Aucun autre attribut n\'est lié au choix du mois.');
+    }
+
+    /**
+     * Une valeur liée est écrite comme une chaîne de JavaScript entre
+     * apostrophes : une apostrophe ou une barre oblique inverse qu'elle
+     * contient est protégée, et le HTML qui la porte est échappé.
+     */
+    public function test_une_valeur_liee_est_une_chaine_javascript_protegee(): void
+    {
+        $arbre = [
+            ['t' => 'g', 'a' => ['role' => 'button'], 'x' => null, 'f' => [['t' => 'rect', 'a' => ['x' => '1'], 'x' => '', 'f' => []]]],
+        ];
+        $variations = [['a' => ['data-nom' => ['choisi' => "l'un\\", 'autre' => 'b"<c>']], 'f' => [0 => ['stroke' => ['choisi' => 'a', 'autre' => 'b']]]]];
+
+        $svg = SvgDeLEcartDesPrixDAchat::ecrire($arbre, $variations, '0 0 520 270', 'Dessin');
+
+        $this->assertStringNotContainsString('<c>', $svg);
+        $this->assertSame("mois === 0 ? 'l\\'un\\\\' : 'b\"<c>'", $this->elements($svg, '//g')[0]->getAttribute('x-bind:data-nom'));
+        $this->assertSame("mois === 0 ? 'a' : 'b'", $this->elements($svg, '//g/rect')[0]->getAttribute('x-bind:stroke'));
     }
 
     public function test_le_cadre_le_role_et_le_libelle_du_dessin_sont_ceux_de_la_maquette(): void
@@ -97,7 +151,7 @@ class SvgDeLEcartDesPrixDAchatTest extends TestCase
             ['t' => 'text', 'a' => ['x' => '1', 'data-nom' => '"><script>alert(1)</script>'], 'x' => '</text><script>alert(2)</script> & « x »', 'f' => []],
         ];
 
-        $svg = SvgDeLEcartDesPrixDAchat::ecrire($arbre, '0 0 520 270', 'Écart "des" <prix> d\'achat', self::CARTE);
+        $svg = SvgDeLEcartDesPrixDAchat::ecrire($arbre, [], '0 0 520 270', 'Écart "des" <prix> d\'achat');
 
         $this->assertStringNotContainsString('<script', $svg);
         $this->assertStringContainsString('data-nom="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"', $svg);
@@ -119,25 +173,25 @@ class SvgDeLEcartDesPrixDAchatTest extends TestCase
             ['t' => 'g', 'a' => ['role' => 'button'], 'x' => null, 'f' => [['t' => 'rect', 'a' => ['x' => '1'], 'x' => '', 'f' => []], ['t' => 'rect', 'a' => ['x' => 'NaN'], 'x' => '', 'f' => []]]],
         ];
 
-        $svg = SvgDeLEcartDesPrixDAchat::ecrire($arbre, '0 0 520 270', 'Dessin', self::CARTE);
+        $svg = SvgDeLEcartDesPrixDAchat::ecrire($arbre, [], '0 0 520 270', 'Dessin');
 
         $this->assertCount(0, $this->elements($svg, '//line'));
         $this->assertCount(0, $this->elements($svg, '//polygon'));
         $this->assertCount(1, $this->elements($svg, '//g'));
         $this->assertCount(1, $this->elements($svg, '//g/rect'));
-        $this->assertSame("choisirLeMois('".self::CARTE."', 0)", $this->elements($svg, '//g')[0]->getAttribute('wire:click'), 'Un groupe omis n\'est pas compté : le rang du premier groupe écrit est 0.');
+        $this->assertSame('mois = 1', $this->elements($svg, '//g')[0]->getAttribute('x-on:click'), 'Le rang d\'une colonne est celui de son mois, même quand la colonne qui la précède n\'est pas écrite.');
     }
 
     /**
      * Les attributs de la maquette sont écrits dans leur ordre, avant ceux
-     * de la grille.
+     * de la page.
      */
     public function test_les_attributs_de_la_maquette_precedent_ceux_de_la_grille(): void
     {
         $calcul = EcartDesPrixDAchat::calculer(LectureDesFixtures::verite()['jeu']['produits'], LectureDesFixtures::moisDeLaMaquette());
         $colonne = $this->elements($this->ecrire($calcul, 0), '//g')[0];
 
-        $this->assertSame(['class', 'tabindex', 'role', 'aria-label', 'aria-pressed', 'wire:click', 'x-on:keydown.enter.prevent', 'x-on:keydown.space.prevent'], array_keys(iterator_to_array($colonne->attributes ?? [])));
+        $this->assertSame(['class', 'tabindex', 'role', 'aria-label', 'aria-pressed', 'x-on:click', 'x-on:keydown.enter.prevent', 'x-on:keydown.space.prevent', 'x-bind:aria-pressed'], array_keys(iterator_to_array($colonne->attributes ?? [])));
     }
 
     /**
@@ -147,7 +201,7 @@ class SvgDeLEcartDesPrixDAchatTest extends TestCase
     {
         $lecture = TextesDeLEcartDesPrixDAchat::lecture($calcul, TextesDeLEcartDesPrixDAchat::AFFICHAGE_PAR_MOIS, $mois);
 
-        return SvgDeLEcartDesPrixDAchat::ecrire($lecture['dessin']['enfants'], $lecture['dessin']['viewBox'], $lecture['dessin']['ariaLabel'], self::CARTE);
+        return SvgDeLEcartDesPrixDAchat::ecrire($lecture['dessin']['enfants'], DessinDeLEcartDesPrixDAchat::ceQueLeChoixChange($calcul), $lecture['dessin']['viewBox'], $lecture['dessin']['ariaLabel']);
     }
 
     /**

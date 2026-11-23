@@ -114,14 +114,14 @@ test('la carte « Écart des prix d’achat » se lit en clair et en sombre dans
 
     Carte::ajouter($onglet, 4);
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="magasin"]')->selectOption((string) $societe->autreMagasin->uuid), 'le choix de la Boutique de la Gare');
-    $onglet->geste(fn () => $onglet->element($carte.' [data-ecart="voir-chiffres"]')->click(), 'l’ouverture des chiffres');
-    $onglet->geste(fn () => $onglet->element($carte.' [data-ecart="voir-calcul"]')->click(), 'l’ouverture du calcul');
+    $onglet->geste(fn () => $onglet->element($carte.' [data-ecart="voir-chiffres"]:visible')->click(), 'l’ouverture des chiffres');
+    $onglet->geste(fn () => $onglet->element($carte.' [data-ecart="voir-calcul"]:visible')->click(), 'l’ouverture du calcul');
 
     $etats = [
-        'mois 6 (hausses)' => fn () => $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element(Carte::colonne(6))->click(), 'le clic sur le mois 6'),
-        'mois 0 (baisses)' => fn () => $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element(Carte::colonne(0))->click(), 'le clic sur le mois 0'),
-        'mois 8 (aucun achat)' => fn () => $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element(Carte::colonne(8))->click(), 'le clic sur le mois 8'),
-        'mois 3 (écart de +0,09 €)' => fn () => $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element(Carte::colonne(3))->click(), 'le clic sur le mois 3'),
+        'mois 6 (hausses)' => fn () => $onglet->gesteSansServeur(fn () => $onglet->element(Carte::colonne(6))->click(), 'le clic sur le mois 6'),
+        'mois 0 (baisses)' => fn () => $onglet->gesteSansServeur(fn () => $onglet->element(Carte::colonne(0))->click(), 'le clic sur le mois 0'),
+        'mois 8 (aucun achat)' => fn () => $onglet->gesteSansServeur(fn () => $onglet->element(Carte::colonne(8))->click(), 'le clic sur le mois 8'),
+        'mois 3 (écart de +0,09 €)' => fn () => $onglet->gesteSansServeur(fn () => $onglet->element(Carte::colonne(3))->click(), 'le clic sur le mois 3'),
         'douze mois' => fn () => $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element($carte.' select[data-geste="affichage"]')->selectOption('debut'), 'le passage aux douze mois'),
     ];
     $defauts = [];

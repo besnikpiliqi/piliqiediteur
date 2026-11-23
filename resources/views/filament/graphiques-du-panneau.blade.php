@@ -419,9 +419,11 @@
      * Les lignes d'un tableau de calcul de la carte « Écart des prix d'achat »,
      * écrites dans la page en JSON compact (voir ecart-des-prix-d-achat.blade.php)
      * et posées dans le tableau quand il est montré : chaque ligne est
-     * [classe, cellules], une cellule son texte seul ou [texte, classe,
-     * étendue]. `montre` vaut false quand le tableau n'est pas montré : il se
-     * vide.
+     * [rang de sa classe, cellules], une cellule son texte seul ou [texte,
+     * rang de sa classe, étendue] ; le rang est celui de la classe dans la
+     * table `classes` du JSON, qui écrit chaque classe une fois (le rang 0 est
+     * « aucune classe »). `montre` vaut false quand le tableau n'est pas
+     * montré : il se vide.
      */
     window.piliqiPoserLesLignes = (corps, montre, affichage, mois) => {
         if (! montre) {
@@ -432,16 +434,17 @@
 
         const racine = corps.closest('[data-ecart-vues]')
         racine._calculs ??= JSON.parse(racine.querySelector(':scope > script[data-ecart="calculs"]').textContent)
+        const { classes } = racine._calculs
         const lignes = document.createDocumentFragment()
 
-        for (const [classe, cellules] of racine._calculs[affichage][mois]) {
+        for (const [rangDeLaClasse, cellules] of racine._calculs[affichage][mois]) {
             const ligne = document.createElement('tr')
-            ligne.className = classe
+            ligne.className = classes[rangDeLaClasse]
 
             for (const donnee of cellules) {
-                const [texte, classeDeLaCellule = '', etendue] = typeof donnee === 'string' ? [donnee] : donnee
+                const [texte, rangDeLaClasseDeLaCellule = 0, etendue] = typeof donnee === 'string' ? [donnee] : donnee
                 const cellule = document.createElement('td')
-                cellule.className = classeDeLaCellule
+                cellule.className = classes[rangDeLaClasseDeLaCellule]
                 cellule.colSpan = etendue ?? 1
                 cellule.textContent = texte
                 ligne.append(cellule)

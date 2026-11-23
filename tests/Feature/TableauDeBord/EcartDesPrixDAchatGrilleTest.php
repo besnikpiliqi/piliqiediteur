@@ -144,6 +144,54 @@ class EcartDesPrixDAchatGrilleTest extends TestCase
     }
 
     /**
+     * Le JSON des lignes du calcul écrit chaque classe une seule fois, avec le
+     * préfixe de la feuille des graphiques, dans sa table `classes` (le rang 0
+     * est « aucune classe »), et chaque ligne et chaque cellule en donne le
+     * rang : le préfixe répété dans chaque ligne faisait près de la moitié du
+     * JSON, que chaque redessin de la grille renvoie (relecture du lot
+     * CLIC-MOIS). Le navigateur pose les classes de la table : la lecture de
+     * la page refuse une ligne posée dont une classe n'a pas le préfixe
+     * (voir LectureDeLaPage et tests/Browser/Parcours/EcartDesPrixDAchatTest.php).
+     */
+    public function test_le_json_des_calculs_ecrit_chaque_classe_une_fois_avec_son_prefixe_et_les_lignes_n_en_donnent_que_le_rang(): void
+    {
+        $this->travelTo(self::aParis('2026-11-13 10:00:00'));
+        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete());
+        AchatsDeLaMaquette::semer(self::responsableDeTest($magasin), Fournisseur::factory()->create(['nom' => 'Maison Verdier']));
+        $page = $this->grille($magasin)->html();
+
+        $this->assertSame(1, preg_match('#<script type="application/json" data-ecart="calculs">(.*?)</script>#s', $page, $json));
+        $calculs = json_decode($json[1], true, 512, JSON_THROW_ON_ERROR);
+        $table = $calculs['classes'];
+
+        $this->assertSame('', $table[0], 'Le rang 0 est « aucune classe ».');
+        $this->assertSame(count($table), count(array_unique($table)), 'Chaque classe est écrite une seule fois.');
+        $this->assertSame(count($table) - 1, substr_count($json[1], LectureDeLaPage::PREFIXE_DES_CLASSES), 'Le préfixe n\'est écrit que dans la table, une fois par classe : jamais dans une ligne ni une cellule.');
+        $this->assertEqualsCanonicalizing(
+            ['mention', 'moins', 'plus', 'soustotal', 'tiret', 'total', 'vide'],
+            array_map(fn (string $classe): string => substr($classe, strlen(LectureDeLaPage::PREFIXE_DES_CLASSES)), array_slice($table, 1)),
+            'La table porte les classes des lignes et des cellules de la maquette, avec le préfixe.',
+        );
+
+        $rangs = [];
+
+        foreach ([...$calculs['avant'], ...$calculs['debut']] as $lignes) {
+            foreach ($lignes as [$rangDeLaLigne, $cellules]) {
+                $rangs[] = $rangDeLaLigne;
+
+                foreach ($cellules as $cellule) {
+                    if (is_array($cellule)) {
+                        $rangs[] = $cellule[1];
+                    }
+                }
+            }
+        }
+
+        $this->assertContainsOnly('int', $rangs);
+        $this->assertEqualsCanonicalizing(array_keys($table), array_values(array_unique($rangs)), 'Chaque classe de la table sert, et aucun rang ne sort de la table.');
+    }
+
+    /**
      * Le menu « Afficher : » se retient en base comme le type : retrouvé
      * à l'ouverture suivante, le mois choisi, lui, revient au dernier mois
      * de la période ; changer le type ne remet pas l'affichage au défaut.

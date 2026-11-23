@@ -46,10 +46,13 @@ use RuntimeException;
  *    sur douze mois, ni le dessin ni ses légendes (`dessin` et `legendes`
  *    valent null), ni le tableau « Voir les chiffres » ;
  *  - les lignes du calcul achat par achat ne sont pas écrites en HTML : la
- *    page les porte en JSON compact (le `script` de la vue de la carte) et
- *    le navigateur les pose dans le tableau quand le calcul est ouvert ; la
+ *    page les porte en JSON compact (le `script` de la vue de la carte, qui
+ *    écrit chaque classe une seule fois, avec son préfixe, dans sa table
+ *    `classes`, chaque ligne et chaque cellule en donnant le rang) et le
+ *    navigateur les pose dans le tableau quand le calcul est ouvert ; la
  *    lecture prend les lignes du tableau quand il en a, sinon celles du JSON,
- *    qui sont les mêmes ;
+ *    qui sont les mêmes ; une ligne ou une cellule posée dont une classe n'a
+ *    pas le préfixe est refusée, puisque la feuille ne la connaîtrait pas ;
  *  - le texte d'un lien « Voir… » ouvert est celui de son `x-text`.
  *
  * Le HTML est lu par un analyseur HTML5 (les commentaires de Livewire et le
@@ -382,12 +385,18 @@ final class LectureDeLaPage
             throw new RuntimeException('La carte ne porte pas les lignes de ce calcul en JSON.');
         }
 
-        return array_map(fn (array $ligne): array => [
-            'classe' => $this->sansPrefixe((string) $ligne[0]),
-            'cellules' => array_map(function (array|string $cellule): array {
-                [$texte, $classe, $etendue] = is_string($cellule) ? [$cellule, '', 1] : [$cellule[0], $cellule[1] ?? '', $cellule[2] ?? 1];
+        $classes = $calculs['classes'] ?? null;
 
-                return ['t' => (string) $texte, 'c' => $this->sansPrefixe((string) $classe), 'colspan' => (int) $etendue];
+        if (! is_array($classes)) {
+            throw new RuntimeException('La carte ne porte pas la table des classes de ses lignes en JSON.');
+        }
+
+        return array_map(fn (array $ligne): array => [
+            'classe' => $this->sansPrefixe((string) $classes[(int) $ligne[0]]),
+            'cellules' => array_map(function (array|string $cellule) use ($classes): array {
+                [$texte, $rang, $etendue] = is_string($cellule) ? [$cellule, 0, 1] : [$cellule[0], $cellule[1] ?? 0, $cellule[2] ?? 1];
+
+                return ['t' => (string) $texte, 'c' => $this->sansPrefixe((string) $classes[(int) $rang]), 'colspan' => (int) $etendue];
             }, $ligne[1]),
         ], array_values($rangees));
     }
@@ -403,10 +412,10 @@ final class LectureDeLaPage
             $cellules = [];
 
             foreach ($this->enfants($ligne, 'td') as $cellule) {
-                $cellules[] = ['t' => (string) $cellule->textContent, 'c' => $this->classes($cellule), 'colspan' => $cellule->hasAttribute('colspan') ? (int) $cellule->getAttribute('colspan') : 1];
+                $cellules[] = ['t' => (string) $cellule->textContent, 'c' => $this->classesPrefixees($cellule), 'colspan' => $cellule->hasAttribute('colspan') ? (int) $cellule->getAttribute('colspan') : 1];
             }
 
-            $lignes[] = ['classe' => $this->classes($ligne), 'cellules' => $cellules];
+            $lignes[] = ['classe' => $this->classesPrefixees($ligne), 'cellules' => $cellules];
         }
 
         return $lignes;
@@ -429,6 +438,21 @@ final class LectureDeLaPage
     private function classes(DOMElement $element): string
     {
         return $this->sansPrefixe($element->getAttribute('class'));
+    }
+
+    /**
+     * Les classes d'une ligne ou d'une cellule d'un tableau, sans le préfixe
+     * de la feuille des graphiques ; une classe qui ne l'a pas est refusée.
+     */
+    private function classesPrefixees(DOMElement $element): string
+    {
+        foreach (preg_split('/\s+/', trim($element->getAttribute('class')), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $classe) {
+            if (! str_starts_with($classe, self::PREFIXE_DES_CLASSES)) {
+                throw new RuntimeException('La classe « '.$classe.' » d\'une ligne ou d\'une cellule du tableau n\'a pas le préfixe « '.self::PREFIXE_DES_CLASSES.' » : la feuille des graphiques ne la connaît pas.');
+            }
+        }
+
+        return $this->classes($element);
     }
 
     /**

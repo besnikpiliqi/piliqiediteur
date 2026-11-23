@@ -18,6 +18,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
+use Tests\Fixtures\EcartDesPrixDAchat\LectureDeLaPage;
 use Tests\SemeSansTransaction;
 use Tests\TestCase;
 
@@ -50,14 +51,19 @@ class EcartDesPrixDAchatVolumeDeLaPageTest extends TestCase
     private const FACTURES = 40;
 
     /**
-     * La taille mesurée au lot du HTML de la grille avec la carte et 12 000
-     * achats, les deux affichages et les douze mois écrits (4 598 310 octets,
-     * dont 4 489 922 de lignes de calcul en JSON compact, 24 313 lignes), plus
-     * 50 %. Avant le lot CLIC-MOIS, le mois de départ seul était écrit en HTML
-     * (689 955 octets par mois, 8 760 606 octets pour les douze mois, une
-     * ligne de six cellules par achat affiché).
+     * La taille mesurée du HTML de la grille avec la carte et 12 000 achats,
+     * les deux affichages et les douze mois écrits (2 337 434 octets, dont
+     * 2 229 046 de lignes de calcul en JSON compact, 24 313 lignes), plus
+     * 50 %, arrondie aux 100 000 octets au-dessus. Le JSON écrit chaque
+     * classe une fois, dans sa table, au lieu de répéter le préfixe de la
+     * feuille dans chaque ligne et chaque cellule : à la première mesure du
+     * lot CLIC-MOIS, que chaque redessin de la grille (période, magasin,
+     * comparaison, ajout d'un graphique) renvoie en entier, il faisait 4 598 310
+     * octets, dont 4 489 922 de JSON. Avant ce lot, le mois de départ seul
+     * était écrit en HTML (689 955 octets par mois, 8 760 606 octets pour les
+     * douze mois, une ligne de six cellules par achat affiché).
      */
-    private const TAILLE_MAXIMALE_DU_HTML = 6_900_000;
+    private const TAILLE_MAXIMALE_DU_HTML = 3_600_000;
 
     public function test_la_page_de_12_000_achats_lit_les_lignes_une_seule_fois_ecrit_les_deux_affichages_et_reste_bornee(): void
     {
@@ -93,6 +99,7 @@ class EcartDesPrixDAchatVolumeDeLaPageTest extends TestCase
         $debutDuJson += strlen('<script type="application/json" data-ecart="calculs">');
         $json = substr($page, $debutDuJson, (int) strpos($page, '</script>', $debutDuJson) - $debutDuJson);
         $calculs = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(count($calculs['classes']) - 1, substr_count($json, LectureDeLaPage::PREFIXE_DES_CLASSES), 'Le préfixe des classes n\'est écrit que dans la table des classes, une fois par classe, jamais dans une ligne ni une cellule : répété, il en faisait près de la moitié.');
         $lignes = array_sum(array_map('count', $calculs['avant'])) + count($calculs['debut'][0]);
         $this->assertGreaterThan(12000, $lignes, 'Les lignes de chaque mois et des douze mois, une par achat affiché, sont dans le JSON.');
 

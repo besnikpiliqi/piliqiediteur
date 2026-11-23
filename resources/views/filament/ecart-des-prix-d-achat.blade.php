@@ -23,12 +23,17 @@
     des douze mois, qui comptent des milliers d'achats, ne s'écrivent pas
     en HTML : elles sont dans la page en JSON compact (le `script` de la
     vue) et le tableau montré les pose quand le calcul est ouvert (voir
-    piliqiPoserLesLignes() dans graphiques-du-panneau.blade.php). La vue
+    piliqiPoserLesLignes() dans graphiques-du-panneau.blade.php). Le JSON
+    écrit chaque classe, avec le préfixe de la feuille des graphiques, une
+    seule fois, dans sa table `classes` ; chaque ligne et chaque cellule en
+    donne le rang. Écrit dans chaque ligne et chaque cellule, ce préfixe
+    faisait près de la moitié du JSON, que chaque redessin de la grille
+    (période, magasin, comparaison, ajout d'un graphique) renvoie. La vue
     change de clé avec la période, le magasin, le premier mois de la période
     et ce que le calcul contient : l'un de ces choix rend le mois de départ,
     et rien d'autre ne le fait revenir, pas même le menu « Afficher : ». Les
-    classes de la maquette s'écrivent sous le préfixe de la feuille des
-    graphiques (voir public/css/app/graphiques.css).
+    autres classes de la maquette s'écrivent sous le préfixe de la feuille
+    des graphiques (voir public/css/app/graphiques.css).
 
     Variables : $ecart (le mois de départ `depart`, la lecture du départ de
     chaque affichage `parMois` et `surDouzeMois`, les douze lectures `mois`
@@ -37,14 +42,30 @@
 --}}
 @php
     $classes = fn (string $classe): string => implode(' ', array_map(fn (string $nom): string => 'piliqi-graphiques__ecart-'.$nom, array_values(array_filter(explode(' ', $classe)))));
-    // Une ligne : [classe, cellules] ; une cellule : son texte seul, ou [texte, classe, étendue] quand elle a l'un des deux.
-    $cellule = fn (array $cellule): array|string => $cellule['c'] === '' && $cellule['colspan'] === 1 ? $cellule['t'] : ($cellule['colspan'] === 1 ? [$cellule['t'], $classes($cellule['c'])] : [$cellule['t'], $classes($cellule['c']), $cellule['colspan']]);
+    // La table des classes du JSON : chaque classe y est écrite une fois, la première (rang 0) étant « aucune classe » ; une ligne ou une cellule en donne le rang.
+    $tableDesClasses = [''];
+    $rangDeLaClasse = function (string $classe) use (&$tableDesClasses, $classes): int {
+        $nom = $classes($classe);
+        $rang = array_search($nom, $tableDesClasses, true);
+
+        if ($rang === false) {
+            $tableDesClasses[] = $nom;
+            $rang = count($tableDesClasses) - 1;
+        }
+
+        return $rang;
+    };
+    // Une ligne : [rang de sa classe, cellules] ; une cellule : son texte seul, ou [texte, rang de sa classe, étendue] quand elle a une classe ou une étendue.
+    $cellule = fn (array $cellule): array|string => $cellule['c'] === '' && $cellule['colspan'] === 1 ? $cellule['t'] : ($cellule['colspan'] === 1 ? [$cellule['t'], $rangDeLaClasse($cellule['c'])] : [$cellule['t'], $rangDeLaClasse($cellule['c']), $cellule['colspan']]);
     $lignesEnJson = fn (array $lignes): array => array_map(
-        fn (array $ligne): array => [$classes($ligne['classe']), array_map($cellule, $ligne['cellules'])],
+        fn (array $ligne): array => [$rangDeLaClasse($ligne['classe']), array_map($cellule, $ligne['cellules'])],
         $lignes,
     );
+    // Les lignes d'abord : la table des classes ne se complète qu'en les écrivant.
+    $calculsParMois = array_map(fn (array $unMois): array => $lignesEnJson($unMois['calcul']['lignes']), $ecart['mois']);
+    $calculsSurDouzeMois = [$lignesEnJson($ecart['surDouzeMois']['calcul']['lignes'])];
     $calculs = json_encode(
-        ['avant' => array_map(fn (array $unMois): array => $lignesEnJson($unMois['calcul']['lignes']), $ecart['mois']), 'debut' => [$lignesEnJson($ecart['surDouzeMois']['calcul']['lignes'])]],
+        ['classes' => $tableDesClasses, 'avant' => $calculsParMois, 'debut' => $calculsSurDouzeMois],
         JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
     );
     $depart = $ecart['depart'];

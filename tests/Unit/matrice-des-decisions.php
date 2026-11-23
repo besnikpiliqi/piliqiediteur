@@ -3150,6 +3150,7 @@ return [
                 'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_l_affichage_choisi_est_retenu_en_base_le_mois_choisi_non_et_le_type_ne_le_remet_pas_au_defaut',
                 'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_un_geste_forge_est_refuse_et_rien_n_est_ecrit',
                 'tests/Feature/TableauDeBord/EcartDesPrixDAchatVolumeDeLaPageTest.php::test_la_page_de_12_000_achats_lit_les_lignes_une_seule_fois_ecrit_les_deux_affichages_et_reste_bornee',
+                'tests/Feature/TableauDeBord/EcartDesPrixDAchatGrilleTest.php::test_le_json_des_calculs_ecrit_chaque_classe_une_fois_avec_son_prefixe_et_les_lignes_n_en_donnent_que_le_rang',
                 'tests/Unit/EcartDesPrixDAchatVolumeTest.php::test_le_calcul_de_12_000_achats_donne_des_lectures_de_taille_bornee',
                 'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › le propriétaire ajoute la carte dans l’espace de la société, la lit comme la maquette, choisit un mois au clic, à Entrée et à Espace, ouvre les liens « Voir… », et retrouve l’affichage, pas le mois, après le rechargement',
             ],

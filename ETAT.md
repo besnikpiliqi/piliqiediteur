@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 23/11/2026 à 23:11 UTC par pilotage-sync.sh : « Cahier de la marge : B décidé, un produit = une fiche + des lots [skip ci] ».
+Mis à jour le 23/11/2026 à 23:20 UTC par pilotage-sync.sh : « Maquette de la marge lancée (course wf_abd5f136-90e) [skip ci] ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

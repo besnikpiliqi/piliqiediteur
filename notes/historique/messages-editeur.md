@@ -6857,3 +6857,7 @@ tu fait comme ca pour les produit aujourd hui! alors la tva se calculera reel ou
 
 B mais est ce qu il faut enregister les produit tva sur marge en unique meme s il ont le meme nom et reference, pour calculer le benefice de chaqu un  et la tva sur le benef ?
 
+## 623. 2026-11-23 23:17 UTC
+
+oui c est bon mais il faut marque dans facture d achat quand on ajoute le produit "TVA sur marge" ou choisir qqch meilleur dont peut etre la loi. dit moi comment apparaitre l option pour choisir et tout le reste. peut avec maquet sera mieux de voir comment apparait partout tous les regime ?
+

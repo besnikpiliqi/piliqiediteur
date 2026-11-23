@@ -74,7 +74,7 @@ class NotificationsDeLaSocieteTest extends TestCase
             StockSousLeSeuilDAlerte::class => new StockSousLeSeuilDAlerte(Produit::factory()->create()),
             StockNegatif::class => new StockNegatif(Produit::factory()->create(), 'T-MABOUT-2026-000001'),
             EcartDansLeStock::class => new EcartDansLeStock($magasin, 2),
-            StockDuMagasinCede::class => new StockDuMagasinCede($magasin, '28.75', []),
+            StockDuMagasinCede::class => new StockDuMagasinCede($magasin, '28.75', [], '2026-11-23'),
             AvisDuTelechargementDesDocuments::class => new AvisDuTelechargementDesDocuments(app(TenantContext::class)->runAsSociete($societe, fn (): TelechargementDeDocuments => tap((new TelechargementDeDocuments)->forceFill([
                 'demande_par' => $proprietaire->id,
                 'magasins' => [$magasin->id],

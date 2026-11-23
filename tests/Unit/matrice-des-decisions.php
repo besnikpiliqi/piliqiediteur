@@ -832,6 +832,17 @@ return [
                 'tests/Feature/Societe/FermerEtRouvrirMagasinTest.php::test_ni_un_responsable_ni_un_compte_de_cabinet_ne_ferment_ne_rouvrent_ni_ne_cedent_un_magasin',
             ],
         ],
+        'statuts.facture-du-stock-d-un-magasin-ferme' => [
+            'puce' => 'Société ou magasin suspendu, fermé, résilié ou révoqué',
+            'regle' => 'Un magasin fermé par sa société, jamais cédé ni suspendu, dans une société active et validée, ne fait que la facture de son stock vendu seul : ni ticket, ni autre facture, ni avoir, contre-passation, e-mail ou relance ; un magasin cédé reste fermé, quoi qu\'on lui fasse faire.',
+            'tests' => [
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_le_magasin_reste_en_lecture_seule_pour_toute_autre_vente_et_se_cede_ensuite',
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_un_magasin_ouvert_ou_cede_ou_suspendu_ne_la_fait_pas',
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_une_societe_suspendue_ne_la_fait_pas',
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_les_autres_gestes_sur_la_facture_du_stock_restent_refuses_tant_que_le_magasin_est_ferme',
+                'tests/Feature/Facturation/FacturerLeStockEcranTest.php::test_le_bouton_s_offre_a_qui_vend_dans_un_magasin_ferme_et_a_personne_d_autre',
+            ],
+        ],
         'statuts.ceder-un-magasin' => [
             'puce' => 'Société ou magasin suspendu, fermé, résilié ou révoqué',
             'regle' => 'Seul le propriétaire cède un magasin (nom retapé, mot de passe redemandé), une fois la société validée, qu\'il soit ouvert ou déjà fermé, sans le rouvrir ni le recontrôler ; un magasin cédé ne se rouvre jamais.',
@@ -982,10 +993,43 @@ return [
         ],
         'societe.cession-de-l-activite' => [
             'puce' => 'Société et établissements',
-            'regle' => 'Le magasin cédé est fermé pour cession, son stock sort au coût moyen, journalisé, et cette valeur hors taxe est remise au propriétaire ; ni les factures, ni les paiements, ni les archives ne bougent.',
+            'regle' => 'Le magasin cédé est fermé pour cession, son stock sort au coût moyen, journalisé et sans facture, et cette valeur hors taxe est remise au propriétaire ; ni les factures, ni les paiements, ni les archives ne bougent.',
             'tests' => [
                 'tests/Feature/Societe/FermerEtRouvrirMagasinTest.php::test_une_fermeture_pour_cession_sort_le_stock_au_cout_moyen_et_remet_la_valeur_hors_taxe',
                 'tests/Feature/Editeur/AnnulerCessionTest.php::test_une_cession_annulee_rentre_le_stock_au_meme_cout_et_seulement_sans_operation_posterieure',
+            ],
+        ],
+        'societe.message-avant-la-cession' => [
+            'puce' => 'Société et établissements',
+            'regle' => 'Avant de confirmer la cession, la fenêtre du propriétaire dit la valeur du stock au coût moyen (une valeur comptable), distingue la transmission du magasin avec son activité, sans TVA (CGI jusqu\'au 31/12/2026, CIBS ensuite), de la vente du stock seul, à facturer avec TVA avant la cession (sans TVA en franchise en base), et renvoie à l\'expert-comptable ; l\'avis reçu après la cession reprend la valeur et la règle.',
+            'tests' => [
+                'tests/Feature/Societe/MessageDeLaCessionTest.php::test_la_valeur_du_stock_est_celle_que_la_cession_sort',
+                'tests/Feature/Societe/MessageDeLaCessionTest.php::test_le_message_distingue_la_transmission_sans_tva_de_la_vente_du_stock_seul',
+                'tests/Feature/Societe/MessageDeLaCessionTest.php::test_le_code_cite_est_celui_du_jour_de_la_cession',
+                'tests/Feature/Societe/MessageDeLaCessionTest.php::test_une_societe_en_franchise_facture_son_stock_sans_tva',
+                'tests/Feature/Societe/MessageDeLaCessionTest.php::test_la_fenetre_de_la_cession_montre_le_message_avant_la_confirmation',
+                'tests/Feature/Societe/MessageDeLaCessionTest.php::test_la_fenetre_d_un_magasin_ferme_cite_le_cibs_a_partir_du_premier_janvier_2027',
+                'tests/Feature/Societe/MessageDeLaCessionTest.php::test_l_avis_apres_la_cession_reprend_la_valeur_et_la_regle_du_jour',
+            ],
+        ],
+        'societe.facture-du-stock-vendu-seul' => [
+            'puce' => 'Société et établissements',
+            'regle' => 'La facture du stock vendu seul est une vente comme une autre (TVA ligne par ligne, numéro, signature, sortie du stock), faite par un compte autorisé à vendre dans le magasin, jamais le propriétaire, à un client professionnel, pour tout ce qu\'il reste en stock des produits choisis qui suivent leur stock, jamais un service ni plus que le stock ; elle se prépare, s\'émet, s\'encaisse et se supprime depuis un magasin fermé, pas cédé, et s\'inscrit au journal d\'audit ; la base la refuse à un particulier et la fige.',
+            'tests' => [
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_un_magasin_ferme_facture_son_stock_avec_tva_ligne_par_ligne',
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_le_proprietaire_ne_facture_jamais_et_aucune_autre_facture_n_est_permise',
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_le_client_est_un_professionnel_du_magasin',
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_les_produits_se_choisissent_parmi_ceux_en_stock_sans_service_ni_archive_ni_stock_negatif',
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_une_seule_facture_du_stock_attend_d_etre_emise',
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_une_remise_sur_chaque_ligne_exige_l_autorisation_d_en_accorder',
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_un_vendeur_autorise_a_vendre_facture_et_un_vendeur_sans_autorisation_de_vente_non',
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_l_emission_refuse_une_ligne_qui_n_est_plus_un_produit_en_stock',
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_emettre_et_encaisser_puis_encaisser_plus_tard_en_plusieurs_modes',
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_la_base_refuse_une_facture_du_stock_qui_n_est_pas_a_un_professionnel_et_son_drapeau_ne_change_plus',
+                'tests/Feature/Facturation/FactureDuStockVenduSeulTest.php::test_la_preparation_et_l_emission_s_inscrivent_au_journal_d_audit',
+                'tests/Feature/Facturation/FacturerLeStockEcranTest.php::test_la_fenetre_prepare_la_facture_du_stock_qui_s_emet_s_encaisse_et_se_supprime_depuis_sa_fiche',
+                'tests/Feature/Facturation/FacturerLeStockEcranTest.php::test_une_remise_se_propose_a_qui_peut_en_accorder_et_la_facture_la_porte',
+                'tests/Feature/Facturation/FacturerLeStockEcranTest.php::test_un_client_particulier_ou_aucun_produit_est_refuse_par_la_fenetre',
             ],
         ],
 
@@ -3937,6 +3981,7 @@ return [
             'S10' => [
                 'decision' => 'Transfert d\'un établissement à une autre société : rien ne suit ; la société qui reprend saisit son catalogue et fait un inventaire d\'ouverture ; le stock du magasin cédé sort au coût moyen, journalisé.',
                 'regles' => ['societe.cession-de-l-activite', 'statuts.ceder-un-magasin'],
+                'remplacee' => 'Remplacée en partie par P4.1 et P4.2 (décision de Claude du 23/11/2026, D76) : « rien ne suit » ne vaut plus pour le stock vendu seul, que le propriétaire est averti de facturer avec TVA avant la cession, depuis le magasin ouvert ou fermé ; le reste tient (la société qui reprend saisit son catalogue, le stock sort au coût moyen sans facture, factures, paiements et archives ne bougent).',
             ],
             'S11' => [
                 'decision' => 'SIREN corrigé après le premier document : pas de correction ordinaire ; vérification avant tout document réel, SIREN verrouillé ; erreur ou usurpation découverte après la validation : procédure réservée à l\'éditeur, justificatifs, traçabilité, examen des documents (note de l\'éditeur).',
@@ -6995,11 +7040,11 @@ return [
             ],
             'P4.1' => [
                 'decision' => 'Cession d\'un magasin avec son stock : Avant une cession, PILIQI préviendra que le stock vendu seul se facture avec TVA et permettra cette facture, même depuis un magasin fermé ; céder le magasin entier reste sans TVA.',
-                'a_venir' => 'Étape 1, lot de la cession, après le lot MAT-PRO : aujourd\'hui le stock sort sans facture et l\'avis part après la cession.',
+                'regles' => ['societe.facture-du-stock-vendu-seul', 'statuts.facture-du-stock-d-un-magasin-ferme', 'societe.message-avant-la-cession'],
             ],
             'P4.2' => [
                 'decision' => 'Message au propriétaire à la cession d\'un magasin : Le message viendra avant de confirmer la cession, distinguera la transmission sans TVA de la vente du stock seul à facturer avant, et citera le nouveau code (CIBS) dès le 01/01/2027.',
-                'a_venir' => 'Étape 1, lot de la cession, après le lot MAT-PRO : aujourd\'hui le stock sort sans facture et l\'avis part après la cession.',
+                'regles' => ['societe.message-avant-la-cession'],
             ],
             'T36.1' => [
                 'decision' => 'Premier mot de passe égal à l\'identifiant : Chaque compte, vendeurs et observateurs compris, devra choisir son mot de passe à la première connexion, ou recevra un mot de passe provisoire tiré au hasard, à usage unique et de courte durée.',

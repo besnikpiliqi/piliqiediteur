@@ -6,6 +6,7 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Actions\FermerLesCaissesPersonnellesAction;
@@ -72,14 +73,18 @@ use Throwable;
  * Toute cession, d'un magasin ouvert ou fermé, sort son stock : chaque
  * produit qui suit son stock et en a sort tout entier au coût moyen (voir
  * StockLedgerService::sortirPourCession(), dont le magasin cédé est la
- * source) ; la valeur hors taxe de ce stock s'inscrit au journal d'audit
- * avec la cession, et un produit en stock négatif y est seulement listé,
- * sans mouvement ; le magasin cédé perd aussi l'indication
- * d'établissement principal qu'il portait (voir
- * ChoisirEtablissementPrincipalAction), retrait noté dans la même entrée
- * d'audit. Rien d'autre ne suit : factures, paiements et archives restent
- * où ils sont. Un magasin cédé ne se ferme, ne se cède et ne se rouvre
- * plus (voir Magasin::aEteCede() et RouvrirMagasinAction).
+ * source), sans facture : c'est la sortie du stock d'une transmission
+ * d'universalité, sans TVA. Le stock vendu seul, lui, se facture avec TVA
+ * avant la cession, depuis le magasin ouvert, ou fermé (voir
+ * VenteDuStockSeul) : le message d'avant la confirmation le dit au
+ * propriétaire (voir MessageDeCession et ModifierMagasin). La valeur hors
+ * taxe du stock sorti s'inscrit au journal d'audit avec la cession, et un
+ * produit en stock négatif y est seulement listé, sans mouvement ; le
+ * magasin cédé perd aussi l'indication d'établissement principal qu'il
+ * portait (voir ChoisirEtablissementPrincipalAction), retrait noté dans la
+ * même entrée d'audit. Rien d'autre ne suit : factures, paiements et
+ * archives restent où ils sont. Un magasin cédé ne se ferme, ne se cède et
+ * ne se rouvre plus (voir Magasin::aEteCede() et RouvrirMagasinAction).
  *
  * Après la transaction : les caisses personnelles d'un magasin qui vient
  * de fermer, restées ouvertes, se ferment d'office, au nom du système,
@@ -172,7 +177,7 @@ class FermerMagasinAction
         }
 
         if ($resultat['cession'] !== null) {
-            $societe->proprietaire()->firstOrFail()->notify(new StockDuMagasinCede(ModeleRelu::de($magasin), $resultat['cession']['valeur_ht'], $resultat['cession']['produits_en_stock_negatif']));
+            $societe->proprietaire()->firstOrFail()->notify(new StockDuMagasinCede(ModeleRelu::de($magasin), $resultat['cession']['valeur_ht'], $resultat['cession']['produits_en_stock_negatif'], Calendrier::deParis()->aujourdhui()));
         }
     }
 

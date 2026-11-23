@@ -18,9 +18,11 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\RecuPaiement;
+use App\Domain\Facturation\Services\VenteDuStockSeul;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -89,7 +91,9 @@ use App\Models\User;
  *   continuent jusqu'au bout ; les autorisations de
  *   PermissionRegistry::permisesEnLectureSeule() ; un geste sur l'équipe
  *   du magasin (une affectation, un compte ou un poste reconnu), sauf dans
- *   une société révoquée ;
+ *   une société révoquée ; et, dans un magasin que sa société a fermé sans
+ *   le céder, les gestes de la facture de son stock vendu seul (voir
+ *   GESTES_DE_LA_VENTE_DU_STOCK) ;
  * - tant que le magasin ne peut pas vendre (société en cours de
  *   vérification, établissement pas encore confirmé, voir
  *   Magasin::peutVendre()), les autorisations des opérations commerciales
@@ -116,6 +120,19 @@ final class ControleDesDroits
         'fermerLaCaisseDe' => ClotureCaissePersonnelle::class,
         'justifier' => Facture::class,
     ];
+
+    /**
+     * Les gestes de la facture du stock vendu seul que continue d'accepter
+     * un magasin fermé par sa société sans être cédé (voir
+     * VenteDuStockSeul) : la préparer depuis la liste des factures (sur la
+     * classe), puis, sur cette facture seule, l'émettre, l'émettre en
+     * l'encaissant, l'encaisser et supprimer son brouillon. Chacun
+     * demande ensuite ses autorisations ordinaires de vente, comme dans un
+     * magasin ouvert, que sa policy lit en tenant le magasin pour ouvert
+     * (voir FacturePolicy) : le propriétaire, qui ne vend jamais, ne les a
+     * pas, ni un compte d'un cabinet.
+     */
+    private const GESTES_DE_LA_VENTE_DU_STOCK = ['facturerLeStock', 'emettre', 'emettreEtEncaisser', 'encaisser', 'delete'];
 
     /**
      * Les gestes d'une policy qu'un compte d'un cabinet d'expertise
@@ -186,7 +203,7 @@ final class ControleDesDroits
             return false;
         }
 
-        if ($magasin->estEnLectureSeule() && ! $this->estPermisEnLectureSeule($ability, $arguments[0] ?? null, $magasin->societe)) {
+        if ($magasin->estEnLectureSeule() && ! $this->estPermisEnLectureSeule($ability, $arguments[0] ?? null, $magasin->societe) && ! $this->estLaVenteDuStockDUnMagasinFerme($ability, $arguments[0] ?? null, $magasin)) {
             return false;
         }
 
@@ -300,6 +317,26 @@ final class ControleDesDroits
     private static function estLeRetraitDUneInvitation(string $ability, mixed $cible): bool
     {
         return $ability === 'retirer' && self::porteSur($cible, InvitationCabinet::class);
+    }
+
+    /**
+     * Le geste est-il de la facture du stock vendu seul, que le magasin
+     * fermé par sa société accepte encore (voir GESTES_DE_LA_VENTE_DU_STOCK
+     * et Magasin::refusDeLaVenteDuStock()) ? Sur la classe des factures
+     * pour la préparer, sur une facture que sa colonne désigne pour les
+     * autres.
+     */
+    private function estLaVenteDuStockDUnMagasinFerme(string $ability, mixed $cible, Magasin $magasin): bool
+    {
+        if (! in_array($ability, self::GESTES_DE_LA_VENTE_DU_STOCK, true)) {
+            return false;
+        }
+
+        if ($ability === 'facturerLeStock') {
+            return $cible === Facture::class && $magasin->peutFacturerSonStock();
+        }
+
+        return $cible instanceof Facture && app(VenteDuStockSeul::class)->concerne($cible);
     }
 
     private function estPermisEnLectureSeule(string $ability, mixed $cible, Societe $societe): bool

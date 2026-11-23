@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Facturation\Support\GardesDeLaVente;
 use App\Domain\Facturation\Support\GardesDesDocumentsEmis;
 use Illuminate\Database\Migrations\Migration;
@@ -44,6 +45,15 @@ return new class extends Migration
             // magasin (clé étrangère sur le magasin et la facture), qui n'en
             // a qu'une (index unique) ; vide pour toute autre facture.
             $table->unsignedBigInteger('facture_rectifiee_id')->nullable();
+            // La facture du stock vendu seul (P4.1, voir VenteDuStockSeul) :
+            // la vente, avec TVA, du stock d'un magasin que sa société a
+            // fermé et pas encore cédé, à un professionnel, seule vente que
+            // ce magasin fait encore ; posée à la création du brouillon,
+            // jamais changée ensuite (déclencheur factures_vente_du_stock_
+            // seul_figee). Elle est toujours à un professionnel, en vente en
+            // France, sans devis ni facture rectifiée (contrainte
+            // factures_vente_du_stock_seul_coherente).
+            $table->boolean('vente_du_stock_seul')->default(false);
             // Le type du client (TypeClient), écrit à chaque enregistrement
             // du brouillon et contrôlé à l'émission (voir
             // EmettreFactureAction) : il choisit la série, ticket de caisse
@@ -177,6 +187,9 @@ return new class extends Migration
         DB::statement('ALTER TABLE factures ADD CONSTRAINT factures_devis_d_origine CHECK ((devis_id IS NULL AND devis_numero IS NULL AND devis_accepte_le IS NULL) OR (devis_id IS NOT NULL AND devis_numero IS NOT NULL AND devis_accepte_le IS NOT NULL))');
         DB::statement('ALTER TABLE factures ADD CONSTRAINT factures_periode_de_l_operation CHECK (date_operation_debut IS NULL OR (date_operation_fin IS NOT NULL AND date_operation_debut < date_operation_fin))');
 
+        DB::statement("ALTER TABLE factures ADD CONSTRAINT factures_vente_du_stock_seul_coherente CHECK (NOT vente_du_stock_seul OR (type_client = 'professionnel' AND nature_operation = 'vente_france' AND devis_id IS NULL AND facture_rectifiee_id IS NULL))");
+        DeclencheursDeProtection::colonneFigee('factures', 'vente_du_stock_seul');
+
         GardesDeLaVente::poser('factures');
         GardesDesDocumentsEmis::poser('factures');
     }
@@ -184,6 +197,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('factures');
+        DeclencheursDeProtection::retirerLaColonneFigee('factures', 'vente_du_stock_seul');
         GardesDeLaVente::retirer('factures');
         GardesDesDocumentsEmis::retirer('factures');
     }

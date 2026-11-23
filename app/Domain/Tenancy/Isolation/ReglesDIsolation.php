@@ -260,7 +260,7 @@ final class ReglesDIsolation
         'comptes_expert_comptable' => ['comptes_expert_comptable_coherents', 'comptes_expert_comptable_sans_suppression_delete', 'comptes_expert_comptable_sans_suppression_truncate'],
         'consultations_vies' => ['consultations_vies_ajout_seul_delete', 'consultations_vies_ajout_seul_truncate', 'consultations_vies_ajout_seul_update'],
         'enregistrements_fiscaux' => ['enregistrements_fiscaux_ajout_seul_delete', 'enregistrements_fiscaux_ajout_seul_truncate', 'enregistrements_fiscaux_ajout_seul_update', 'garde_vente_enregistrements_fiscaux'],
-        'factures' => ['factures_cloture_caisse_id_figee', 'garde_documents_emis_factures', 'garde_vente_factures'],
+        'factures' => ['factures_cloture_caisse_id_figee', 'factures_vente_du_stock_seul_figee', 'garde_documents_emis_factures', 'garde_vente_factures'],
         'factures_achat' => ['factures_achat_repere_grand_livre_figee', 'factures_achat_seulement_avec_des_articles', 'magasins_ouverts_a_l_expert_comptable'],
         'fournisseurs' => ['magasins_ouverts_a_l_expert_comptable'],
         'identifiants' => ['garde_identifiants', 'garde_identifiants_vidage'],

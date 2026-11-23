@@ -19,6 +19,7 @@ use App\Domain\Facturation\Actions\EncaisserEnPlusieursModesAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Actions\FacturerLeStockAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
@@ -220,6 +221,31 @@ final class GestesDuMagasin
             null,
             self::jeton(),
         ));
+    }
+
+    /**
+     * La facture du stock vendu seul de ce magasin fermé (voir
+     * FacturerLeStockAction), préparée puis émise par cette personne, pour
+     * tout ce qu'il reste en stock de ces produits, avec cette remise sur
+     * chaque ligne, sans règlement à l'émission, ou réglée à l'émission par
+     * ces parts.
+     *
+     * @param  list<string>  $references  les références des produits à facturer
+     * @param  list<PartDeReglement>  $parts
+     */
+    public function facturerLeStock(User $vendeur, Client $client, array $references, ?string $remisePourcentage = null, array $parts = []): Facture
+    {
+        return $this->dans(function () use ($vendeur, $client, $references, $remisePourcentage, $parts): Facture {
+            $produits = array_map(fn (string $reference): int => $this->produit($reference)->id, $references);
+
+            return app(EmettreFactureAction::class)->handle(
+                $vendeur,
+                app(FacturerLeStockAction::class)->handle($vendeur, $client, $produits, $remisePourcentage),
+                $parts === [] ? null : ReglementComptant::horsDeLaCaisse($parts),
+                null,
+                self::jeton(),
+            );
+        });
     }
 
     /**

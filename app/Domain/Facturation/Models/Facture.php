@@ -84,6 +84,15 @@ use LogicException;
  * facture, ce que les avoirs déjà émis n'en ont pas crédité, et une
  * facture rectificative (voir factureRectifiee()) en reprend les lignes
  * sous l'identité corrigée de la société.
+ *
+ * La facture du stock vendu seul (voir VenteDuStockSeul) est la seule vente
+ * que fait encore un magasin que sa société a fermé sans le céder : la
+ * colonne vente_du_stock_seul, posée à la création du brouillon, ne change
+ * plus et la dit (voir estLaVenteDuStockSeul()). Elle classe la facture,
+ * sans rien changer à ce que celle-ci dit (parties, lignes, montants) : elle
+ * n'entre donc pas dans son contenu signé, que la base fige avec le reste du
+ * document émis et que l'inscription de l'émission au journal d'audit
+ * rappelle (voir ActionAuditee::FactureDuStockEmise).
  */
 class Facture extends Model implements DocumentEnvoyable
 {
@@ -129,6 +138,7 @@ class Facture extends Model implements DocumentEnvoyable
      */
     protected $attributes = [
         'nature_operation' => 'vente_france',
+        'vente_du_stock_seul' => false,
     ];
 
     protected $casts = [
@@ -137,6 +147,7 @@ class Facture extends Model implements DocumentEnvoyable
         'type_client' => TypeClient::class,
         'client_etabli_en_france' => 'boolean',
         'franchise_en_base' => 'boolean',
+        'vente_du_stock_seul' => 'boolean',
         'nature_operation' => NatureOperation::class,
         'date_operation_debut' => JourCivil::class,
         'date_operation_fin' => JourCivil::class,
@@ -328,6 +339,16 @@ class Facture extends Model implements DocumentEnvoyable
     public function estUneRectificative(): bool
     {
         return $this->facture_rectifiee_id !== null;
+    }
+
+    /**
+     * Est-ce la facture du stock vendu seul, que fait un magasin fermé par
+     * sa société avant d'être cédé (voir VenteDuStockSeul) ? Posée à la
+     * création du brouillon, elle ne change plus.
+     */
+    public function estLaVenteDuStockSeul(): bool
+    {
+        return (bool) $this->vente_du_stock_seul;
     }
 
     /**

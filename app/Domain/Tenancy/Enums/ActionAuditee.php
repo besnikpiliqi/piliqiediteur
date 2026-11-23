@@ -97,6 +97,8 @@ enum ActionAuditee: string implements HasLabel
     case AdresseDeConnexionChangee = 'adresse_de_connexion_changee';
     case AdresseDeConnexionRetiree = 'adresse_de_connexion_retiree';
     case VenteSansStock = 'vente_sans_stock';
+    case FactureDuStockPreparee = 'facture_du_stock_preparee';
+    case FactureDuStockEmise = 'facture_du_stock_emise';
     case FactureAchatValidee = 'facture_achat_validee';
     case FactureAchatModifiee = 'facture_achat_modifiee';
     case EcartsDuFournisseurConfirmes = 'ecarts_du_fournisseur_confirmes';
@@ -229,6 +231,8 @@ enum ActionAuditee: string implements HasLabel
             self::AdresseDeConnexionChangee => 'Adresse de connexion changée',
             self::AdresseDeConnexionRetiree => 'Adresse de connexion retirée à la clôture de l\'inscription',
             self::VenteSansStock => 'Vente au-delà du stock',
+            self::FactureDuStockPreparee => 'Facture du stock vendu seul préparée',
+            self::FactureDuStockEmise => 'Facture du stock vendu seul émise',
             self::FactureAchatValidee => 'Facture d\'achat validée',
             self::FactureAchatModifiee => 'Facture d\'achat validée corrigée',
             self::EcartsDuFournisseurConfirmes => 'Écart avec le document du fournisseur confirmé',
@@ -464,6 +468,13 @@ enum ActionAuditee: string implements HasLabel
             // passer sous zéro, sa référence, son stock avant la vente et
             // la quantité vendue (voir EmettreFactureAction).
             self::VenteSansStock => ['vente', 'produits'],
+            // La facture du stock vendu seul d'un magasin fermé (voir
+            // VenteDuStockSeul) : à la préparation du brouillon, le client
+            // (son identifiant et son nom), le nombre de produits, la remise
+            // accordée à chaque ligne et le total TTC ; à l'émission, son
+            // numéro et son total TTC.
+            self::FactureDuStockPreparee => ['client', 'produits', 'remise_pourcentage', 'total_ttc'],
+            self::FactureDuStockEmise => ['numero', 'total_ttc'],
             // Le numéro de la facture d'achat, le n° de la facture du
             // fournisseur, ses totaux, la base, la TVA retenue et la TVA
             // calculée de chaque taux, sa marque « TVA à vérifier » et, pour

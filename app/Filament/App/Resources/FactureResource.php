@@ -548,7 +548,7 @@ class FactureResource extends Resource
     {
         return TextEntry::make('nature_operation')
             ->label('Nature de l\'opération')
-            ->helperText(fn (Facture|Devis $record): ?string => $record->nature_operation->mention());
+            ->helperText(fn (Facture|Devis $record): ?string => $record->nature_operation->mention() ?? ($record instanceof Facture && $record->estLaVenteDuStockSeul() ? 'Vente du stock d\'un magasin fermé, facturée seule, avec TVA.' : null));
     }
 
     /**

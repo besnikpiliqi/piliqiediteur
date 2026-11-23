@@ -2,6 +2,7 @@
 
 namespace App\Filament\Societe\Resources\MagasinResource\Pages;
 
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Tenancy\Actions\ChangerSiretAction;
 use App\Domain\Tenancy\Actions\ChoisirEtablissementPrincipalAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
@@ -10,6 +11,7 @@ use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\CodeMagasin;
+use App\Domain\Tenancy\Services\MessageDeCession;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -27,6 +29,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -43,7 +46,10 @@ use Illuminate\Validation\ValidationException;
  * - le fermer, temporairement ou pour cessation d'activité (voir
  *   FermerMagasinAction), ou, pour le propriétaire seul, une fois la
  *   société validée, le céder en retapant son nom, qu'il soit ouvert ou
- *   déjà fermé ;
+ *   déjà fermé, après le message qui lui dit la valeur du stock sorti et
+ *   distingue la transmission du magasin avec son activité, sans TVA, de la
+ *   vente du stock seul, à facturer avec TVA avant la cession (voir
+ *   MessageDeCession) ;
  * - le rouvrir, avant comme après la validation de la société, sauf après
  *   une cession ou la libération de son SIRET par l'éditeur (voir
  *   RouvrirMagasinAction).
@@ -238,7 +244,7 @@ class ModifierMagasin extends EditRecord
             ->icon('heroicon-o-lock-closed')
             ->color('danger')
             ->visible(fn (): bool => $this->peut('fermerLeMagasin') && ! $this->magasin()->estFerme())
-            ->modalDescription('Ses journées de caisse en attente sont clôturées tout de suite, les caisses personnelles encore ouvertes sont fermées automatiquement, et le magasin passe en lecture seule : plus aucune vente, aucun e-mail aux clients ni ticket Z tant qu\'il est fermé. Ses documents, son stock et son équipe restent. Vous pourrez le rouvrir.')
+            ->modalDescription('Ses journées de caisse en attente sont clôturées tout de suite, les caisses personnelles encore ouvertes sont fermées automatiquement, et le magasin passe en lecture seule : plus aucune vente, aucun e-mail aux clients ni ticket Z tant qu\'il est fermé, hormis la facture de son stock vendu seul, que son équipe peut encore faire. Ses documents, son stock et son équipe restent. Vous pourrez le rouvrir.')
             ->form([
                 Radio::make('motif')
                     ->label('Motif')
@@ -266,10 +272,7 @@ class ModifierMagasin extends EditRecord
             ->icon('heroicon-o-arrow-right-start-on-rectangle')
             ->color('danger')
             ->visible(fn (): bool => $this->peut('cederLeMagasin') && $this->magasin()->societe->estValidee() && ! $this->estCede())
-            ->modalDescription(fn (): string => ($this->magasin()->estFerme()
-                ? 'La cession est définitive : le magasin, déjà fermé, ne se rouvrira plus, et il n\'est ni rouvert ni recontrôlé au répertoire Sirene pour être cédé.'
-                : 'La cession est définitive : le magasin est fermé et ne se rouvrira pas. Ses journées en attente sont clôturées.')
-                .' Tout son stock sort au coût moyen ; sa valeur hors taxe vous est remise, à rapprocher du prix de cession prévu à l\'acte avec votre expert-comptable. Ses factures, paiements et archives restent dans votre société. L\'activité reprise s\'ouvre dans le compte de la société qui la reprend.')
+            ->modalDescription(fn (): HtmlString => $this->messageDeLaCession())
             ->form([
                 TextInput::make('confirmation')
                     ->label(fn (): string => "Retapez le nom du magasin : {$this->magasin()->nom}")
@@ -280,6 +283,31 @@ class ModifierMagasin extends EditRecord
                 fn () => app(FermerMagasinAction::class)->handle($this->auteur(), $this->magasin(), MotifFermeture::Cession, ValeurSimple::enTexte($data['mot_de_passe']), ValeurSimple::enTexte($data['confirmation'])),
                 fn (): string => "Le magasin {$this->magasin()->nom} est cédé : la valeur de son stock sorti vous est remise dans vos notifications.",
             ));
+    }
+
+    /**
+     * Ce que la fenêtre de la cession dit avant la confirmation (P4.1 et
+     * P4.2, voir MessageDeCession) : ce que la cession a de définitif, la
+     * valeur du stock au coût moyen qu'elle sort, la différence entre la
+     * transmission du magasin avec son activité, sans TVA, et la vente du
+     * stock seul, à facturer avec TVA avant la cession, même depuis un
+     * magasin fermé, et le renvoi à l'expert-comptable. L'article cité est
+     * celui du jour de la cession.
+     */
+    private function messageDeLaCession(): HtmlString
+    {
+        $magasin = $this->magasin();
+        $message = app(MessageDeCession::class);
+        $paragraphes = [
+            $magasin->estFerme()
+                ? 'La cession est définitive : le magasin, déjà fermé, ne se rouvrira plus, et il n\'est ni rouvert ni recontrôlé au répertoire Sirene pour être cédé.'
+                : 'La cession est définitive : le magasin est fermé et ne se rouvrira pas. Ses journées en attente sont clôturées.',
+            'Tout son stock sort au coût moyen, sans facture : sa valeur hors taxe vous est remise, à rapprocher du prix de cession prévu à l\'acte.',
+            ...$message->avantLaCession($magasin->societe, $message->valeurDuStockEnCentimes($magasin), Calendrier::deParis()->aujourdhui()),
+            'Ses factures, paiements et archives restent dans votre société. L\'activité reprise s\'ouvre dans le compte de la société qui la reprend.',
+        ];
+
+        return new HtmlString(implode('<br><br>', array_map(e(...), $paragraphes)));
     }
 
     public function rouvrirAction(): Action

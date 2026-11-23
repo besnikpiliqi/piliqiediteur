@@ -275,7 +275,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
             $this->entreesDAudit($magasin->societe, ActionAuditee::MagasinFerme)[0]->nouvelles_valeurs,
         );
         Notification::assertSentTo($proprietaire, StockDuMagasinCede::class, fn (StockDuMagasinCede $avis): bool => $avis->valeurHt === '28.75' && $avis->produitsEnStockNegatif === ["GOMME {$gomme->nom} (-2)"]);
-        $this->assertStringContainsString('Valeur du stock au coût moyen : 28,75 € HT', (new StockDuMagasinCede($magasin, '28.75', []))->toDatabase($proprietaire)['body']);
+        $this->assertStringContainsString('Valeur du stock au coût moyen : 28,75 € HT', (new StockDuMagasinCede($magasin, '28.75', [], '2026-11-23'))->toDatabase($proprietaire)['body']);
         $this->assertTrue($magasin->fresh()->aEteCede());
     }
 

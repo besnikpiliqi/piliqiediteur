@@ -93,7 +93,9 @@ use LogicException;
  * - Comptoir des Îles, « Commerce ou atelier » à huit magasins : à
  *   Fort-de-France (Martinique, TVA à 8,5 %, heure des Antilles), à Lyon
  *   (son inventaire d'ouverture en brouillon, puis fermé temporairement),
- *   à Bordeaux (fermé pour cessation, puis rouvert), à Nantes (cédé), à
+ *   à Bordeaux (fermé pour cessation, puis rouvert), à Nantes (fermé
+ *   temporairement, qui facture alors son stock de paniers seul à une
+ *   épicerie professionnelle, avec TVA, puis cédé), à
  *   Lille (suspendu par l'éditeur), à Pointe-à-Pitre (Guadeloupe) et à
  *   Saint-Denis (La Réunion), et à Ajaccio (Corse, fermé pour cessation
  *   sans avoir vendu) ; son propriétaire a demandé de
@@ -195,6 +197,18 @@ final class SocietesDesCas
     private const CESSATION_DE_BORDEAUX = 70;
 
     private const REOUVERTURE_DE_BORDEAUX = 55;
+
+    /**
+     * Nantes ferme temporairement, vend ses paniers en osier seuls à une
+     * épicerie professionnelle par la facture du stock vendu seul (P4.1,
+     * voir VenteDuStockSeul), en reçoit le solde, puis le propriétaire le
+     * cède déjà fermé : ses confitures sortent à la cession, sans facture.
+     */
+    private const FERMETURE_DE_NANTES = 48;
+
+    private const FACTURE_DU_STOCK_DE_NANTES = 46;
+
+    private const SOLDE_DE_LA_FACTURE_DU_STOCK = 41;
 
     private const CESSION_DE_NANTES = 40;
 
@@ -644,6 +658,11 @@ final class SocietesDesCas
                 $this->semis->horsDeToutContexte(fn (): Magasin => app(RouvrirMagasinAction::class)->handle($this->semis->proprietaire('comptoir'), $this->semis->relireLeMagasin('bordeaux'), $this->semis->motDePasseDuProprietaire('comptoir')));
                 $this->semis->relireLeMagasin('bordeaux');
             }),
+            self::FERMETURE_DE_NANTES => $this->leSoir($rang, '21:30', function (): void {
+                $this->fermerNantesAvecSonClientProfessionnel();
+            }),
+            self::FACTURE_DU_STOCK_DE_NANTES => $this->leSoir($rang, '21:30', fn () => $this->facturerLeStockDeNantes()),
+            self::SOLDE_DE_LA_FACTURE_DU_STOCK => $this->leSoir($rang, '21:30', fn () => $this->encaisserLeSoldeDeLaFactureDuStock($rang)),
             self::CESSION_DE_NANTES => $this->leSoir($rang, '21:30', fn () => $this->fermer('nantes', MotifFermeture::Cession, 'Comptoir des Îles Nantes')),
             self::CESSATION_D_AJACCIO => $this->leSoir($rang, '21:30', fn () => $this->fermer('ajaccio', MotifFermeture::Cessation)),
             self::SUSPENSION_DE_LILLE => $this->leSoir($rang, '21:30', function (): void {
@@ -754,7 +773,7 @@ final class SocietesDesCas
         $this->horloge->aller($rang, '20:30');
         $ouverts = [
             'bordeaux' => $avantLaFin > self::CESSATION_DE_BORDEAUX || $avantLaFin < self::REOUVERTURE_DE_BORDEAUX ? 'Inès Lafitte' : null,
-            'nantes' => $avantLaFin > self::CESSION_DE_NANTES ? 'Ronan Guillou' : null,
+            'nantes' => $avantLaFin > self::FERMETURE_DE_NANTES ? 'Ronan Guillou' : null,
             'lille' => $avantLaFin > self::SUSPENSION_DE_LILLE ? 'Chloé Vandamme' : null,
         ];
 
@@ -779,6 +798,54 @@ final class SocietesDesCas
             $facture = $studio->facturer($this->semis->compte('Rémi Lacroix'), $pixel, [$studio->ligne('Séance de prise de vue', 1)]);
             $studio->encaisser($this->semis->compte('Rémi Lacroix'), $facture, [new PartDeReglement(ModePaiement::Virement, 15000)], $this->horloge->jour($rang));
         }
+    }
+
+    /**
+     * Le responsable de Nantes enregistre l'épicerie professionnelle qui
+     * reprendra son stock de paniers (une fiche ne se crée plus dans un
+     * magasin fermé), puis le propriétaire ferme le magasin temporairement.
+     */
+    private function fermerNantesAvecSonClientProfessionnel(): void
+    {
+        (new GestesDuMagasin($this->semis->magasin('nantes')))->fiche($this->semis->compte('Ronan Guillou'), Client::class, [
+            'nom' => 'Épicerie fine du Quai',
+            'type_client' => TypeClient::Professionnel,
+            'siren' => IdentifiantsInsee::avecSaCle('00000059'),
+            'adresse' => '12 quai de la Fosse',
+            'code_postal' => '44000',
+            'ville' => 'Nantes',
+            'pays' => 'FR',
+            'email' => 'compta@epicerie-du-quai.exemple.test',
+        ]);
+        $this->fermer('nantes', MotifFermeture::Temporaire);
+    }
+
+    /**
+     * Nantes, fermé temporairement, facture à l'épicerie tous ses paniers en
+     * osier, avec 5 % de remise sur chaque ligne : le responsable du magasin
+     * la prépare et l'émet, un acompte de 800 € par virement reçu à
+     * l'émission. Les confitures ne sont pas facturées : elles sortiront à
+     * la cession. Rien ne se vend au client comptoir, qu'un magasin fermé
+     * n'accepte plus.
+     */
+    private function facturerLeStockDeNantes(): void
+    {
+        $nantes = new GestesDuMagasin($this->semis->magasin('nantes'));
+        $epicerie = $nantes->dans(fn (): Client => Client::query()->where('nom', 'Épicerie fine du Quai')->sole());
+
+        $nantes->facturerLeStock($this->semis->compte('Ronan Guillou'), $epicerie, ['PANIER-OSIER'], '5', [new PartDeReglement(ModePaiement::Virement, 80000, 'VIR-STOCK-NANTES')]);
+    }
+
+    /**
+     * L'épicerie règle le solde de la facture du stock par chèque, que le
+     * magasin, toujours fermé, enregistre.
+     */
+    private function encaisserLeSoldeDeLaFactureDuStock(int $rang): void
+    {
+        $nantes = new GestesDuMagasin($this->semis->magasin('nantes'));
+        $facture = $nantes->dans(fn (): Facture => Facture::query()->where('vente_du_stock_seul', true)->sole());
+
+        $nantes->encaisser($this->semis->compte('Ronan Guillou'), $facture, [new PartDeReglement(ModePaiement::Cheque, $facture->montantRestantEnCentimes(), 'CHQ-0412')], $this->horloge->jour($rang));
     }
 
     /**

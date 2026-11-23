@@ -10,6 +10,7 @@ use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Facturation\Services\PiedDePage;
+use App\Domain\Facturation\Services\VenteDuStockSeul;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ModeleRelu;
@@ -47,6 +48,13 @@ use LogicException;
  * ou à un autre prix que celui de la fiche du produit ou du prix de
  * référence du service, exige en plus qu'il soit autorisé à accorder des
  * remises et fixer les prix (R2, voir DerogationsDePrix).
+ *
+ * La facture du stock vendu seul d'un magasin que sa société a fermé (voir
+ * VenteDuStockSeul et FacturerLeStockAction) se crée par le même chemin :
+ * le magasin, fermé, y est tenu pour ouvert le temps de la transaction, et
+ * le brouillon porte alors la colonne vente_du_stock_seul, que la base ne
+ * laisse plus changer et qu'elle n'accepte que pour un professionnel, en
+ * vente en France, sans devis ni rectification.
  */
 class CreerFactureAction
 {
@@ -55,41 +63,45 @@ class CreerFactureAction
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
         private readonly DerogationsDePrix $derogations,
+        private readonly VenteDuStockSeul $venteDuStock,
     ) {}
 
     /**
      * @param  array<array-key, array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs  conditions_paiement, notes, et la nature et la livraison (voir NoteSaNatureDOperation::noterSaNatureDOperation())
+     * @param  bool  $venteDuStockSeul  la facture du stock vendu seul d'un magasin fermé (voir FacturerLeStockAction, seule à la demander)
      *
      * @throws AuthorizationException quand l'auteur ne peut pas créer de facture, ou introduit une remise ou un prix sans y être autorisé
      * @throws InvalidArgumentException quand les conditions de paiement sont trop longues pour le pied du PDF (voir PiedDePage)
      * @throws LogicException quand le magasin est en lecture seule, ou que le client n'est pas un client du magasin
      */
-    public function handle(User $auteur, Client $client, array $lignes, array $attributs = []): Facture
+    public function handle(User $auteur, Client $client, array $lignes, array $attributs = [], bool $venteDuStockSeul = false): Facture
     {
         PiedDePage::verifierLesConditionsDePaiement($attributs['conditions_paiement'] ?? null);
 
-        return DB::transaction(function () use ($auteur, $client, $lignes, $attributs) {
+        $creation = fn (): Facture => DB::transaction(function () use ($auteur, $client, $lignes, $attributs, $venteDuStockSeul) {
             $magasin = app(TenantContext::class)->magasin();
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Facture::class);
             $client = Client::relueDansLeMagasin($client, Client::REFUS_AUTRE_MAGASIN);
 
-            return $this->operateur->pendant($compte, fn (): Facture => $this->creer($compte, $client, $lignes, $attributs));
+            return $this->operateur->pendant($compte, fn (): Facture => $this->creer($compte, $client, $lignes, $attributs, $venteDuStockSeul));
         });
+
+        return $venteDuStockSeul ? $this->venteDuStock->pendant(app(TenantContext::class)->magasin(), $creation) : $creation();
     }
 
     /**
      * @param  array<array-key, array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs
      */
-    private function creer(User $compte, Client $client, array $lignes, array $attributs): Facture
+    private function creer(User $compte, Client $client, array $lignes, array $attributs, bool $venteDuStockSeul): Facture
     {
         $facture = new Facture($attributs);
         $contexte = ContexteDeVente::pourEnregistrer($client, app(TenantContext::class)->magasin(), $facture->noterSaNatureDOperation($attributs));
         $document = $this->constructeurLigne->construireToutes($lignes, $contexte);
         $this->derogations->exiger($compte, [], $document->lignes, $contexte);
-        $facture->forceFill(['client_id' => $client->getKey(), 'cree_par' => $compte->getKey(), ...$contexte->colonnes()])->save();
+        $facture->forceFill(['client_id' => $client->getKey(), 'cree_par' => $compte->getKey(), 'vente_du_stock_seul' => $venteDuStockSeul, ...$contexte->colonnes()])->save();
 
         foreach ($document->lignes as $ligne) {
             $facture->lignes()->create($ligne);

@@ -24,6 +24,7 @@ use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\ControleNatureOperation;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Facturation\Services\VenteDuStockSeul;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Stock\Events\StockDevenuNegatif;
 use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
@@ -173,6 +174,16 @@ use LogicException;
  *     la chaîne du magasin se verrouille en dernier ; puis le jeton.
  * Sans clé de signature, ou si l'horloge du serveur a reculé, rien de tout
  * cela n'a lieu : la facture reste un brouillon.
+ *
+ * La facture du stock vendu seul (voir VenteDuStockSeul et
+ * FacturerLeStockAction) est la seule qu'émet un magasin que sa société a
+ * fermé sans le céder : il y est tenu pour ouvert le temps de l'émission,
+ * jamais une fois cédé, et l'émission refuse, avant tout numéro, une facture
+ * dont une ligne n'est pas un produit en stock ou dépasse ce qu'il en
+ * reste, même pour une personne autorisée à vendre sans stock (aucun
+ * avertissement ne s'y offre : le magasin fermé n'a plus de stock à rendre
+ * négatif). Elle s'inscrit au journal d'audit avec son numéro (voir
+ * ActionAuditee::FactureDuStockEmise).
  */
 class EmettreFactureAction
 {
@@ -195,6 +206,7 @@ class EmettreFactureAction
         private readonly JournalAudit $journalAudit,
         private readonly ActionsUniques $actionsUniques,
         private readonly CalculateurLigne $calculateur,
+        private readonly VenteDuStockSeul $venteDuStock,
     ) {}
 
     /**
@@ -219,7 +231,7 @@ class EmettreFactureAction
             $reglement = null;
         }
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_FACTURE, Facture::class, $auteur, [
+        return $this->venteDuStock->pourLaFacture($facture, fn (): Facture => $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_FACTURE, Facture::class, $auteur, [
             'facture_id' => $facture->getKey(),
             'reglement' => $reglement?->enTableau(),
         ], fn () => $this->registre->verrouiller($magasin), fn (): Facture => DB::transaction(function () use ($auteur, $facture, $reglement, $confirmation, $magasin) {
@@ -234,7 +246,7 @@ class EmettreFactureAction
             $this->caissesPersonnelles->refuserSiSaCaisseEstOuverteAilleurs($compte, $magasin);
 
             return $this->operateur->pendant($compte, fn (): Facture => $this->emettre($compte, $facture, $reglement, $confirmation, $instant));
-        }));
+        })));
     }
 
     /**
@@ -280,6 +292,11 @@ class EmettreFactureAction
         }
 
         $rectifiee = $rectificative ? $facture->factureRectifiee()->firstOrFail() : null;
+
+        if ($facture->estLaVenteDuStockSeul()) {
+            $this->venteDuStock->verifierLaFacture($facture);
+        }
+
         $manques = $rectificative ? [] : $this->stock->verifier($compte, $facture, $confirmation);
         $consultationVies = $rectifiee !== null ? $rectifiee->consultationVies : $this->controleNatureOperation->verifier($facture, $instant->jour());
         $numero = $this->numerotation->suivant($facture->magasin, $typeDocument, $instant->annee());
@@ -320,6 +337,13 @@ class EmettreFactureAction
 
         if ($manques !== []) {
             $this->journaliserLaVenteSansStock($compte, $facture, $manques);
+        }
+
+        if ($facture->estLaVenteDuStockSeul()) {
+            $this->journalAudit->inscrire(ActionAuditee::FactureDuStockEmise, $compte, $facture->magasin, null, [
+                'numero' => $facture->numero,
+                'total_ttc' => $facture->total_ttc,
+            ], $facture);
         }
 
         return $facture;

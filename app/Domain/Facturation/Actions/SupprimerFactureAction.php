@@ -9,6 +9,7 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\VenteDuStockSeul;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -34,7 +35,9 @@ use LogicException;
  * fermeture du magasin, ni deux fois pour un même brouillon. L'auteur
  * relu doit pouvoir supprimer le brouillon relu (voir
  * FacturePolicy::delete()) ; le journal des événements inscrit
- * l'abandon à son nom (voir OperateurCourant).
+ * l'abandon à son nom (voir OperateurCourant). Le brouillon de la facture
+ * du stock vendu seul d'un magasin fermé, sans cession, se supprime comme
+ * tout brouillon (voir VenteDuStockSeul).
  */
 class SupprimerFactureAction
 {
@@ -42,6 +45,7 @@ class SupprimerFactureAction
         private readonly RegistreFiscal $registre,
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
+        private readonly VenteDuStockSeul $venteDuStock,
     ) {}
 
     /**
@@ -54,7 +58,7 @@ class SupprimerFactureAction
     {
         $magasin = app(TenantContext::class)->magasin();
 
-        $this->registre->sousVerrou($magasin, function () use ($auteur, $facture, $magasin): void {
+        $this->venteDuStock->pourLaFacture($facture, fn () => $this->registre->sousVerrou($magasin, function () use ($auteur, $facture, $magasin): void {
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'deleteAny', $magasin, Facture::class);
 
@@ -68,6 +72,6 @@ class SupprimerFactureAction
             $this->lecteur->exiger($compte, 'delete', $magasin, $facture);
 
             $this->operateur->pendant($compte, fn (): ?bool => $facture->delete());
-        });
+        }));
     }
 }

@@ -1264,6 +1264,16 @@ return [
         ]],
     ],
     'app/Filament/App/Resources/FactureResource/Pages/ListFactures.php' => [
+        'action:facturerLeStock' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/FactureDuStockVenduSeulTest.php › le responsable d’un magasin fermé prépare la facture du stock à un professionnel, puis l’émet depuis sa fiche',
+            'tests/Browser/Parcours/FactureDuStockVenduSeulTest.php › le vendeur voit « Facturer le stock » dans un magasin fermé, jamais l’observateur ni le propriétaire',
+        ]],
+        'champ:client_id' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/FactureDuStockVenduSeulTest.php › le responsable d’un magasin fermé prépare la facture du stock à un professionnel, puis l’émet depuis sa fiche',
+        ]],
+        'champ:produits' => ['lot' => 'NAV-2', 'tests' => [
+            'tests/Browser/Parcours/FactureDuStockVenduSeulTest.php › le responsable d’un magasin fermé prépare la facture du stock à un professionnel, puis l’émet depuis sa fiche',
+        ]],
         'action:create' => ['lot' => 'NAV-2', 'tests' => [
             'tests/Browser/Balayage/BalayageDuMagasinParLaSocieteTest.php › l’administrateur autorisé à vendre ouvre chaque page et chaque action du magasin sans erreur',
             'tests/Browser/Balayage/BalayageDuMagasinParSonEquipeTest.php › le responsable ouvre chaque page et chaque action du magasin sans erreur',
@@ -2313,6 +2323,7 @@ return [
     'app/Filament/Societe/Resources/MagasinResource/Pages/ModifierMagasin.php' => [
         'action:ceder' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',
+            'tests/Browser/Parcours/FactureDuStockVenduSeulTest.php › le propriétaire lit, avant de confirmer la cession, la valeur du stock et la différence entre la transmission sans TVA et la vente du stock seul, en clair et en sombre',
         ]],
         'action:changerLeSiret' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Balayage/BalayageDeLEspaceDeLaSocieteTest.php › le propriétaire ouvre chaque page et chaque action de l’espace de sa société sans erreur',

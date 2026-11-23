@@ -13,6 +13,7 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\RecusDePaiement;
+use App\Domain\Facturation\Services\VenteDuStockSeul;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -75,6 +76,7 @@ class EncaisserEnPlusieursModesAction
         private readonly ActionsUniques $actionsUniques,
         private readonly CalculateurLigne $calculateur,
         private readonly RecusDePaiement $recus,
+        private readonly VenteDuStockSeul $venteDuStock,
     ) {}
 
     /**
@@ -98,7 +100,7 @@ class EncaisserEnPlusieursModesAction
         $bonsDAvoir = PartDeReglement::numerosDesBons($bonsDAvoir);
         $magasin = app(TenantContext::class)->magasin();
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::ENCAISSER_EN_PLUSIEURS_MODES, Facture::class, $auteur, [
+        return $this->venteDuStock->pourLaFacture($facture, fn (): Facture => $this->actionsUniques->executer($jeton, ActionsUniques::ENCAISSER_EN_PLUSIEURS_MODES, Facture::class, $auteur, [
             'facture_id' => $facture->getKey(),
             'parts' => array_map(fn (PartDeReglement $part): array => $part->enTableau(), $parts),
             'bons_d_avoir' => $bonsDAvoir,
@@ -130,7 +132,7 @@ class EncaisserEnPlusieursModesAction
             $this->recus->clore($recu);
 
             return ModeleRelu::de($facture);
-        }));
+        })));
     }
 
     /**

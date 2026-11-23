@@ -28,6 +28,7 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\RecuPaiement;
+use App\Domain\Facturation\Services\VenteDuStockSeul;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -130,7 +131,9 @@ class AppServiceProvider extends ServiceProvider
      * requêtes ou deux jobs.
      *
      * Le contexte d'origine des produits (voir OrigineDesProduits) vit de
-     * même le temps d'une requête ou d'un job, jamais au-delà.
+     * même le temps d'une requête ou d'un job, jamais au-delà, comme le
+     * magasin fermé que tient pour ouvert la facture de son stock vendu
+     * seul (voir VenteDuStockSeul).
      *
      * Une connexion réussie mène à l'accueil du panneau, même pour un
      * compte qui n'a encore aucun magasin (voir ReponseDeConnexion), à la
@@ -152,6 +155,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->scoped(RegistreFiscal::class);
         $this->app->scoped(OrigineDesProduits::class);
+        $this->app->scoped(VenteDuStockSeul::class);
         $this->app->bind(LoginResponse::class, ReponseDeConnexion::class);
         $this->app->bind(SiteDeDemonstration::class, SiteDeDemonstrationParHttps::class);
         $this->app->bind(SemisDUnModele::class, SemisDuModeleParLeSemeur::class);

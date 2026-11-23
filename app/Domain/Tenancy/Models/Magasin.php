@@ -16,6 +16,7 @@ use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Exceptions\IdentiteDeLaSocieteIncompleteException;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\VenteDuStockSeul;
 use App\Domain\Tenancy\Concerns\RefuseUneCleIllisible;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\StatutMagasin;
@@ -89,9 +90,11 @@ use LogicException;
  * Ce qu'il fait encore, quel que soit l'écran ou la commande qui le
  * demande : en lecture seule (fermé, suspendu par l'éditeur, ou société
  * qui n'est plus active), il ne vend plus et n'écrit plus à ses clients
- * (voir estEnLectureSeule()) ; il ne vend qu'une fois sa société validée
- * et son établissement confirmé par le répertoire Sirene (voir
- * peutVendre()). Un magasin ne se supprime jamais (voir delete() et le
+ * (voir estEnLectureSeule()), sauf la facture du stock vendu seul que fait
+ * un magasin fermé par sa société avant d'être cédé (voir
+ * refusDeLaVenteDuStock() et VenteDuStockSeul) ; il ne vend qu'une fois sa
+ * société validée et son établissement confirmé par le répertoire Sirene
+ * (voir peutVendre()). Un magasin ne se supprime jamais (voir delete() et le
  * déclencheur de la table magasins) : sa société le ferme et le rouvre
  * (voir FermerMagasinAction et RouvrirMagasinAction), son motif de
  * fermeture disant pourquoi il est fermé (motif_fermeture), et un magasin
@@ -137,6 +140,10 @@ class Magasin extends Model implements HasName
     public const DELAI_PAIEMENT_PAR_DEFAUT = 30;
 
     private const REFUS_SOCIETE_A_VERIFIER = 'Votre société est en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation.';
+
+    public const REFUS_STOCK_D_UN_MAGASIN_OUVERT = 'Seul un magasin que sa société a fermé fait la facture de son stock vendu seul : dans un magasin ouvert, faites une facture ordinaire.';
+
+    public const REFUS_STOCK_D_UN_MAGASIN_CEDE = 'Ce magasin a été cédé : son stock est sorti, il ne facture plus rien.';
 
     public const REFUS_ASSUJETTI_UNIQUE = 'PILIQI ne gère pas encore les sociétés membres d\'un assujetti unique (groupe TVA) : aucune vente, facture, avoir, encaissement ni devis numéroté réel n\'est possible.';
 
@@ -495,14 +502,17 @@ class Magasin extends Model implements HasName
      * Ce qui le met en lecture seule, tel que l'écran le dit, le magasin
      * étant désigné ainsi (« Ce magasin est fermé », « Le magasin est en
      * lecture seule, votre société étant suspendue ») ; null quand il ne
-     * l'est pas.
+     * l'est pas. Fermé par sa société, jamais cédé, il est tenu pour ouvert
+     * le temps de la facture de son stock vendu seul que le domaine fait
+     * lui-même (voir VenteDuStockSeul::pendant()), et seulement pour elle :
+     * un magasin cédé reste fermé, quoi qu'on lui fasse faire.
      */
     public function motifDeLectureSeule(string $designation = 'Ce magasin'): ?string
     {
         $societe = $this->societe;
 
         return match (true) {
-            $this->estFerme() => "{$designation} est fermé",
+            $this->estFerme() && ($this->aEteCede() || ! app(VenteDuStockSeul::class)->estEnCoursPour($this)) => "{$designation} est fermé",
             $this->suspendu_le !== null => "{$designation} est suspendu",
             $societe->estClose() => "{$designation} est en lecture seule, l'inscription de votre société étant close",
             $societe->statut->estEnLectureSeule() => "{$designation} est en lecture seule, votre société étant ".mb_strtolower($societe->statut->getLabel()),
@@ -571,6 +581,33 @@ class Magasin extends Model implements HasName
             $this->etablissement_verifie_le === null => "L'établissement de ce magasin (SIRET {$this->siret}) n'est pas encore confirmé par le répertoire Sirene de l'INSEE : aucune vente avant sa confirmation.",
             default => null,
         };
+    }
+
+    /**
+     * Pourquoi il ne peut pas faire la facture du stock vendu seul, la
+     * seule vente d'un magasin fermé (voir VenteDuStockSeul), telle que
+     * l'écran le dit ; null quand il le peut : fermé par sa société,
+     * temporairement ou pour cessation, jamais cédé, et vendant comme s'il
+     * était ouvert (voir refusDeVente() : société validée et active,
+     * établissement confirmé, ni suspension de l'éditeur ni assujetti
+     * unique).
+     */
+    public function refusDeLaVenteDuStock(): ?string
+    {
+        return match (true) {
+            ! $this->estFerme() => self::REFUS_STOCK_D_UN_MAGASIN_OUVERT,
+            $this->aEteCede() => self::REFUS_STOCK_D_UN_MAGASIN_CEDE,
+            default => app(VenteDuStockSeul::class)->commeSiOuvert($this, fn (): ?string => $this->refusDeVente()),
+        };
+    }
+
+    /**
+     * Peut-il faire la facture du stock vendu seul ? Voir
+     * refusDeLaVenteDuStock().
+     */
+    public function peutFacturerSonStock(): bool
+    {
+        return $this->refusDeLaVenteDuStock() === null;
     }
 
     /**

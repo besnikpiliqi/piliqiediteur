@@ -5,6 +5,7 @@ namespace App\Domain\Achats\Models;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Calendrier\Casts\JourCivil;
 use App\Domain\Catalogue\Models\Produit;
@@ -253,6 +254,24 @@ class FactureAchat extends Model
         return $query
             ->where('statut', StatutFactureAchat::Validee)
             ->whereHas('lignes', fn (Builder $lignes): Builder => $lignes->retournables());
+    }
+
+    /**
+     * Les factures d'achat de ce jour du calendrier de leur magasin : celles
+     * dont la date de la facture du fournisseur est ce jour, ou, sans cette
+     * date, celles validées ce jour-là (de minuit à minuit), comme le
+     * tableau de bord les range (voir AchatsDuTableauDeBord).
+     *
+     * @param  Builder<FactureAchat>  $query
+     * @return Builder<FactureAchat>
+     */
+    public function scopeDuJour(Builder $query, Calendrier $calendrier, string $jour): Builder
+    {
+        [$debut, $fin] = $calendrier->bornesDuJour($jour);
+
+        return $query->where(fn (Builder $dates): Builder => $dates
+            ->where('date_facture', $jour)
+            ->orWhere(fn (Builder $sansDate): Builder => $sansDate->whereNull('date_facture')->where('date_validation', '>=', $debut)->where('date_validation', '<', $fin)));
     }
 
     /**

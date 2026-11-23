@@ -18,6 +18,7 @@ use App\Domain\Achats\Models\TauxFactureAchat;
 use App\Domain\Achats\Services\ChiffrageDUnAvoirFournisseur;
 use App\Domain\Achats\Services\EcartsDUnTaux;
 use App\Domain\Achats\Services\TvaDuFournisseur;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Rules\MontantAuCentime;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentChiffre;
@@ -27,6 +28,7 @@ use App\Domain\Fichiers\PieceDeposee;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Domain\Tenancy\Support\RequeteDuModele;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
 use App\Domain\Tenancy\Support\ValeursLues;
@@ -39,6 +41,7 @@ use App\Filament\Concerns\PorteUnJeton;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use App\Filament\FiltreDUnJour;
 use App\Filament\TableauEntry;
 use Carbon\CarbonImmutable;
 use Filament\Actions\DeleteAction;
@@ -278,6 +281,10 @@ class FactureAchatResource extends Resource
                 Tables\Filters\SelectFilter::make('source')->options(SourceFactureAchat::class),
                 self::filtreTvaAVerifier(),
                 self::filtrePieceManquante(),
+                // Les factures d'achat de tel jour du calendrier du magasin,
+                // où mène le clic sur un jour d'un graphique par période du
+                // tableau de bord (voir FiltreDUnJour).
+                FiltreDUnJour::make('Jour de la facture', fn (Builder $query, Calendrier $calendrier, string $jour): Builder => RequeteDuModele::de($query, FactureAchat::class)->duJour($calendrier, $jour)),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

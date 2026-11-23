@@ -98,7 +98,7 @@ test('un nom trop long s’écrit par son début suivi de « … », l’info-bu
     $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe');
     $carte = '[data-graphique="meilleurs_produits"]';
 
-    $onglet->attendreQue('document.querySelectorAll("[data-graphique]").length === 4', 'les graphiques par défaut ne sont pas là');
+    $onglet->attendreQue('document.querySelectorAll("[data-graphique]").length === 5', 'les graphiques par défaut ne sont pas là');
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="ajouter"]')->selectOption('meilleurs_produits'), 'l’ajout des meilleurs produits')
         ->attendreQue('document.querySelector(\''.$carte.' canvas\') !== null && document.querySelector(\''.$carte.' canvas\').width > 0', 'les meilleurs produits ne sont pas dessinés');
     $onglet->attendreQue('window.Alpine.$data(document.querySelector(\''.$carte.' canvas\').closest(\'[x-data]\')).getChart() !== null', 'le graphique des meilleurs produits n’est pas prêt');
@@ -163,7 +163,7 @@ test('la légende d’un anneau écrit un nom trop long par son début suivi de 
     $carte = '[data-graphique="meilleurs_produits"]';
     $graphique = 'window.Alpine.$data(document.querySelector(\''.$carte.' canvas\').closest(\'[x-data]\')).getChart()';
 
-    $onglet->attendreQue('document.querySelectorAll("[data-graphique]").length === 4', 'les graphiques par défaut ne sont pas là');
+    $onglet->attendreQue('document.querySelectorAll("[data-graphique]").length === 5', 'les graphiques par défaut ne sont pas là');
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="ajouter"]')->selectOption('meilleurs_produits'), 'l’ajout des meilleurs produits');
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element($carte.' select[data-geste="type"]')->selectOption('anneau'), 'le passage en anneau')
         ->attendreQue('document.querySelector(\''.$carte.' canvas\') !== null && '.$graphique.' !== null && '.$graphique.'.config.type === "doughnut"', 'l’anneau n’est pas dessiné');

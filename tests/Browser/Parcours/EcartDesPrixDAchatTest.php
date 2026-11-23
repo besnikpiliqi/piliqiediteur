@@ -31,7 +31,7 @@ test('le propriétaire ajoute la carte dans l’espace de la société, la lit c
     $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe');
     $carte = '[data-graphique="'.CARTE_DE_L_ECART.'"]';
 
-    Carte::ajouter($onglet, 4);
+    Carte::ajouter($onglet, 5);
     // Les achats de la maquette sont ceux de la Boutique de la Gare : la carte compte ce seul magasin.
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="magasin"]')->selectOption((string) $societe->autreMagasin->uuid), 'le choix de la Boutique de la Gare');
     Carte::verifier($onglet, 'espace de la société');
@@ -88,7 +88,7 @@ test('le propriétaire ajoute la carte dans le panneau d’un magasin, la lit co
     Carte::semer($this, self::aParis('2026-11-13 10:00:00'), $societe->autreMagasin, self::responsableDeTest($societe->autreMagasin));
     $onglet = $this->seConnecter($societe->proprietaire)->aller('/app/'.$societe->autreMagasin->uuid)->attendre()->verifier();
 
-    Carte::ajouter($onglet, 3);
+    Carte::ajouter($onglet, 4);
     Carte::verifier($onglet, 'panneau d’un magasin');
     $onglet->attendreQue('document.querySelector(\'select[data-filtre="magasin"]\') === null', 'le panneau d’un magasin montre un filtre des magasins')
         ->attendreQue('!document.querySelector(\'[data-graphique="'.CARTE_DE_L_ECART.'"]\').textContent.includes("·")', 'le panneau d’un magasin nomme un magasin');
@@ -103,7 +103,7 @@ test('un administrateur à qui le propriétaire coche les graphiques voit la car
 
     $onglet = $this->seConnecter($nina, panneau: 'societe');
 
-    Carte::ajouter($onglet, 3);
+    Carte::ajouter($onglet, 4);
     Carte::verifier($onglet, 'administrateur');
 });
 
@@ -116,7 +116,7 @@ test('un responsable à qui le propriétaire coche les graphiques voit la carte 
 
     $onglet = $this->seConnecter($lea)->aller('/app/'.$societe->autreMagasin->uuid)->attendre()->verifier();
 
-    Carte::ajouter($onglet, 3);
+    Carte::ajouter($onglet, 4);
     Carte::verifier($onglet, 'responsable');
 });
 
@@ -129,7 +129,7 @@ test('le propriétaire du cabinet et le collaborateur à qui le client est confi
     $onglet = $this->seConnecter($societe->{$compte}, panneau: 'cabinet')
         ->aller('/cabinet/'.$societe->cabinet->uuid.'/clients/'.$lien->uuid.'/graphiques')->attendre()->verifier();
 
-    Carte::ajouter($onglet, 3);
+    Carte::ajouter($onglet, 4);
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="magasin"]')->selectOption((string) $societe->autreMagasin->uuid), 'le choix de la Boutique de la Gare');
     Carte::verifier($onglet, 'page du client');
 })->with(['propriétaire du cabinet' => 'proprietaireDuCabinet', 'collaborateur' => 'collaborateur']);
@@ -142,7 +142,7 @@ test('l’expert-comptable déclaré voit la carte sur « Tableau de bord de la 
 
     $onglet = $this->seConnecter($marc)->aller('/app/'.$magasin->uuid.'/tableau-de-bord-de-la-societe')->attendre()->verifier();
 
-    Carte::ajouter($onglet, 3);
+    Carte::ajouter($onglet, 4);
     Carte::verifier($onglet, 'expert-comptable déclaré');
 });
 
@@ -172,7 +172,7 @@ test('la carte d’une société sans aucun achat dit « Aucun achat ce mois-ci 
     $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe');
     $carte = '[data-graphique="'.CARTE_DE_L_ECART.'"]';
 
-    Carte::ajouter($onglet, 4);
+    Carte::ajouter($onglet, 5);
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="magasin"]')->selectOption((string) $societe->autreMagasin->uuid), 'le choix de la Boutique de la Gare')
         ->attendreQue('document.querySelector(\''.$carte.' [data-ecart="pastille"]\').textContent.trim() === "Aucun achat ce mois-ci"', 'la carte ne dit pas « Aucun achat ce mois-ci »')
         ->attendreQue('!document.querySelector(\''.$carte.' svg\').outerHTML.includes("NaN")', 'le dessin d’une carte sans achat porte un « NaN »')
@@ -240,7 +240,7 @@ test('la carte, ses tableaux ouverts, ne déborde pas à 1 280, 1 024 et 390 px 
     $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe');
     $carte = '[data-graphique="'.CARTE_DE_L_ECART.'"]';
 
-    Carte::ajouter($onglet, 4);
+    Carte::ajouter($onglet, 5);
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="magasin"]')->selectOption((string) $societe->autreMagasin->uuid), 'le choix de la Boutique de la Gare');
     $onglet->geste(fn () => $onglet->element($carte.' [data-ecart="voir-chiffres"]')->click(), 'l’ouverture des chiffres');
     $onglet->geste(fn () => $onglet->element($carte.' [data-ecart="voir-calcul"]')->click(), 'l’ouverture du calcul');

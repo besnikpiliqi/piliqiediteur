@@ -682,9 +682,12 @@ final class SeriesDesGraphiques
     }
 
     /**
+     * Les avoirs émis, sur les magasins où le compte voit tous les avoirs
+     * (pas forcément toutes les ventes), lus une fois pour la page.
+     *
      * @return list<DocumentDeVente>
      */
-    private function avoirs(CalculDesSeries $calcul): array
+    public function avoirs(CalculDesSeries $calcul): array
     {
         return $calcul->avoirs ??= $this->ventes->avoirs($calcul->perimetre, $calcul->perimetre->magasinsAvec(SourceDesGraphiques::Avoirs), $calcul->premierJour(), $calcul->dernierJour());
     }

@@ -2,6 +2,9 @@
 
 namespace App\Domain\TableauDeBord\Support;
 
+use App\Domain\TableauDeBord\Enums\DecoupageDuTableauDeBord;
+use App\Domain\TableauDeBord\Enums\PeriodeDuTableauDeBord;
+
 /**
  * Les phrases grises du tableau de bord sur le découpage par période
  * (choix de l'éditeur du 16/11/2026, lot GRAPH-AN ; décisions de Claude du
@@ -37,6 +40,39 @@ final class TextesDesPeriodes
 
     /** La TVA d'un jour ne compte pas les charges, que leur mois de TVA rattache à un mois. */
     public const TVA_DES_CHARGES_PAR_JOUR = 'La TVA des charges se rattache à son mois de TVA : le détail par jour ne la compte pas.';
+
+    /**
+     * Ce que dit l'écran, sous la barre des filtres, de ce que ses choix
+     * font (maquette du 22/11/2026) : par année, la période des dix
+     * dernières années et ce qui est grisé ; par trimestre sur « 12 derniers
+     * mois », les quatre blocs de trois mois ; avec le cumul, d'où il part et
+     * ce que devient la comparaison.
+     *
+     * @return list<string>
+     */
+    public static function dEcran(DecoupageDuTableauDeBord $decoupage, PeriodeDuTableauDeBord $periode, bool $cumul, bool $comparer, bool $exercices): array
+    {
+        $notes = [];
+        $terme = $exercices ? 'exercice' : 'année';
+
+        if ($decoupage === DecoupageDuTableauDeBord::Annee) {
+            $notes[] = "Par {$terme} : la période est les 10 dernières années pour tout l'écran ; les années vides du début ne s'affichent pas, une {$terme} vide au milieu reste à 0".($exercices ? ' ; chaque barre est un exercice.' : '.');
+            $notes[] = self::COMPARAISON_PAR_ANNEE.' '.self::CUMUL_PAR_ANNEE;
+
+            return $notes;
+        }
+
+        if ($decoupage === DecoupageDuTableauDeBord::Trimestre && $periode === PeriodeDuTableauDeBord::DouzeDerniersMois && ! $cumul) {
+            $notes[] = 'Par trimestre, sur les 12 derniers mois : quatre blocs de trois mois, le dernier finissant ce mois-ci.';
+        }
+
+        if ($cumul) {
+            $debut = $exercices ? "de l'exercice" : "de l'année";
+            $notes[] = "Le cumul se compte depuis le début {$debut}".($comparer ? ($exercices ? " ; l'exercice précédent est cumulé en pointillés." : " ; l'année précédente est cumulée en pointillés.") : '.');
+        }
+
+        return $notes;
+    }
 
     /**
      * Les années du début sans donnée, que la carte ne montre pas : « Une

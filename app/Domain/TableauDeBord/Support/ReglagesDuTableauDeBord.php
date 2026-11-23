@@ -49,9 +49,12 @@ final class ReglagesDuTableauDeBord
      * achats HT par mois », « TVA à payer par mois (estimation) » et
      * « Chiffre d'affaires HT par mois », en barres, puis, dans l'espace
      * de la société quand il y a plus d'un magasin, « Chiffre d'affaires
-     * par magasin » en anneau ; un graphique que le compte ne voit pas est
-     * omis. Les 12 derniers mois par mois, tous ses magasins, sans
-     * comparaison ni cumul.
+     * par magasin » en anneau, puis « Factures à encaisser par ancienneté »
+     * en barres (accord de l'éditeur du 17/11/2026, lot GRAPH-AN) ; un
+     * graphique que le compte ne voit pas est omis, donc cette dernière
+     * carte seulement pour qui voit ces factures dans les magasins comptés
+     * (voir Perimetre::voit()). Les 12 derniers mois par mois, tous ses
+     * magasins, sans comparaison ni cumul.
      *
      * Sur le site de démonstration, toutes les cartes que le compte voit
      * sur cet écran, dans l'ordre du catalogue, chacune à son type par
@@ -78,6 +81,8 @@ final class ReglagesDuTableauDeBord
         if ($perimetre->ecran === EcranDuTableauDeBord::Societe && $perimetre->magasins()->count() > 1) {
             $cartes[] = CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMagasin, TypeDeGraphique::Anneau);
         }
+
+        $cartes[] = CarteDuTableauDeBord::parDefaut(Graphique::FacturesParAnciennete, TypeDeGraphique::Barres);
 
         return new self(array_values(array_filter($cartes, fn (CarteDuTableauDeBord $carte): bool => $perimetre->voit($carte->graphique))));
     }

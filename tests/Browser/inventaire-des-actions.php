@@ -69,6 +69,17 @@ return [
             'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › la carte, ses tableaux ouverts, ne déborde pas à 1 280, 1 024 et 390 px de large : un tableau large défile dans son cadre, jamais la page',
         ]],
     ],
+    'app/Domain/TableauDeBord/Support/SvgDesBarresParPeriode.php' => [
+        'clic:choisirLaBarre' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLaSocieteTest.php › un clic sur une barre découpe la carte plus finement, jusqu\'au jour, dont la liste des documents s\'ouvre avec un tableau par magasin et un lien vers la liste filtrée ; « Revenir » remonte',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLaSocieteTest.php › « Revenir » et le fil du détail remontent d\'un niveau, le détail se referme avec le découpage et ne se retient pas ; la valeur du stock n\'ouvre aucune liste',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLaSocieteTest.php › une barre se choisit au clavier (Entrée), son info-bulle suit la souris ou le focus et se ferme à Échap',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDuMagasinTest.php › dans le panneau d’un magasin, la carte ne compte que ce magasin, et la liste d’un jour n’en nomme aucun et mène à sa liste filtrée',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDuCabinetTest.php › le collaborateur à qui le client est confié découpe la carte par année, ouvre le détail jusqu’au jour et la liste de ses documents, et suit le lien vers la liste du magasin du client',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLExpertComptableTest.php › l’expert-comptable déclaré découpe la carte par année, ouvre le détail jusqu’au jour et la liste de ses documents, et suit le lien vers la liste du magasin',
+            'tests/Browser/Balayage/ContrasteDesCartesParPeriodeTest.php › les cartes par période se lisent en clair et en sombre : mois, trimestre, année et écart, cumul et comparaison, détail par jour, fenêtre d\'un jour et info-bulle',
+        ]],
+    ],
     'app/Domain/Tenancy/Notifications/AvisDeLEquipe.php' => [
         'action:voir' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/CartesDesNotificationsTest.php › le vendeur voit glisser la carte de chaque notification arrivée, la ferme, et ouvre la fiche par son bouton',
@@ -2114,6 +2125,14 @@ return [
         'action:archiver' => ['lot' => 'NAV-3', 'tests' => []],
         'action:delete' => ['lot' => 'NAV-3', 'tests' => []],
     ],
+    'app/Filament/FiltreDUnJour.php' => [
+        'filtre:jour' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLaSocieteTest.php › un clic sur une barre découpe la carte plus finement, jusqu\'au jour, dont la liste des documents s\'ouvre avec un tableau par magasin et un lien vers la liste filtrée ; « Revenir » remonte',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDuMagasinTest.php › dans le panneau d’un magasin, la carte ne compte que ce magasin, et la liste d’un jour n’en nomme aucun et mène à sa liste filtrée',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDuCabinetTest.php › le collaborateur à qui le client est confié découpe la carte par année, ouvre le détail jusqu’au jour et la liste de ses documents, et suit le lien vers la liste du magasin du client',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLExpertComptableTest.php › l’expert-comptable déclaré découpe la carte par année, ouvre le détail jusqu’au jour et la liste de ses documents, et suit le lien vers la liste du magasin',
+        ]],
+    ],
     'app/Filament/Societe/Pages/AccepterLaTransmission.php' => [
         'action:accepter' => ['lot' => 'NAV-4', 'tests' => []],
         'page' => ['lot' => 'NAV-4', 'tests' => []],
@@ -2558,6 +2577,14 @@ return [
     'resources/views/filament/cabinet/resources/fiche-du-client.blade.php' => [
         'lien:Ouvrir le magasin' => ['lot' => 'NAV-5', 'tests' => []],
     ],
+    'resources/views/filament/liste-du-jour.blade.php' => [
+        'lien:{{ $uneListe[\'libelle\'] }}' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLaSocieteTest.php › un clic sur une barre découpe la carte plus finement, jusqu\'au jour, dont la liste des documents s\'ouvre avec un tableau par magasin et un lien vers la liste filtrée ; « Revenir » remonte',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDuMagasinTest.php › dans le panneau d’un magasin, la carte ne compte que ce magasin, et la liste d’un jour n’en nomme aucun et mène à sa liste filtrée',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDuCabinetTest.php › le collaborateur à qui le client est confié découpe la carte par année, ouvre le détail jusqu’au jour et la liste de ses documents, et suit le lien vers la liste du magasin du client',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLExpertComptableTest.php › l’expert-comptable déclaré découpe la carte par année, ouvre le détail jusqu’au jour et la liste de ses documents, et suit le lien vers la liste du magasin',
+        ]],
+    ],
     'resources/views/filament/pages/auth/choisir-son-mot-de-passe.blade.php' => [
         'envoi:choisir' => ['lot' => 'NAV-4', 'tests' => []],
         'formulaire:{{ filament()->getLogoutUrl() }}' => ['lot' => 'NAV-4', 'tests' => []],
@@ -2817,6 +2844,22 @@ return [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › une observatrice ne voit ni les chiffres clés ni les graphiques dans le panneau de son magasin',
         ]],
     ],
+    'resources/views/filament/carte-par-periode.blade.php' => [
+        'changement:ajouterLaTendance' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLaSocieteTest.php › le cumul se dessine en courbe qui ne se clique pas, avec l\'année précédente en pointillés quand « Comparer » est cochée ; l\'écart en % est vert, rouge ou « – » ; la tendance se dessine et se grise avec le cumul',
+            'tests/Browser/Balayage/ContrasteDesCartesParPeriodeTest.php › les cartes par période se lisent en clair et en sombre : mois, trimestre, année et écart, cumul et comparaison, détail par jour, fenêtre d\'un jour et info-bulle',
+        ]],
+        'changement:changerLeMode' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLaSocieteTest.php › le cumul se dessine en courbe qui ne se clique pas, avec l\'année précédente en pointillés quand « Comparer » est cochée ; l\'écart en % est vert, rouge ou « – » ; la tendance se dessine et se grise avec le cumul',
+            'tests/Browser/Balayage/ContrasteDesCartesParPeriodeTest.php › les cartes par période se lisent en clair et en sombre : mois, trimestre, année et écart, cumul et comparaison, détail par jour, fenêtre d\'un jour et info-bulle',
+        ]],
+        'clic:remonterAuNiveau' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLaSocieteTest.php › « Revenir » et le fil du détail remontent d\'un niveau, le détail se referme avec le découpage et ne se retient pas ; la valeur du stock n\'ouvre aucune liste',
+        ]],
+        'clic:revenir' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLaSocieteTest.php › « Revenir » et le fil du détail remontent d\'un niveau, le détail se referme avec le découpage et ne se retient pas ; la valeur du stock n\'ouvre aucune liste',
+        ]],
+    ],
     'resources/views/filament/ecart-des-prix-d-achat.blade.php' => [
         'changement:changerLAffichage' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/EcartDesPrixDAchatTest.php › le propriétaire ajoute la carte dans l’espace de la société, la lit comme la maquette, choisit un mois au clic, à Entrée et à Espace, ouvre les liens « Voir… », et retrouve l’affichage, pas le mois, après le rechargement',
@@ -2857,11 +2900,23 @@ return [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le menu « Période » d’une société dont l’exercice finit en décembre n’a pas de choix « Exercice » et dit « (exercice en cours) » ; celui d’une société dont l’exercice finit en juin a les cinq choix',
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
         ]],
+        'changement:choisirLeDecoupage' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLaSocieteTest.php › par trimestre, la carte montre quatre blocs de trois mois sur les 12 derniers mois, puis T1 à T4 sur une année ; par année, les années vides du début sont cachées et celle du milieu reste à 0',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLaSocieteTest.php › dans une société dont l\'exercice finit en juin, la case du cumul et la carte parlent d\'exercice, et par année chaque barre est un exercice',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDuMagasinTest.php › dans le panneau d’un magasin, la carte ne compte que ce magasin, et la liste d’un jour n’en nomme aucun et mène à sa liste filtrée',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDuCabinetTest.php › le collaborateur à qui le client est confié découpe la carte par année, ouvre le détail jusqu’au jour et la liste de ses documents, et suit le lien vers la liste du magasin du client',
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLExpertComptableTest.php › l’expert-comptable déclaré découpe la carte par année, ouvre le détail jusqu’au jour et la liste de ses documents, et suit le lien vers la liste du magasin',
+            'tests/Browser/Balayage/ContrasteDesCartesParPeriodeTest.php › les cartes par période se lisent en clair et en sombre : mois, trimestre, année et écart, cumul et comparaison, détail par jour, fenêtre d\'un jour et info-bulle',
+        ]],
         'changement:choisirLeMagasin' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
         ]],
         'changement:comparer' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',
+        ]],
+        'changement:cumuler' => ['lot' => 'NAV-4', 'tests' => [
+            'tests/Browser/Parcours/GraphiquesParPeriodeDeLaSocieteTest.php › le cumul se dessine en courbe qui ne se clique pas, avec l\'année précédente en pointillés quand « Comparer » est cochée ; l\'écart en % est vert, rouge ou « – » ; la tendance se dessine et se grise avec le cumul',
+            'tests/Browser/Balayage/ContrasteDesCartesParPeriodeTest.php › les cartes par période se lisent en clair et en sombre : mois, trimestre, année et écart, cumul et comparaison, détail par jour, fenêtre d\'un jour et info-bulle',
         ]],
         'clic:descendre' => ['lot' => 'NAV-4', 'tests' => [
             'tests/Browser/Parcours/GraphiquesDuTableauDeBordTest.php › le propriétaire choisit la période, un magasin et la comparaison, classe les meilleurs produits par quantité, déplace deux cartes, lit les chiffres d’une carte, et retrouve tout après le rechargement',

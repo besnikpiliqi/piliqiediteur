@@ -3,10 +3,21 @@
     use App\Domain\TableauDeBord\Enums\Graphique;
     use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
     use App\Domain\TableauDeBord\Support\SerieDuGraphique;
+    use App\Filament\GrilleDesGraphiques;
 
     $enTexte = fn (?int $valeur, string $unite): string => $valeur === null ? '–' : ($unite === SerieDuGraphique::NOMBRE ? number_format($valeur, 0, ',', ' ') : $euros($valeur));
+    $idDesNotes = 'notes-de-l-ecran';
 @endphp
 
+{{--
+    Les chiffres clés, la barre des filtres, les phrases grises de l'écran, la
+    grille des cartes et la fenêtre de la liste d'un jour (choix de l'éditeur
+    du 16/11/2026, lot GRAPH-AN ; maquette 01-graph-an.html du 22/11/2026) :
+    le libellé de chaque filtre à gauche de son menu, sur une seule ligne
+    quand elle tient, « Ajouter un graphique » seul à droite sur la seconde
+    sinon ; la ligne sous un chiffre clé a sa couleur (data-ton), que la
+    feuille des graphiques donne en clair et en sombre.
+--}}
 <x-filament-widgets::widget class="piliqi-graphiques">
     @if (array_filter($chiffres) !== [])
         <div class="piliqi-graphiques__chiffres" aria-label="Chiffres clés du mois">
@@ -15,7 +26,7 @@
                     <div class="piliqi-graphiques__libelle">CA HT du mois</div>
                     <div class="piliqi-graphiques__valeur">{{ $euros($chiffres['ca']['valeur']) }}</div>
                     @if ($chiffres['ca']['variation'] !== null)
-                        <div class="piliqi-graphiques__precision">{{ $chiffres['ca']['variation'] }}</div>
+                        <div class="piliqi-graphiques__precision piliqi-graphiques__ton--{{ $chiffres['ca']['ton'] }}" data-ton="{{ $chiffres['ca']['ton'] }}">{{ $chiffres['ca']['variation'] }}</div>
                     @endif
                 </div>
             @endif
@@ -25,7 +36,7 @@
                     <div class="piliqi-graphiques__libelle">Achats HT du mois</div>
                     <div class="piliqi-graphiques__valeur">{{ $euros($chiffres['achats']['valeur']) }}</div>
                     @if ($chiffres['achats']['variation'] !== null)
-                        <div class="piliqi-graphiques__precision">{{ $chiffres['achats']['variation'] }}</div>
+                        <div class="piliqi-graphiques__precision piliqi-graphiques__ton--{{ $chiffres['achats']['ton'] }}" data-ton="{{ $chiffres['achats']['ton'] }}">{{ $chiffres['achats']['variation'] }}</div>
                     @endif
                 </div>
             @endif
@@ -45,9 +56,9 @@
                         <div class="piliqi-graphiques__valeur">TVA non applicable (franchise en base)</div>
                     @else
                         <div class="piliqi-graphiques__valeur" data-tva="reelle">{{ $euros($chiffres['tva']['a_payer']) }}</div>
-                        <div class="piliqi-graphiques__precision">collectée {{ $euros($chiffres['tva']['collectee']) }} − déductible {{ $euros($chiffres['tva']['deductible']) }}{{ $chiffres['tva']['avec_les_charges'] ? ($chiffres['tva']['sans_celles_de_la_societe'] ? ' (sans les charges de « Toute la société »)' : '') : ' (sans les charges)' }}</div>
+                        <div class="piliqi-graphiques__precision piliqi-graphiques__ton--neutre" data-ton="neutre">collectée {{ $euros($chiffres['tva']['collectee']) }} − déductible {{ $euros($chiffres['tva']['deductible']) }}{{ $chiffres['tva']['avec_les_charges'] ? ($chiffres['tva']['sans_celles_de_la_societe'] ? ' (sans les charges de « Toute la société »)' : '') : ' (sans les charges)' }}</div>
                         @if ($chiffres['tva']['estimation'] !== null)
-                            <div class="piliqi-graphiques__precision" data-tva="estimation">estimation avec les charges à valider : {{ $euros($chiffres['tva']['estimation']) }}</div>
+                            <div class="piliqi-graphiques__precision piliqi-graphiques__ton--neutre" data-tva="estimation">estimation avec les charges à valider : {{ $euros($chiffres['tva']['estimation']) }}</div>
                         @endif
                     @endif
                 </div>
@@ -57,26 +68,44 @@
                 <div class="piliqi-graphiques__chiffre" data-chiffre="restant_du">
                     <div class="piliqi-graphiques__libelle">Restant dû des clients</div>
                     <div class="piliqi-graphiques__valeur">{{ $euros($chiffres['restant_du']['valeur']) }}</div>
-                    <div class="piliqi-graphiques__precision">dont {{ $euros($chiffres['restant_du']['en_retard']) }} en retard</div>
+                    <div class="piliqi-graphiques__precision piliqi-graphiques__ton--{{ $chiffres['restant_du']['ton_du_retard'] }}" data-ton="{{ $chiffres['restant_du']['ton_du_retard'] }}">dont {{ $euros($chiffres['restant_du']['en_retard']) }} en retard</div>
                 </div>
             @endif
         </div>
     @endif
 
-    <div class="piliqi-graphiques__filtres">
-        <label class="piliqi-graphiques__filtre">
+    <div class="piliqi-graphiques__filtres" data-filtres>
+        <label @class(['piliqi-graphiques__filtre', 'piliqi-graphiques__filtre--periode', 'piliqi-graphiques__filtre--coupe' => $parAnnee])>
             <span>Période</span>
+            <x-filament::input.wrapper :disabled="$parAnnee">
+                @if ($parAnnee)
+                    {{-- Par année, la période est les dix dernières années, pour tout l'écran : le menu se grise et le dit. --}}
+                    <x-filament::input.select disabled aria-describedby="{{ $idDesNotes }}" data-filtre="periode">
+                        <option value="" selected>{{ $periodeParAnnee }}</option>
+                    </x-filament::input.select>
+                @else
+                    <x-filament::input.select wire:change="choisirLaPeriode($event.target.value)" data-filtre="periode">
+                        @foreach ($periodes as $valeur => $libelle)
+                            <option value="{{ $valeur }}" @selected($reglages->periode->value === $valeur)>{{ $libelle }}</option>
+                        @endforeach
+                    </x-filament::input.select>
+                @endif
+            </x-filament::input.wrapper>
+        </label>
+
+        <label class="piliqi-graphiques__filtre piliqi-graphiques__filtre--decoupage">
+            <span>Découper par</span>
             <x-filament::input.wrapper>
-                <x-filament::input.select wire:change="choisirLaPeriode($event.target.value)" data-filtre="periode">
-                    @foreach ($periodes as $valeur => $libelle)
-                        <option value="{{ $valeur }}" @selected($reglages->periode->value === $valeur)>{{ $libelle }}</option>
+                <x-filament::input.select wire:change="choisirLeDecoupage($event.target.value)" data-filtre="decoupage">
+                    @foreach ($decoupages as $valeur => $libelle)
+                        <option value="{{ $valeur }}" @selected($reglages->decoupage->value === $valeur)>{{ $libelle }}</option>
                     @endforeach
                 </x-filament::input.select>
             </x-filament::input.wrapper>
         </label>
 
         @if ($magasins !== [])
-            <label class="piliqi-graphiques__filtre">
+            <label class="piliqi-graphiques__filtre piliqi-graphiques__filtre--magasin">
                 <span>Magasin</span>
                 <x-filament::input.wrapper>
                     <x-filament::input.select wire:change="choisirLeMagasin($event.target.value)" data-filtre="magasin">
@@ -89,13 +118,18 @@
             </label>
         @endif
 
-        <label class="piliqi-graphiques__case">
-            <x-filament::input.checkbox wire:change="comparer($event.target.checked)" :checked="$reglages->comparer" data-filtre="comparer" />
+        <label @class(['piliqi-graphiques__case', 'piliqi-graphiques__case--coupee' => $parAnnee])>
+            <x-filament::input.checkbox wire:change="comparer($event.target.checked)" :checked="$reglages->comparer && ! $parAnnee" :disabled="$parAnnee" aria-describedby="{{ $idDesNotes }}" data-filtre="comparer" />
             <span>Comparer avec l'année précédente</span>
         </label>
 
-        {{-- Le menu revient de lui-même sur « — Choisir — » dès qu'un graphique est choisi, et ce choix n'envoie rien (constat de l'éditeur du 15/11/2026) ; un graphique affiché n'y est plus proposé. --}}
-        <label class="piliqi-graphiques__filtre">
+        <label @class(['piliqi-graphiques__case', 'piliqi-graphiques__case--coupee' => $parAnnee])>
+            <x-filament::input.checkbox wire:change="cumuler($event.target.checked)" :checked="$reglages->cumul && ! $parAnnee" :disabled="$parAnnee" aria-describedby="{{ $idDesNotes }}" data-filtre="cumul" />
+            <span>{{ $cumulLibelle }}</span>
+        </label>
+
+        {{-- Le menu revient de lui-même sur « — Choisir — » dès qu'un graphique est choisi, et ce choix n'envoie rien (constat de l'éditeur du 15/11/2026) ; un graphique affiché n'y est plus proposé. Sur la seconde ligne, quand la première ne suffit pas, il se range seul à droite. --}}
+        <label class="piliqi-graphiques__filtre piliqi-graphiques__filtre--ajout">
             <span>Ajouter un graphique</span>
             <x-filament::input.wrapper :disabled="$aAjouter === []">
                 @if ($aAjouter === [])
@@ -117,24 +151,33 @@
         </label>
     </div>
 
+    <div class="piliqi-graphiques__notes" id="{{ $idDesNotes }}" data-notes-de-l-ecran>
+        @foreach ($notesDeLEcran as $note)
+            <p class="piliqi-graphiques__gris">{{ $note }}</p>
+        @endforeach
+    </div>
+
     @if ($cartes === [])
         <p class="piliqi-graphiques__gris">Aucun graphique : ajoutez-en un par le menu « Ajouter un graphique ».</p>
     @endif
 
+    {{-- Un lecteur d'écran entend le détail qui s'ouvre ou se ferme ; la phrase ne dit rien quand aucun détail n'est ouvert. --}}
+    <p class="piliqi-graphiques__annonce" role="status" aria-live="polite" data-annonce>{{ $annonce }}</p>
+
     <div class="piliqi-graphiques__grille">
-        @foreach ($cartes as $rang => ['carte' => $carte, 'serie' => $serie, 'config' => $config, 'ecart' => $ecart])
+        @foreach ($cartes as $rang => ['carte' => $carte, 'serie' => $serie, 'config' => $config, 'ecart' => $ecart, 'periode' => $periode])
             @php($graphique = $carte->graphique)
-            {{-- L'écart des prix d'achat est nommé par son titre, celui de l'affichage choisi ; les autres cartes par leur libellé. --}}
+            {{-- L'écart des prix d'achat est nommé par son titre, celui de l'affichage choisi ; une carte par période par son titre au pas de ses barres ; les autres cartes par leur libellé. --}}
             <section
-                @class(['piliqi-graphiques__carte', 'piliqi-graphiques__carte--ecart' => $ecart !== null])
+                @class(['piliqi-graphiques__carte', 'piliqi-graphiques__carte--ecart' => $ecart !== null, 'piliqi-graphiques__carte--periode' => $periode !== null])
                 wire:key="carte-{{ $graphique->value }}"
                 data-graphique="{{ $graphique->value }}"
-                @if ($ecart !== null) aria-labelledby="titre-{{ $graphique->value }}" @else aria-label="{{ $graphique->getLabel() }}" @endif
+                @if ($ecart !== null) aria-labelledby="titre-{{ $graphique->value }}" @else aria-label="{{ $periode !== null ? ($serie->titre ?? $graphique->getLabel()) : $graphique->getLabel() }}" @endif
                 x-data="{ chiffres: false, calcul: false }"
             >
                 {{-- Le titre passe à la ligne dans sa colonne ; le type, « Monter », « Descendre » et la croix restent ensemble, à droite de la première ligne, quelle que soit sa longueur (constat de l'éditeur du 15/11/2026). --}}
                 <div class="piliqi-graphiques__tete" data-tete>
-                    <h3 class="piliqi-graphiques__titre" id="titre-{{ $graphique->value }}" data-titre>{{ $ecart === null ? $graphique->getLabel() : $ecart['lecture']['titreCarte'] }}</h3>
+                    <h3 class="piliqi-graphiques__titre" id="titre-{{ $graphique->value }}" data-titre>{{ $ecart !== null ? $ecart['lecture']['titreCarte'] : ($periode !== null ? ($serie->titre ?? $graphique->getLabel()) : $graphique->getLabel()) }}</h3>
 
                     <div class="piliqi-graphiques__commandes" data-commandes>
                         <x-filament::input.wrapper class="piliqi-graphiques__type">
@@ -164,6 +207,8 @@
 
                 @if ($ecart !== null)
                     @include('filament.ecart-des-prix-d-achat', ['lecture' => $ecart['lecture'], 'svg' => $ecart['svg'], 'note' => $serie->note, 'graphique' => $graphique])
+                @elseif ($periode !== null)
+                    @include('filament.carte-par-periode', ['carte' => $carte, 'serie' => $serie, 'lecture' => $periode, 'graphique' => $graphique])
                 @else
                     <p class="piliqi-graphiques__gris">{{ $graphique->ceQuIlCompte() }}</p>
 
@@ -224,4 +269,8 @@
             </section>
         @endforeach
     </div>
+
+    @if ($liste !== null)
+        @include('filament.liste-du-jour', ['liste' => $liste])
+    @endif
 </x-filament-widgets::widget>

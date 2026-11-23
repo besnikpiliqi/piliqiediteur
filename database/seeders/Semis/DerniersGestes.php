@@ -19,6 +19,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\ChoixDesCharges;
 use App\Domain\Facturation\Services\DocumentsDeLaPeriode;
 use App\Domain\Facturation\Services\DocumentTrouve;
+use App\Domain\TableauDeBord\Enums\DecoupageDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\PeriodeDuTableauDeBord;
@@ -141,24 +142,34 @@ final class DerniersGestes
             // Tous les graphiques qu'il voit sont affichés : son menu
             // « Ajouter un graphique » dit « Tous les graphiques sont
             // affichés ».
+            //
+            // Découpé par trimestre, avec la tendance du chiffre d'affaires
+            // (lot GRAPH-AN) : les quatre blocs de trois mois des 12 derniers
+            // mois, comparés à l'année précédente.
             $preferences->enregistrer($this->semis->compte('Marc Petit'), EcranDuTableauDeBord::ExpertComptable, new ReglagesDuTableauDeBord([
-                CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois, TypeDeGraphique::Aires),
+                new CarteDuTableauDeBord(Graphique::ChiffreDAffairesParMois, TypeDeGraphique::Aires, tendance: true),
                 CarteDuTableauDeBord::parDefaut(Graphique::VentesParTauxDeTva, TypeDeGraphique::Camembert),
                 ...array_map(fn (Graphique $graphique): CarteDuTableauDeBord => CarteDuTableauDeBord::parDefaut($graphique), array_values(array_filter(Graphique::cases(), fn (Graphique $graphique): bool => ! in_array($graphique, [Graphique::ChiffreDAffairesParMois, Graphique::VentesParTauxDeTva], true)))),
-            ], PeriodeDuTableauDeBord::DouzeDerniersMois, null, true));
+            ], PeriodeDuTableauDeBord::DouzeDerniersMois, null, true, DecoupageDuTableauDeBord::Trimestre));
         }
     }
 
     private function choisirLesGraphiquesDeMaisonFerrand(PreferencesDesGraphiques $preferences): void
     {
         $preferences->enregistrer($this->semis->proprietaire('commerce'), EcranDuTableauDeBord::Societe, new ReglagesDuTableauDeBord([
-            CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois, TypeDeGraphique::Lignes),
+            // Le chiffre d'affaires en écart en % sur un an et la marge avec
+            // sa tendance, découpés par année (lot GRAPH-AN) : l'année 2025,
+            // commencée en octobre, et l'année en cours ; les années d'avant,
+            // sans donnée, ne s'affichent pas.
+            new CarteDuTableauDeBord(Graphique::ChiffreDAffairesParMois, TypeDeGraphique::Lignes, ecart: true),
             CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMagasin),
             CarteDuTableauDeBord::parDefaut(Graphique::EncaissementsParMode, TypeDeGraphique::Anneau),
             CarteDuTableauDeBord::parDefaut(Graphique::VentesParVendeur),
-            CarteDuTableauDeBord::parDefaut(Graphique::MargeBruteParMois),
+            new CarteDuTableauDeBord(Graphique::MargeBruteParMois, TypeDeGraphique::Barres, tendance: true),
             new CarteDuTableauDeBord(Graphique::EcartDesPrixDAchat, TypeDeGraphique::Barres, affichage: CarteDuTableauDeBord::AFFICHAGE_SUR_DOUZE_MOIS),
-        ], PeriodeDuTableauDeBord::AnneeEnCours, null, true));
+        ], PeriodeDuTableauDeBord::AnneeEnCours, null, true, DecoupageDuTableauDeBord::Annee));
+        // Les ventes du magasin cumulées depuis le début de l'année, avec
+        // l'année précédente cumulée en pointillés (lot GRAPH-AN).
         $preferences->enregistrer($this->semis->compte('Camille Laurent'), EcranDuTableauDeBord::Magasin, new ReglagesDuTableauDeBord([
             CarteDuTableauDeBord::parDefaut(Graphique::VentesEtAchatsParMois),
             CarteDuTableauDeBord::parDefaut(Graphique::MeilleursProduits, TypeDeGraphique::BarresCouchees),
@@ -166,7 +177,7 @@ final class DerniersGestes
             CarteDuTableauDeBord::parDefaut(Graphique::ValeurDuStock, TypeDeGraphique::Aires),
             CarteDuTableauDeBord::parDefaut(Graphique::VentesParJourDeLaSemaine, TypeDeGraphique::Radar),
             CarteDuTableauDeBord::parDefaut(Graphique::EcartDesPrixDAchat),
-        ]));
+        ], PeriodeDuTableauDeBord::DouzeDerniersMois, null, true, DecoupageDuTableauDeBord::Mois, true));
     }
 
     /**

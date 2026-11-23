@@ -2,29 +2,41 @@
 
 namespace App\Filament;
 
+use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Cabinets\Models\LienCabinet;
 use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\TableauDeBord\Enums\DecoupageDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
+use App\Domain\TableauDeBord\Enums\ListeDeDocuments;
+use App\Domain\TableauDeBord\Enums\NiveauDeLaBarre;
 use App\Domain\TableauDeBord\Enums\PeriodeDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\TypeDeGraphique;
 use App\Domain\TableauDeBord\Services\ChiffresDuTableauDeBord;
+use App\Domain\TableauDeBord\Services\ContenuDesListesDUnJour;
 use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
 use App\Domain\TableauDeBord\Services\PreferencesDesGraphiques;
 use App\Domain\TableauDeBord\Services\SeriesDesGraphiques;
+use App\Domain\TableauDeBord\Support\Barre;
 use App\Domain\TableauDeBord\Support\CalculDesSeries;
 use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
 use App\Domain\TableauDeBord\Support\EcartDesPrixDAchat;
+use App\Domain\TableauDeBord\Support\LectureDUneCarteParPeriode;
 use App\Domain\TableauDeBord\Support\Mois;
 use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\TableauDeBord\Support\ReglagesDuTableauDeBord;
 use App\Domain\TableauDeBord\Support\SerieDuGraphique;
 use App\Domain\TableauDeBord\Support\SvgDeLEcartDesPrixDAchat;
 use App\Domain\TableauDeBord\Support\TextesDeLEcartDesPrixDAchat;
+use App\Domain\TableauDeBord\Support\TextesDesPeriodes;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Support\CompteConnecte;
+use App\Filament\App\Resources\AvoirFournisseurResource;
+use App\Filament\App\Resources\AvoirResource;
+use App\Filament\App\Resources\FactureAchatResource;
+use App\Filament\App\Resources\FactureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Closure;
 use Filament\Facades\Filament;
@@ -77,7 +89,25 @@ use LogicException;
  * venir quand la période ou le magasin change. Seuls le calcul de
  * l'affichage choisi et celui du mois choisi sont écrits dans la page.
  *
+ * Les cartes par période (choix de l'éditeur du 16/11/2026, lot GRAPH-AN ;
+ * maquette 01-graph-an.html et décisions de Claude du 22/11/2026, D76) : la
+ * barre des filtres a, en plus de la période, du magasin et de la
+ * comparaison, « Découper par » (voir choisirLeDecoupage()) et la case du
+ * cumul (voir cumuler()) ; chaque carte par période a son menu « Afficher »
+ * (voir changerLeMode()) et sa case de tendance (voir ajouterLaTendance()),
+ * et son dessin est un `svg` écrit par le serveur (voir
+ * SvgDesBarresParPeriode et LectureDUneCarteParPeriode). Un clic sur une
+ * barre (voir choisirLaBarre()) la redécoupe plus finement ou, sur un jour,
+ * ouvre la fenêtre de ses documents (voir ContenuDesListesDUnJour) ; « Revenir »
+ * et le fil remontent (voir revenir() et remonterAuNiveau()). Le détail ouvert
+ * et la fenêtre sont des gestes de l'écran, jamais retenus en base, figés
+ * contre le navigateur (#[Locked]) et refermés par tout réglage qui change
+ * les barres des cartes ; chaque geste refuse, sans rien changer, une barre
+ * qui n'est pas celle que la carte dessine.
+ *
  * @phpstan-import-type Lecture from TextesDeLEcartDesPrixDAchat
+ * @phpstan-import-type Lecture from LectureDUneCarteParPeriode as LectureParPeriode
+ * @phpstan-import-type MagasinDuJour from ContenuDesListesDUnJour
  */
 class GrilleDesGraphiques extends Widget
 {
@@ -89,6 +119,11 @@ class GrilleDesGraphiques extends Widget
     public const NOM = 'grille-des-graphiques';
 
     public const REFUS_DE_LA_VALEUR = 'Ce choix n\'existe pas dans le tableau de bord : rien n\'a changé.';
+
+    /** Ce que le menu « Afficher » d'une carte par période montre : les montants, ou l'écart en % sur un an. */
+    public const MODE_MONTANTS = 'montants';
+
+    public const MODE_ECART = 'ecart';
 
     protected static string $view = 'filament.grille-des-graphiques';
 
@@ -112,6 +147,27 @@ class GrilleDesGraphiques extends Widget
      */
     public array $moisChoisis = [];
 
+    /**
+     * Le détail ouvert de chaque carte par période (choix de l'éditeur du
+     * 16/11/2026, « Cliquer pour voir le détail ») : les jetons des barres
+     * ouvertes, de la plus large à la plus fine (voir Barre::jeton()). Un
+     * geste de l'écran, jamais retenu en base ; un jeton qui n'est pas celui
+     * d'une barre de la carte n'ouvre rien (voir CalculDesSeries::chemin()).
+     *
+     * @var array<string, list<string>>
+     */
+    #[Locked]
+    public array $details = [];
+
+    /**
+     * La liste d'un jour que la fenêtre montre : le graphique et le jeton du
+     * jour que le clic a ouvert, ou null quand aucune fenêtre n'est ouverte.
+     *
+     * @var array{graphique: string, jeton: string}|null
+     */
+    #[Locked]
+    public ?array $listeDuJour = null;
+
     public function mount(string $ecran = 'magasin', ?string $lien = null): void
     {
         $this->ecran = (EcranDuTableauDeBord::tryFrom($ecran) ?? throw new AuthorizationException(PerimetreDesGraphiques::REFUS))->value;
@@ -133,7 +189,7 @@ class GrilleDesGraphiques extends Widget
                 throw new LogicException(self::REFUS_DE_LA_VALEUR);
             }
 
-            $this->moisChoisis = [];
+            $this->refermerLeDetail();
 
             return $reglages->avecLaPeriode($choisie);
         });
@@ -154,7 +210,7 @@ class GrilleDesGraphiques extends Widget
             }
 
             $perimetre->restreintA($choisi);
-            $this->moisChoisis = [];
+            $this->refermerLeDetail();
 
             return $reglages->avecLeMagasin($choisi);
         });
@@ -163,6 +219,147 @@ class GrilleDesGraphiques extends Widget
     public function comparer(bool $comparer): void
     {
         $this->modifier(fn (ReglagesDuTableauDeBord $reglages): ReglagesDuTableauDeBord => $reglages->avecLaComparaison($comparer));
+    }
+
+    /**
+     * Le menu « Découper par » : une barre par mois, par trimestre ou par
+     * année (un exercice quand la société ne clôt pas en décembre). Le
+     * détail ouvert se referme, ses barres n'étant plus celles de la carte.
+     */
+    public function choisirLeDecoupage(string $decoupage): void
+    {
+        $this->modifier(function (ReglagesDuTableauDeBord $reglages) use ($decoupage): ReglagesDuTableauDeBord {
+            $choisi = DecoupageDuTableauDeBord::tryFrom($decoupage) ?? throw new LogicException(self::REFUS_DE_LA_VALEUR);
+            $this->refermerLeDetail();
+
+            return $reglages->avecLeDecoupage($choisi);
+        });
+    }
+
+    /**
+     * La case « Cumul depuis le début de l'année » (de l'exercice) : refusée
+     * quand on la coche par année, où chaque barre est déjà une année
+     * entière (voir ReglagesDuTableauDeBord::cumulPossible()).
+     */
+    public function cumuler(bool $cumul): void
+    {
+        $this->modifier(function (ReglagesDuTableauDeBord $reglages) use ($cumul): ReglagesDuTableauDeBord {
+            if ($cumul && ! $reglages->cumulPossible()) {
+                throw new LogicException(self::REFUS_DE_LA_VALEUR);
+            }
+
+            $this->refermerLeDetail();
+
+            return $reglages->avecLeCumul($cumul);
+        });
+    }
+
+    /**
+     * Le menu « Afficher » d'une carte par période : les montants, ou
+     * l'écart en % sur un an. Le détail ouvert de la carte se referme. Une
+     * carte qui n'est pas par période, ou une autre valeur, est refusée.
+     */
+    public function changerLeMode(string $graphique, string $mode): void
+    {
+        $this->modifier(function (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre) use ($graphique, $mode): ReglagesDuTableauDeBord {
+            $carte = $this->carteAffichee($reglages, $this->graphiqueVisible($graphique, $perimetre));
+
+            if (! $carte->graphique->estParPeriode() || ! in_array($mode, [self::MODE_MONTANTS, self::MODE_ECART], true)) {
+                throw new LogicException(self::REFUS_DE_LA_VALEUR);
+            }
+
+            $this->refermerLeDetailDe($carte->graphique);
+
+            return $reglages->avecLaCarte($carte->avecLEcart($mode === self::MODE_ECART));
+        });
+    }
+
+    /**
+     * La case « Ajouter la tendance (moyenne sur 3 mois) » d'une carte par
+     * période. Une carte qui n'est pas par période est refusée.
+     */
+    public function ajouterLaTendance(string $graphique, bool $tendance): void
+    {
+        $this->modifier(function (ReglagesDuTableauDeBord $reglages, Perimetre $perimetre) use ($graphique, $tendance): ReglagesDuTableauDeBord {
+            $carte = $this->carteAffichee($reglages, $this->graphiqueVisible($graphique, $perimetre));
+
+            if (! $carte->graphique->estParPeriode()) {
+                throw new LogicException(self::REFUS_DE_LA_VALEUR);
+            }
+
+            return $reglages->avecLaCarte($carte->avecLaTendance($tendance));
+        });
+    }
+
+    /**
+     * Le clic sur une barre d'une carte par période, Entrée ou Espace sur
+     * elle : un mois, un trimestre ou une année se redécoupent plus finement
+     * dans la même carte (année ou trimestre en mois, mois en jours) ; un
+     * jour ouvre la fenêtre de ses documents. Un geste de l'écran, jamais
+     * retenu en base. Une barre qui n'est pas de la carte telle qu'elle est
+     * dessinée, à venir, ou d'une carte en cumul, est refusée, rien ne
+     * change.
+     */
+    public function choisirLaBarre(string $graphique, string $jeton): void
+    {
+        static::executerSansCasser(function () use ($graphique, $jeton): void {
+            $perimetre = $this->perimetre();
+            $reglages = $this->reglages($perimetre);
+            $filtre = $perimetre->restreintA($this->magasinDuFiltre($reglages, $perimetre));
+            $choisi = $this->graphiqueVisible($graphique, $perimetre);
+            $carte = $this->carteAffichee($reglages, $choisi);
+            $calcul = $this->calcul($filtre, $reglages);
+
+            if (! $choisi->estParPeriode() || $calcul->cumulActif($carte)) {
+                throw new LogicException(self::REFUS_DE_LA_VALEUR);
+            }
+
+            $barre = $this->barreDeLaCarte($calcul, $carte, $jeton);
+
+            if ($barre->niveau === NiveauDeLaBarre::Jour) {
+                if ($choisi->listesDuJour($filtre->societe->aDesArticles()) === []) {
+                    throw new LogicException(self::REFUS_DE_LA_VALEUR);
+                }
+
+                $this->listeDuJour = ['graphique' => $choisi->value, 'jeton' => $barre->jeton()];
+
+                return;
+            }
+
+            $this->details[$choisi->value] = [...($this->details[$choisi->value] ?? []), $barre->jeton()];
+        });
+    }
+
+    /**
+     * « Revenir » : le détail ouvert d'une carte remonte d'un niveau, et la
+     * fenêtre d'un jour se ferme. Sans détail ouvert, rien ne se passe.
+     */
+    public function revenir(string $graphique): void
+    {
+        static::executerSansCasser(function () use ($graphique): void {
+            $choisi = Graphique::tryFrom($graphique) ?? throw new LogicException(self::REFUS_DE_LA_VALEUR);
+            $this->remonterDe($choisi, count($this->details[$choisi->value] ?? []) - 1);
+        });
+    }
+
+    /**
+     * Un niveau du fil du détail (« Par mois › 2025 › avril 2025 ») : le
+     * détail remonte jusqu'à ce niveau, 0 étant la carte tout entière.
+     */
+    public function remonterAuNiveau(string $graphique, int $niveau): void
+    {
+        static::executerSansCasser(function () use ($graphique, $niveau): void {
+            $choisi = Graphique::tryFrom($graphique) ?? throw new LogicException(self::REFUS_DE_LA_VALEUR);
+            $this->remonterDe($choisi, $niveau);
+        });
+    }
+
+    /**
+     * Ferme la fenêtre de la liste d'un jour.
+     */
+    public function fermerLaListe(): void
+    {
+        $this->listeDuJour = null;
     }
 
     /**
@@ -183,7 +380,12 @@ class GrilleDesGraphiques extends Widget
 
     public function retirerLeGraphique(string $graphique): void
     {
-        $this->modifier(fn (ReglagesDuTableauDeBord $reglages): ReglagesDuTableauDeBord => $reglages->sansLeGraphique(Graphique::tryFrom($graphique) ?? throw new LogicException(self::REFUS_DE_LA_VALEUR)));
+        $this->modifier(function (ReglagesDuTableauDeBord $reglages) use ($graphique): ReglagesDuTableauDeBord {
+            $retire = Graphique::tryFrom($graphique) ?? throw new LogicException(self::REFUS_DE_LA_VALEUR);
+            $this->refermerLeDetailDe($retire);
+
+            return $reglages->sansLeGraphique($retire);
+        });
     }
 
     public function changerLeType(string $graphique, string $type): void
@@ -284,13 +486,15 @@ class GrilleDesGraphiques extends Widget
         $reglages = $this->reglages($perimetre);
         $filtre = $perimetre->restreintA($this->magasinDuFiltre($reglages, $perimetre));
         $cartes = $reglages->cartesVisibles($filtre);
-        $calcul = new CalculDesSeries($filtre, $reglages, $cartes);
+        $calcul = $this->calcul($filtre, $reglages);
         $series = app(SeriesDesGraphiques::class)->pour($calcul);
         $euros = app(CalculateurLigne::class)->enEuros(...);
         $affiches = array_map(fn (CarteDuTableauDeBord $carte): Graphique => $carte->graphique, $cartes);
         $aujourdhui = $perimetre->aujourdhui();
         $moisDeFin = $perimetre->moisDeFinDExercice();
         $periodes = PeriodeDuTableauDeBord::duMenu($moisDeFin);
+        $exercices = $calcul->exercicesDecales();
+        $parAnnee = $reglages->decoupage === DecoupageDuTableauDeBord::Annee;
 
         return [
             'chiffres' => app(ChiffresDuTableauDeBord::class)->pour($calcul),
@@ -301,6 +505,15 @@ class GrilleDesGraphiques extends Widget
                 array_map(fn (PeriodeDuTableauDeBord $periode): string => $periode->value, $periodes),
                 array_map(fn (PeriodeDuTableauDeBord $periode): string => $periode->libelle($aujourdhui, $moisDeFin), $periodes),
             ),
+            'decoupages' => [
+                DecoupageDuTableauDeBord::Mois->value => 'mois',
+                DecoupageDuTableauDeBord::Trimestre->value => 'trimestre',
+                DecoupageDuTableauDeBord::Annee->value => 'année',
+            ],
+            'parAnnee' => $parAnnee,
+            'periodeParAnnee' => TextesDesPeriodes::PERIODE_PAR_ANNEE,
+            'cumulLibelle' => 'Cumul depuis le début '.($exercices ? 'de l\'exercice' : 'de l\'année'),
+            'notesDeLEcran' => TextesDesPeriodes::dEcran($reglages->decoupage, $reglages->periode, $reglages->cumul, $reglages->comparer, $exercices),
             'magasins' => $perimetre->ecran->montrePlusieursMagasins() && $perimetre->magasins()->count() > 1
                 ? $perimetre->magasins()->mapWithKeys(fn (Magasin $magasin): array => [(string) $magasin->uuid => Perimetre::nomDuMagasin($magasin)])->all()
                 : [],
@@ -308,10 +521,113 @@ class GrilleDesGraphiques extends Widget
             'cartes' => array_map(fn (CarteDuTableauDeBord $carte): array => [
                 'carte' => $carte,
                 'serie' => $series[$carte->graphique->value],
-                'config' => $carte->graphique === Graphique::EcartDesPrixDAchat ? null : self::configuration($carte, $series[$carte->graphique->value]),
+                'config' => $carte->graphique === Graphique::EcartDesPrixDAchat || $carte->graphique->estParPeriode() ? null : self::configuration($carte, $series[$carte->graphique->value]),
                 'ecart' => $carte->graphique === Graphique::EcartDesPrixDAchat ? $this->ecartDesPrixDAchat($carte, $series[$carte->graphique->value], $perimetre, $calcul->moisDeLEcart) : null,
+                'periode' => $carte->graphique->estParPeriode() ? LectureDUneCarteParPeriode::lire($carte, $series[$carte->graphique->value], $calcul, $euros) : null,
             ], $cartes),
+            'liste' => $this->listeDuJour($calcul, $perimetre, $euros),
+            'annonce' => $this->annonceDuDetail($calcul, $cartes, $series),
         ];
+    }
+
+    /**
+     * Ce que dit la fenêtre de la liste d'un jour, ou null quand aucune n'est
+     * ouverte, ou que le jour n'est plus celui d'une barre de la carte (un
+     * réglage l'a changée entre-temps) : pour chaque magasin compté, chaque
+     * liste de documents que la personne y voit en entier, avec le nombre de
+     * documents de ce jour, leur total HT net et le lien vers la liste du
+     * magasin, filtrée sur ce jour (voir FiltreDUnJour). Le nom d'un magasin
+     * ne s'écrit que dans l'espace de la société, du cabinet ou de
+     * l'expert-comptable, quand plusieurs magasins y sont comptés.
+     *
+     * @param  Closure(int): string  $euros
+     * @return array{titre: string, magasins: list<array{nom: string|null, listes: list<array{libelle: string, nombre: int, ht: string, url: string}>}>}|null
+     */
+    private function listeDuJour(CalculDesSeries $calcul, Perimetre $perimetre, Closure $euros): ?array
+    {
+        if ($this->listeDuJour === null) {
+            return null;
+        }
+
+        $graphique = Graphique::tryFrom($this->listeDuJour['graphique']);
+        $carte = $graphique === null ? null : $calcul->carte($graphique);
+
+        if ($graphique === null || $carte === null) {
+            $this->listeDuJour = null;
+
+            return null;
+        }
+
+        try {
+            $contenu = app(ContenuDesListesDUnJour::class)->pour($calcul, $graphique, $this->listeDuJour['jeton']);
+        } catch (LogicException|AuthorizationException) {
+            $this->listeDuJour = null;
+
+            return null;
+        }
+
+        $jour = null;
+
+        foreach ($calcul->barresDe($carte) as $barre) {
+            if ($barre->jeton() === $this->listeDuJour['jeton']) {
+                $jour = $barre->intitule;
+            }
+        }
+
+        $avecLeNom = $perimetre->ecran->montrePlusieursMagasins() && count($contenu) > 1;
+
+        return [
+            'titre' => 'Documents du '.mb_strtolower($jour ?? 'jour'),
+            'magasins' => array_map(fn (array $duMagasin): array => [
+                'nom' => $avecLeNom ? Perimetre::nomDuMagasin($duMagasin['magasin']->magasin) : null,
+                'listes' => array_map(fn (array $liste): array => [
+                    'libelle' => $liste['liste']->getLabel(),
+                    'nombre' => $liste['nombre'],
+                    'ht' => $euros($liste['ht']),
+                    'url' => $this->lienDeLaListe($liste['liste'], $duMagasin['magasin']->magasin, $duMagasin['magasin']->jour),
+                ], $duMagasin['listes']),
+            ], $contenu),
+        ];
+    }
+
+    /**
+     * La liste du magasin, filtrée sur ce jour (voir FiltreDUnJour) : les
+     * factures d'achat se limitent aux validées, comme le graphique les
+     * compte.
+     */
+    private function lienDeLaListe(ListeDeDocuments $liste, Magasin $magasin, string $jour): string
+    {
+        $filtres = [FiltreDUnJour::NOM => ['jour' => $jour]];
+
+        return match ($liste) {
+            ListeDeDocuments::Factures => FactureResource::getUrl('index', ['tableFilters' => $filtres], panel: 'app', tenant: $magasin),
+            ListeDeDocuments::Avoirs => AvoirResource::getUrl('index', ['tableFilters' => $filtres], panel: 'app', tenant: $magasin),
+            ListeDeDocuments::FacturesAchat => FactureAchatResource::getUrl('index', ['tableFilters' => [...$filtres, 'statut' => ['value' => StatutFactureAchat::Validee->value]]], panel: 'app', tenant: $magasin),
+            ListeDeDocuments::AvoirsFournisseur => AvoirFournisseurResource::getUrl('index', ['tableFilters' => $filtres], panel: 'app', tenant: $magasin),
+        };
+    }
+
+    /**
+     * La phrase que les lecteurs d'écran entendent quand un détail s'ouvre
+     * ou se ferme : le nom de la dernière barre ouverte de chaque carte, ou
+     * rien quand aucun détail n'est ouvert.
+     *
+     * @param  list<CarteDuTableauDeBord>  $cartes
+     * @param  array<string, SerieDuGraphique>  $series
+     */
+    private function annonceDuDetail(CalculDesSeries $calcul, array $cartes, array $series): string
+    {
+        $annonces = [];
+
+        foreach ($cartes as $carte) {
+            $detail = $calcul->detailDe($carte->graphique);
+
+            if ($detail !== null) {
+                $annonces[] = ($series[$carte->graphique->value]->titre ?? $carte->graphique->getLabel()).' : détail ouvert sur '.$detail->intitule.'.';
+            }
+        }
+
+        return implode(' ', $annonces);
     }
 
     /**
@@ -370,7 +686,7 @@ class GrilleDesGraphiques extends Widget
      * les séries en euros (un nombre reste un nombre) et les précisions des
      * info-bulles.
      *
-     * @return array{type: string, titre: string, etiquettes: list<string>, jeux: list<array{libelle: string, valeurs: list<float|int|null>, unite: string, en_ligne: bool, axe_de_droite: bool, pointilles: bool}>, info_bulles: array<int, string>}
+     * @return array{type: string, titre: string, etiquettes: list<string>, jeux: list<array{libelle: string, valeurs: list<float|int|null>, unite: string, en_ligne: bool, axe_de_droite: bool, pointilles: bool, role: string}>, info_bulles: array<int, string>}
      */
     public static function configuration(CarteDuTableauDeBord $carte, SerieDuGraphique $serie): array
     {
@@ -458,6 +774,70 @@ class GrilleDesGraphiques extends Widget
             $sens,
             $perimetre->restreintA($this->magasinDuFiltre($reglages, $perimetre)),
         ));
+    }
+
+    /**
+     * Le calcul de la page : les cartes du filtre et le détail ouvert de
+     * chacune (voir CalculDesSeries::chemin()).
+     */
+    private function calcul(Perimetre $filtre, ReglagesDuTableauDeBord $reglages): CalculDesSeries
+    {
+        return new CalculDesSeries($filtre, $reglages, $reglages->cartesVisibles($filtre), $this->details);
+    }
+
+    /**
+     * La barre de ce jeton parmi celles que la carte dessine, jamais une
+     * barre à venir.
+     *
+     * @throws LogicException
+     */
+    private function barreDeLaCarte(CalculDesSeries $calcul, CarteDuTableauDeBord $carte, string $jeton): Barre
+    {
+        foreach ($calcul->barresDe($carte) as $barre) {
+            if ($barre->jeton() === $jeton && ! $barre->aVenir) {
+                return $barre;
+            }
+        }
+
+        throw new LogicException(self::REFUS_DE_LA_VALEUR);
+    }
+
+    /**
+     * Un changement de période, de magasin, de découpage ou de cumul change
+     * les barres de toutes les cartes : aucun détail ne reste ouvert, ni
+     * fenêtre, ni mois choisi.
+     */
+    private function refermerLeDetail(): void
+    {
+        $this->moisChoisis = [];
+        $this->details = [];
+        $this->listeDuJour = null;
+    }
+
+    private function refermerLeDetailDe(Graphique $graphique): void
+    {
+        unset($this->details[$graphique->value]);
+
+        if ($this->listeDuJour !== null && $this->listeDuJour['graphique'] === $graphique->value) {
+            $this->listeDuJour = null;
+        }
+    }
+
+    /**
+     * Garde les $niveau premiers niveaux du détail ouvert de cette carte
+     * (0 : la carte tout entière) et ferme la fenêtre d'un jour.
+     */
+    private function remonterDe(Graphique $graphique, int $niveau): void
+    {
+        $chemin = array_slice($this->details[$graphique->value] ?? [], 0, max(0, $niveau));
+
+        if ($chemin === []) {
+            unset($this->details[$graphique->value]);
+        } else {
+            $this->details[$graphique->value] = $chemin;
+        }
+
+        $this->listeDuJour = null;
     }
 
     /**

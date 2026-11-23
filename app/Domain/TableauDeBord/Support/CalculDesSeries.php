@@ -227,6 +227,24 @@ final class CalculDesSeries
     }
 
     /**
+     * Le menu « Afficher » de la carte (les montants ou l'écart en %) se
+     * règle-t-il ? Pas dans un détail, qui montre les montants seulement.
+     */
+    public function ecartPossible(CarteDuTableauDeBord $carte): bool
+    {
+        return $this->chemin($carte->graphique) === [];
+    }
+
+    /**
+     * La case « Ajouter la tendance » de la carte se coche-t-elle ? Pas dans
+     * un détail, pas en écart en %, pas avec le cumul.
+     */
+    public function tendancePossible(CarteDuTableauDeBord $carte): bool
+    {
+        return $this->chemin($carte->graphique) === [] && ! $carte->ecart && ! $this->cumulDeBase($carte);
+    }
+
+    /**
      * Cette carte montre-t-elle sa tendance ? Pas en écart en %, pas avec le
      * cumul, pas en détail.
      */

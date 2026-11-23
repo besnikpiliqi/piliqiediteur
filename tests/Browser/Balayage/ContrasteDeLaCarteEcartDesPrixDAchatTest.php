@@ -112,7 +112,7 @@ test('la carte « Écart des prix d’achat » se lit en clair et en sombre dans
     $carte = '[data-graphique="'.Carte::CARTE.'"]';
     $contraste = new ContrasteDesPages($onglet);
 
-    Carte::ajouter($onglet, 4);
+    Carte::ajouter($onglet, 5);
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="magasin"]')->selectOption((string) $societe->autreMagasin->uuid), 'le choix de la Boutique de la Gare');
     $onglet->geste(fn () => $onglet->element($carte.' [data-ecart="voir-chiffres"]')->click(), 'l’ouverture des chiffres');
     $onglet->geste(fn () => $onglet->element($carte.' [data-ecart="voir-calcul"]')->click(), 'l’ouverture du calcul');
@@ -151,7 +151,7 @@ test('le contrôle du dessin relève une graduation, une barre et un cadre trop 
     $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe');
     $contraste = new ContrasteDesPages($onglet);
 
-    Carte::ajouter($onglet, 4);
+    Carte::ajouter($onglet, 5);
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="magasin"]')->selectOption((string) $societe->autreMagasin->uuid), 'le choix de la Boutique de la Gare');
 
     foreach (ContrasteDesPages::MODES as $mode) {

@@ -37,8 +37,9 @@ class PreferencesDesGraphiquesTest extends TestCase
 
     /**
      * Le propriétaire ajoute « Ventes par taux de TVA », le passe en
-     * camembert, le monte avant le chiffre d'affaires par magasin, retire
-     * la TVA à payer, choisit l'année précédente, Villeurbanne et la
+     * camembert, le monte deux fois, avant le chiffre d'affaires par
+     * magasin (« Factures à encaisser par ancienneté » est la dernière des
+     * cartes ouvertes au départ), retire la TVA à payer, choisit l'année précédente, Villeurbanne et la
      * comparaison ; à sa connexion suivante, tout est là, dans cet ordre.
      */
     public function test_ajout_retrait_type_ordre_et_filtres_sont_retenus_apres_une_nouvelle_connexion(): void
@@ -50,6 +51,7 @@ class PreferencesDesGraphiquesTest extends TestCase
         Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value])
             ->call('ajouterUnGraphique', Graphique::VentesParTauxDeTva->value)
             ->call('changerLeType', Graphique::VentesParTauxDeTva->value, TypeDeGraphique::Camembert->value)
+            ->call('monter', Graphique::VentesParTauxDeTva->value)
             ->call('monter', Graphique::VentesParTauxDeTva->value)
             ->call('retirerLeGraphique', Graphique::TvaAPayerParMois->value)
             ->call('choisirLaPeriode', PeriodeDuTableauDeBord::AnneePrecedente->value)
@@ -68,6 +70,7 @@ class PreferencesDesGraphiquesTest extends TestCase
                 ['graphique' => Graphique::ChiffreDAffairesParMois->value, 'type' => 'barres', 'ecart' => false, 'tendance' => false],
                 ['graphique' => Graphique::VentesParTauxDeTva->value, 'type' => 'camembert'],
                 ['graphique' => Graphique::ChiffreDAffairesParMagasin->value, 'type' => 'anneau'],
+                ['graphique' => Graphique::FacturesParAnciennete->value, 'type' => 'barres'],
             ],
             'periode' => 'annee_precedente',
             'magasin' => (string) $villeurbanne->uuid,
@@ -76,7 +79,7 @@ class PreferencesDesGraphiquesTest extends TestCase
             'cumul' => false,
         ], $reglages->versTableau());
         Livewire::test(GrilleDesGraphiques::class, ['ecran' => EcranDuTableauDeBord::Societe->value])
-            ->assertSeeInOrder(['Ventes et achats HT par mois', 'Chiffre d\'affaires HT par mois', 'Ventes par taux de TVA', 'Chiffre d\'affaires par magasin']);
+            ->assertSeeInOrder(['Ventes et achats HT par mois', 'Chiffre d\'affaires HT par mois', 'Ventes par taux de TVA', 'Chiffre d\'affaires par magasin', 'Factures à encaisser par ancienneté']);
     }
 
     /**
@@ -422,10 +425,10 @@ class PreferencesDesGraphiquesTest extends TestCase
             ->call('retirerLeGraphique', Graphique::VentesEtAchatsParMois->value)
             ->call('retirerLeGraphique', Graphique::TvaAPayerParMois->value);
 
-        $this->assertSame([Graphique::ChiffreDAffairesParMois, Graphique::ChiffreDAffairesParMagasin], $this->graphiquesDe($proprietaire, $lyon));
-        $this->assertSame([Graphique::VentesEtAchatsParMois, Graphique::TvaAPayerParMois, Graphique::ChiffreDAffairesParMois, Graphique::ChiffreDAffairesParMagasin], $this->graphiquesDe($administrateur, $lyon));
+        $this->assertSame([Graphique::ChiffreDAffairesParMois, Graphique::ChiffreDAffairesParMagasin, Graphique::FacturesParAnciennete], $this->graphiquesDe($proprietaire, $lyon));
+        $this->assertSame([Graphique::VentesEtAchatsParMois, Graphique::TvaAPayerParMois, Graphique::ChiffreDAffairesParMois, Graphique::ChiffreDAffairesParMagasin, Graphique::FacturesParAnciennete], $this->graphiquesDe($administrateur, $lyon));
         $reglagesDuMagasin = app(PreferencesDesGraphiques::class)->lire($proprietaire, app(PerimetreDesGraphiques::class)->duMagasin($proprietaire, $lyon));
-        $this->assertSame([Graphique::VentesEtAchatsParMois, Graphique::TvaAPayerParMois, Graphique::ChiffreDAffairesParMois], array_map(fn (CarteDuTableauDeBord $carte): Graphique => $carte->graphique, $reglagesDuMagasin->cartes));
+        $this->assertSame([Graphique::VentesEtAchatsParMois, Graphique::TvaAPayerParMois, Graphique::ChiffreDAffairesParMois, Graphique::FacturesParAnciennete], array_map(fn (CarteDuTableauDeBord $carte): Graphique => $carte->graphique, $reglagesDuMagasin->cartes));
     }
 
     /**

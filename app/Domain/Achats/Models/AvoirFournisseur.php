@@ -4,6 +4,7 @@ namespace App\Domain\Achats\Models;
 
 use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
+use App\Domain\CaisseSecurisee\Concerns\HorodateSonEmission;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -40,7 +41,7 @@ class AvoirFournisseur extends Model
     }
 
     /** @use HasFactory<AvoirFournisseurFactory> */
-    use BelongsToMagasin, HasFactory;
+    use BelongsToMagasin, HasFactory, HorodateSonEmission;
 
     protected $table = 'avoirs_fournisseur';
 

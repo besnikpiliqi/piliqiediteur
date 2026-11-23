@@ -61,6 +61,7 @@ use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SaisitUnReglementEnParts;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use App\Filament\FiltreDUnJour;
 use App\Filament\PlusRecentEnPremier;
 use App\Filament\TableauEntry;
 use Filament\Actions\DeleteAction;
@@ -950,6 +951,10 @@ class FactureResource extends Resource
                     ->label('À encaisser')
                     ->toggle()
                     ->query(fn (Builder $query): Builder => RequeteDuModele::de($query, Facture::class)->aEncaisser()),
+                // Les factures et les tickets émis tel jour du calendrier du
+                // magasin, où mène le clic sur un jour d'un graphique par
+                // période du tableau de bord (voir FiltreDUnJour).
+                FiltreDUnJour::make('Jour d\'émission', fn (Builder $query, Calendrier $calendrier, string $jour): Builder => RequeteDuModele::de($query, Facture::class)->emisLe($calendrier, $jour)),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

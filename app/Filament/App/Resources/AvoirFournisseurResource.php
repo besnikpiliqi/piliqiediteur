@@ -4,8 +4,11 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Models\AvoirFournisseur;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Tenancy\Support\RequeteDuModele;
 use App\Filament\App\FicheDUnDocument;
 use App\Filament\App\Resources\AvoirFournisseurResource\Pages;
+use App\Filament\FiltreDUnJour;
 use App\Filament\PlusRecentEnPremier;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
@@ -133,6 +136,10 @@ class AvoirFournisseurResource extends Resource
                 Tables\Filters\SelectFilter::make('source')->options(SourceAvoirFournisseur::class),
                 FactureAchatResource::filtreTvaAVerifier(),
                 FactureAchatResource::filtrePieceManquante(),
+                // Les avoirs fournisseur émis tel jour du calendrier du
+                // magasin, où mène le clic sur un jour d'un graphique par
+                // période du tableau de bord (voir FiltreDUnJour).
+                FiltreDUnJour::make('Jour d\'émission', fn (Builder $query, Calendrier $calendrier, string $jour): Builder => RequeteDuModele::de($query, AvoirFournisseur::class)->emisLe($calendrier, $jour)),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

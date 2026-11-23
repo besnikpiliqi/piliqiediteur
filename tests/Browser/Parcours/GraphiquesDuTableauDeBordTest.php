@@ -32,12 +32,19 @@ use Tests\Browser\Support\Navigation;
  * peints par Chart.js ? La carte « Écart des prix d'achat », qui n'a pas de
  * canevas, est dessinée quand son `svg` porte ses douze colonnes et, sous
  * chacune, l'étiquette de son mois (décision de l'éditeur du 21/11/2026,
- * D76, B7 : un dessin par carte, sans en affaiblir l'exigence).
+ * D76, B7 : un dessin par carte, sans en affaiblir l'exigence). Une carte
+ * par période, dont le `svg` est écrit par le serveur (choix de l'éditeur du
+ * 16/11/2026, lot GRAPH-AN), est dessinée quand son `svg` porte une colonne
+ * par barre, chacune avec son étiquette lue, et une hauteur visible.
  */
 function carteDessinee(string $graphique): string
 {
     if ($graphique === Graphique::EcartDesPrixDAchat->value) {
         return '(() => { const d = document.querySelector(\'[data-graphique="'.$graphique.'"] svg[role="group"]\'); return d !== null && d.querySelectorAll(\'g[role="button"]\').length === 12 && d.querySelectorAll(\'g[role="button"] > text[font-weight]\').length === 12 && d.getBoundingClientRect().height > 100; })()';
+    }
+
+    if (Graphique::from($graphique)->estParPeriode()) {
+        return '(() => { const d = document.querySelector(\'[data-graphique="'.$graphique.'"] svg[data-periode="dessin"]\'); return d !== null && d.querySelectorAll(\'g.colonne[aria-label]\').length > 0 && d.querySelectorAll(\'text[text-anchor="middle"]\').length > 0 && d.getBoundingClientRect().height > 100; })()';
     }
 
     return '(() => { const c = document.querySelector(\'[data-graphique="'.$graphique.'"] canvas\'); if (! c || c.width === 0) return false; const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 4) { if (d[i] !== 0) return true; } return false; })()';
@@ -74,7 +81,7 @@ test('le propriétaire voit les quatre chiffres et les graphiques par défaut, a
     $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe');
 
     $onglet->voir('CA HT du mois')->voir('Achats HT du mois')->voir('TVA à payer (estimation)')->voir('Restant dû des clients')
-        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 4', 'les quatre graphiques par défaut ne sont pas là')
+        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 5', 'les cinq graphiques par défaut ne sont pas là')
         ->attendreQue(carteDessinee('ca_par_magasin'), 'le chiffre d’affaires par magasin n’est pas dessiné');
 
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="ajouter"]')->selectOption('marge_par_mois'), 'l’ajout de la marge')
@@ -97,7 +104,7 @@ test('un administrateur à qui le propriétaire coche les graphiques ne voit que
     app(TenantContext::class)->clear();
 
     $this->seConnecter($nina, panneau: 'societe')
-        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 3', 'les trois graphiques par défaut d’un seul magasin ne sont pas là')
+        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 4', 'les quatre graphiques par défaut d’un seul magasin ne sont pas là')
         ->voir('CA HT du mois')
         ->attendreQue(carteDessinee('ca_par_mois'), 'le chiffre d’affaires par mois n’est pas dessiné')
         ->attendreQue('document.querySelector(\'select[data-filtre="magasin"]\') === null', 'le filtre des magasins paraît pour un seul magasin')
@@ -112,7 +119,7 @@ test('un responsable à qui le propriétaire coche les graphiques les voit dans 
     // La grille vient après « À faire » et se charge quand elle paraît à
     // l'écran (chargement différé) : la page défile jusqu'à elle.
     $this->seConnecter($lea)
-        ->attendreQue('(window.scrollTo(0, document.body.scrollHeight), document.querySelectorAll("[data-graphique]").length === 3)', 'les trois graphiques par défaut du magasin ne sont pas là')
+        ->attendreQue('(window.scrollTo(0, document.body.scrollHeight), document.querySelectorAll("[data-graphique]").length === 4)', 'les quatre graphiques par défaut du magasin ne sont pas là')
         ->voir('CA HT du mois')
         ->attendreQue(carteDessinee('ventes_et_achats_par_mois'), 'les ventes et les achats ne sont pas dessinés')
         ->attendreQue('document.querySelector(\'select[data-filtre="magasin"]\') === null', 'le panneau d’un magasin montre un filtre des magasins')
@@ -126,7 +133,7 @@ test('le collaborateur à qui le client est confié ouvre la page de ses graphiq
         ->aller('/cabinet/'.$societe->cabinet->uuid.'/clients')->attendre()->verifier()
         ->cliquerSurLeLien('Graphiques')
         ->attendreQue('location.pathname.endsWith("/graphiques")', 'la page des graphiques du client ne s’ouvre pas')
-        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 3', 'les trois graphiques par défaut du client ne sont pas là')
+        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 4', 'les quatre graphiques par défaut du client ne sont pas là')
         ->voir('CA HT du mois')
         ->attendreQue(carteDessinee('ca_par_mois'), 'le chiffre d’affaires par mois du client n’est pas dessiné');
 });
@@ -140,7 +147,7 @@ test('l’expert-comptable déclaré ouvre « Tableau de bord de la société »
     $this->seConnecter($marc)
         ->cliquerSurLeLien('Tableau de bord de la société')
         ->attendreQue('location.pathname.endsWith("/tableau-de-bord-de-la-societe")', 'la page de l’expert-comptable ne s’ouvre pas')
-        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 3', 'les graphiques par défaut de l’expert-comptable ne sont pas là')
+        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 4', 'les graphiques par défaut de l’expert-comptable ne sont pas là')
         ->voir('CA HT du mois')
         ->attendreQue(carteDessinee('ca_par_mois'), 'le chiffre d’affaires par mois n’est pas dessiné');
 });
@@ -160,7 +167,7 @@ test('le propriétaire choisit la période, un magasin et la comparaison, classe
     $port = (string) $societe->magasin->uuid;
     $ordre = 'Array.from(document.querySelectorAll("[data-graphique]")).map((carte) => carte.dataset.graphique).join(",")';
     $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe')
-        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 4', 'les quatre graphiques par défaut ne sont pas là');
+        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 5', 'les cinq graphiques par défaut ne sont pas là');
 
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="periode"]')->selectOption('annee_en_cours'), 'le choix de l’année en cours');
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="magasin"]')->selectOption($port), 'le choix de la Boutique du Port');
@@ -170,12 +177,12 @@ test('le propriétaire choisit la période, un magasin et la comparaison, classe
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('[data-graphique="meilleurs_produits"] select[data-geste="mesure"]')->selectOption('quantite'), 'le classement par quantité');
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('[data-graphique="meilleurs_produits"] [data-geste="monter"]')->click(), 'la montée des meilleurs produits');
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('[data-graphique="ventes_et_achats_par_mois"] [data-geste="descendre"]')->click(), 'la descente des ventes et achats')
-        ->attendreQue($ordre.' === "tva_par_mois,ventes_et_achats_par_mois,ca_par_mois,meilleurs_produits,ca_par_magasin"', 'les cartes ne sont pas dans l’ordre voulu');
+        ->attendreQue($ordre.' === "tva_par_mois,ventes_et_achats_par_mois,ca_par_mois,ca_par_magasin,meilleurs_produits,factures_par_anciennete"', 'les cartes ne sont pas dans l’ordre voulu');
     $onglet->geste(fn () => $onglet->element('[data-graphique="ca_par_mois"] [data-geste="chiffres"]')->click(), 'l’ouverture des chiffres')
         ->attendreQue('document.querySelector(\'[data-graphique="ca_par_mois"] table\') !== null && document.querySelector(\'[data-graphique="ca_par_mois"] table\').offsetParent !== null', 'le tableau des chiffres ne s’ouvre pas');
 
     $onglet->aller($onglet->chemin())->attendre()->verifier()
-        ->attendreQue($ordre.' === "tva_par_mois,ventes_et_achats_par_mois,ca_par_mois,meilleurs_produits,ca_par_magasin"', 'l’ordre des cartes n’est pas retenu')
+        ->attendreQue($ordre.' === "tva_par_mois,ventes_et_achats_par_mois,ca_par_mois,ca_par_magasin,meilleurs_produits,factures_par_anciennete"', 'l’ordre des cartes n’est pas retenu')
         ->attendreQue('document.querySelector(\'select[data-filtre="periode"]\').value === "annee_en_cours"', 'la période n’est pas retenue')
         ->attendreQue('document.querySelector(\'select[data-filtre="magasin"]\').value === '.json_encode($port), 'le magasin n’est pas retenu')
         ->attendreQue('document.querySelector(\'input[data-filtre="comparer"]\').checked', 'la comparaison n’est pas retenue')
@@ -190,7 +197,7 @@ test('le propriétaire du cabinet ouvre les graphiques d’un client depuis sa f
         ->aller('/cabinet/'.$societe->cabinet->uuid.'/clients/'.LienCabinet::query()->withoutGlobalScopes()->where('societe_id', $societe->societe->id)->sole()->uuid)->attendre()->verifier()
         ->cliquerSurLeLien('Graphiques')
         ->attendreQue('location.pathname.endsWith("/graphiques")', 'la page des graphiques du client ne s’ouvre pas depuis sa fiche')
-        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 3', 'les graphiques du client ne sont pas là')
+        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 4', 'les graphiques du client ne sont pas là')
         ->voir('CA HT du mois');
 });
 
@@ -199,7 +206,7 @@ test('le propriétaire, dans le panneau d’un magasin, ajoute un graphique, en 
 
     $onglet = $this->seConnecter($societe->proprietaire)->aller('/app/'.$societe->magasin->uuid)->attendre()->verifier();
 
-    composerLaGrille($onglet, 3, 'ventes_par_taux', 'camembert')
+    composerLaGrille($onglet, 4, 'ventes_par_taux', 'camembert')
         ->voir('CA HT du mois')
         ->attendreQue('document.querySelector(\'select[data-filtre="magasin"]\') === null', 'le panneau d’un magasin montre un filtre des magasins au propriétaire');
 });
@@ -210,10 +217,10 @@ test('un administrateur à qui le propriétaire coche les graphiques compose sa 
     app(TenantContext::class)->clear();
 
     $onglet = $this->seConnecter($nina, panneau: 'societe');
-    composerLaGrille($onglet, 3, 'avoirs_par_mois', 'lignes');
+    composerLaGrille($onglet, 4, 'avoirs_par_mois', 'lignes');
 
     $onglet->aller('/app/'.$societe->magasin->uuid)->attendre()->verifier();
-    composerLaGrille($onglet, 3, 'ventes_par_jour', 'radar')
+    composerLaGrille($onglet, 4, 'ventes_par_jour', 'radar')
         ->attendreQue('document.querySelector(\'[data-graphique="avoirs_par_mois"]\') === null', 'le réglage de l’espace de la société déborde sur le panneau du magasin');
 });
 
@@ -224,7 +231,7 @@ test('un responsable à qui le propriétaire coche les graphiques compose sa gri
 
     $onglet = $this->seConnecter($lea)->aller('/app/'.$societe->magasin->uuid)->attendre()->verifier();
 
-    composerLaGrille($onglet, 3, 'particuliers_et_professionnels', 'barres_couchees');
+    composerLaGrille($onglet, 4, 'particuliers_et_professionnels', 'barres_couchees');
 });
 
 test('le propriétaire du cabinet compose la page des graphiques d’un client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client', function () {
@@ -233,10 +240,10 @@ test('le propriétaire du cabinet compose la page des graphiques d’un client, 
 
     $onglet = $this->seConnecter($societe->proprietaireDuCabinet, panneau: 'cabinet')
         ->aller('/cabinet/'.$societe->cabinet->uuid.'/clients/'.$lien->uuid.'/graphiques')->attendre()->verifier();
-    composerLaGrille($onglet, 3, 'meilleurs_produits', 'barres');
+    composerLaGrille($onglet, 4, 'meilleurs_produits', 'barres');
 
     $onglet->aller('/app/'.$societe->magasin->uuid)->attendre()->verifier();
-    composerLaGrille($onglet, 3, 'encaissements_par_mode', 'camembert');
+    composerLaGrille($onglet, 4, 'encaissements_par_mode', 'camembert');
 });
 
 test('le collaborateur à qui le client est confié compose la page des graphiques du client, la retrouve après le rechargement, puis compose celle du panneau d’un magasin du client', function () {
@@ -245,10 +252,10 @@ test('le collaborateur à qui le client est confié compose la page des graphiqu
 
     $onglet = $this->seConnecter($societe->collaborateur, panneau: 'cabinet')
         ->aller('/cabinet/'.$societe->cabinet->uuid.'/clients/'.$lien->uuid.'/graphiques')->attendre()->verifier();
-    composerLaGrille($onglet, 3, 'ventes_et_panier_moyen', 'lignes');
+    composerLaGrille($onglet, 4, 'ventes_et_panier_moyen', 'lignes');
 
     $onglet->aller('/app/'.$societe->magasin->uuid)->attendre()->verifier();
-    composerLaGrille($onglet, 3, 'avoirs_par_mois', 'aires');
+    composerLaGrille($onglet, 4, 'avoirs_par_mois', 'aires');
 });
 
 test('l’expert-comptable déclaré compose « Tableau de bord de la société », la retrouve après le rechargement, puis compose la grille du panneau de son magasin', function () {
@@ -258,10 +265,10 @@ test('l’expert-comptable déclaré compose « Tableau de bord de la société 
     $marc = $this->expertComptable($magasin);
 
     $onglet = $this->seConnecter($marc)->aller('/app/'.$magasin->uuid.'/tableau-de-bord-de-la-societe')->attendre()->verifier();
-    composerLaGrille($onglet, 3, 'ventes_par_taux', 'barres');
+    composerLaGrille($onglet, 4, 'ventes_par_taux', 'barres');
 
     $onglet->aller('/app/'.$magasin->uuid)->attendre()->verifier();
-    composerLaGrille($onglet, 3, 'meilleurs_produits', 'anneau');
+    composerLaGrille($onglet, 4, 'meilleurs_produits', 'anneau');
 });
 
 test('une observatrice ne voit ni les chiffres clés ni les graphiques dans le panneau de son magasin', function () {
@@ -367,7 +374,7 @@ test('aucune carte ne déborde pendant que Chart.js redimensionne son graphique,
         array_map(fn (Graphique $graphique): CarteDuTableauDeBord => CarteDuTableauDeBord::parDefaut($graphique), Graphique::cases()),
     ));
     $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe')
-        ->attendreQue('document.querySelectorAll("[data-graphique] canvas").length === '.(count(Graphique::cases()) - 1).' && '.carteDessinee(Graphique::EcartDesPrixDAchat->value), 'les dix-neuf graphiques ne sont pas dessinés (dix-huit canevas et le dessin de l’écart des prix d’achat)');
+        ->attendreQue('document.querySelectorAll("[data-graphique] canvas").length === '.count(array_filter(Graphique::cases(), fn (Graphique $graphique): bool => ! $graphique->estParPeriode() && $graphique !== Graphique::EcartDesPrixDAchat)).' && '.carteDessinee(Graphique::EcartDesPrixDAchat->value).' && '.implode(' && ', array_map(fn (Graphique $graphique): string => carteDessinee($graphique->value), array_filter(Graphique::cases(), fn (Graphique $graphique): bool => $graphique->estParPeriode()))), 'les graphiques ne sont pas tous dessinés (un canevas pour chaque carte de Chart.js, un `svg` pour chaque carte par période et pour l’écart des prix d’achat)');
 
     $debordent = $onglet->page()->evaluate(<<<'JS'
         () => {
@@ -410,7 +417,7 @@ test('après l’ajout d’un graphique, le menu « Ajouter un graphique » revi
     $societe = $this->societeComplete();
     $menu = 'document.querySelector(\'select[data-filtre="ajouter"]\')';
     $onglet = $this->seConnecter($societe->proprietaire, panneau: 'societe')
-        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 4', 'les quatre graphiques par défaut ne sont pas là');
+        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 5', 'les cinq graphiques par défaut ne sont pas là');
 
     $onglet->gesteQuiAppelleLeServeur(fn () => $onglet->element('select[data-filtre="ajouter"]')->selectOption('marge_par_mois'), 'l’ajout de la marge')
         ->attendreQue('document.querySelector(\'[data-graphique="marge_par_mois"]\') !== null', 'la marge n’est pas ajoutée')
@@ -422,6 +429,6 @@ test('après l’ajout d’un graphique, le menu « Ajouter un graphique » revi
         ->attendreQue($menu.'.value === ""', 'le menu ne reste pas sur « — Choisir — »')
         ->verifier()
         ->nePasVoir('Ce choix n\'existe pas dans le tableau de bord')
-        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 5', 'les cinq cartes ne restent pas affichées');
+        ->attendreQue('document.querySelectorAll("[data-graphique]").length === 6', 'les six cartes ne restent pas affichées');
     expect(PreferencesDuTableauDeBord::query()->withoutGlobalScopes()->where('user_id', $societe->proprietaire->id)->sole()->reglages)->toBe($reglages);
 });

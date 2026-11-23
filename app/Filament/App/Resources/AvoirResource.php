@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -25,6 +26,7 @@ use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PrendLeCalendrierDuMagasin;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
+use App\Filament\FiltreDUnJour;
 use App\Filament\PlusRecentEnPremier;
 use App\Filament\TableauEntry;
 use Filament\Forms\Components\Actions\Action as ActionDeChamp;
@@ -596,6 +598,12 @@ class AvoirResource extends Resource
                 Tables\Columns\TextColumn::make('motif')->limit(40)->toggleable(),
                 Tables\Columns\TextColumn::make('date_emission')->label('Émis le')->dateTime('d/m/Y')->sortable(),
                 Tables\Columns\TextColumn::make('cree_par_nom')->label('Émis par')->toggleable(),
+            ])
+            ->filters([
+                // Les avoirs émis tel jour du calendrier du magasin, où mène
+                // le clic sur un jour d'un graphique par période du tableau
+                // de bord (voir FiltreDUnJour).
+                FiltreDUnJour::make('Jour d\'émission', fn (Builder $query, Calendrier $calendrier, string $jour): Builder => RequeteDuModele::de($query, Avoir::class)->emisLe($calendrier, $jour)),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

@@ -72,7 +72,7 @@ final class ConstructeurDeSeriesParPeriode
                 $lignes[] = ['actuel' => $actuel, 'precedent' => $precedent];
             }
 
-            $jeux[] = SerieDuGraphique::jeu('Écart sur un an', $pourcentages, SerieDuGraphique::POURCENT);
+            $jeux[] = SerieDuGraphique::jeu('Écart sur un an', $pourcentages, SerieDuGraphique::POURCENT, role: SerieDuGraphique::ROLE_ECART);
             $ecartSurUnAn = ['unite' => $unite, 'lignes' => $lignes];
             $notes[] = TextesDesPeriodes::ecart(self::uneBarreEstEnCours($barres));
 
@@ -87,7 +87,7 @@ final class ConstructeurDeSeriesParPeriode
             if ($calcul->comparaisonActive($carte)) {
                 $principale = $definitions[$principal];
                 $debutPrecedent = $cumul ? Mois::premierJour(Mois::decaler(Mois::duJour($barres[0]->premierJour), -12)) : null;
-                $jeux[] = SerieDuGraphique::jeu($principale->libelle.' (un an plus tôt)', self::valeursUnAnPlusTot($principale, $barres, $debutPrecedent, $aujourdhui), $unite, $principale->enLigne || $cumul, $principale->axeDeDroite, $principale->pointilles);
+                $jeux[] = SerieDuGraphique::jeu($principale->libelle.' (un an plus tôt)', self::valeursUnAnPlusTot($principale, $barres, $debutPrecedent, $aujourdhui), $unite, $principale->enLigne || $cumul, $principale->axeDeDroite, $principale->pointilles, SerieDuGraphique::ROLE_COMPARAISON);
 
                 if (self::uneBarreEstEnCours($barres)) {
                     $notes[] = TextesDesPeriodes::MEMES_JOURS;
@@ -95,7 +95,7 @@ final class ConstructeurDeSeriesParPeriode
             }
 
             if ($calcul->tendanceActive($carte)) {
-                $jeux[] = SerieDuGraphique::jeu('Moyenne sur 3 '.$niveau->pluriel($exercices), self::moyennesSurTrois($valeurs[$principal]), $unite, true, $definitions[$principal]->axeDeDroite);
+                $jeux[] = SerieDuGraphique::jeu('Moyenne sur 3 '.$niveau->pluriel($exercices), self::moyennesSurTrois($valeurs[$principal]), $unite, true, $definitions[$principal]->axeDeDroite, role: SerieDuGraphique::ROLE_TENDANCE);
             }
         }
 

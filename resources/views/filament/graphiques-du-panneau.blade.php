@@ -154,6 +154,116 @@
         window.piliqiCacherLeNomComplet = cacher
     })()
 
+    // L'info-bulle d'une barre d'une carte par période (lot GRAPH-AN) : le
+    // serveur écrit, sur chaque colonne de son `svg` (`data-info-bulle`), du
+    // JSON, le titre de la barre et une ligne par série ; la page ne le lit
+    // qu'avec textContent, jamais comme du HTML. Elle suit la souris, ou la
+    // colonne qui a le focus, et se ferme par Échap, quand la souris quitte la
+    // colonne ou que la page défile (WCAG 1.4.13).
+    ;(() => {
+        if (window.piliqiInfoBullesDesBarres) {
+            return
+        }
+
+        window.piliqiInfoBullesDesBarres = true
+
+        let bulle = null
+
+        const element = () => {
+            if (bulle === null) {
+                bulle = document.createElement('div')
+                bulle.className = 'piliqi-graphiques__info-bulle'
+                bulle.setAttribute('role', 'tooltip')
+                bulle.setAttribute('data-info-bulle-des-barres', '')
+                bulle.hidden = true
+                document.body.appendChild(bulle)
+            }
+
+            return bulle
+        }
+
+        const cacher = () => {
+            if (bulle !== null) {
+                bulle.hidden = true
+            }
+        }
+
+        const montrer = (colonne, x, y) => {
+            let contenu
+
+            try {
+                contenu = JSON.parse(colonne.getAttribute('data-info-bulle'))
+            } catch (erreur) {
+                return cacher()
+            }
+
+            const infoBulle = element()
+            const titre = document.createElement('strong')
+
+            titre.textContent = contenu.titre
+            infoBulle.replaceChildren(titre)
+
+            for (const ligne of contenu.lignes) {
+                const texte = document.createElement('span')
+
+                texte.className = 'piliqi-graphiques__info-bulle-ligne'
+
+                if (ligne.couleur !== '') {
+                    const puce = document.createElement('i')
+
+                    puce.className = 'piliqi-graphiques__puce piliqi-graphiques__puce--info'
+                    puce.style.background = ligne.couleur
+                    puce.setAttribute('aria-hidden', 'true')
+                    texte.appendChild(puce)
+                }
+
+                texte.appendChild(document.createTextNode(ligne.texte))
+                infoBulle.appendChild(texte)
+            }
+
+            infoBulle.hidden = false
+
+            const boite = infoBulle.getBoundingClientRect()
+            let gauche = x + 14
+            let haut = y + 14
+
+            if (gauche + boite.width > window.innerWidth - 8) {
+                gauche = x - boite.width - 14
+            }
+
+            if (haut + boite.height > window.innerHeight - 8) {
+                haut = y - boite.height - 14
+            }
+
+            infoBulle.style.left = `${Math.max(8, gauche)}px`
+            infoBulle.style.top = `${Math.max(8, haut)}px`
+        }
+
+        const colonneSous = (cible) => cible instanceof Element ? cible.closest('.piliqi-graphiques__periode-dessin [data-info-bulle]') : null
+
+        document.addEventListener('mousemove', (evenement) => {
+            const colonne = colonneSous(evenement.target)
+
+            colonne === null ? cacher() : montrer(colonne, evenement.clientX, evenement.clientY)
+        })
+        document.addEventListener('focusin', (evenement) => {
+            const colonne = colonneSous(evenement.target)
+
+            if (colonne !== null) {
+                const boite = colonne.getBoundingClientRect()
+
+                montrer(colonne, boite.left + boite.width / 2, boite.top + 20)
+            }
+        })
+        document.addEventListener('focusout', cacher)
+        document.addEventListener('keydown', (evenement) => {
+            if (evenement.key === 'Escape') {
+                cacher()
+            }
+        })
+        document.addEventListener('scroll', cacher, true)
+    })()
+
     window.piliqiGraphique = (config) => {
         const TEINTES = ['primary', 'warning', 'success', 'danger', 'info', 'gray']
         const FORMES = { barres: 'bar', barres_couchees: 'bar', lignes: 'line', aires: 'line', anneau: 'doughnut', camembert: 'pie', radar: 'radar' }

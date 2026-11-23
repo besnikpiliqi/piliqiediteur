@@ -26,7 +26,7 @@ namespace App\Domain\TableauDeBord\Support;
  *
  * @phpstan-import-type Calcul from EcartDesPrixDAchat
  *
- * @phpstan-type Jeu array{libelle: string, valeurs: list<int|null>, unite: 'euros'|'nombre'|'pourcent', en_ligne: bool, axe_de_droite: bool, pointilles: bool}
+ * @phpstan-type Jeu array{libelle: string, valeurs: list<int|null>, unite: 'euros'|'nombre'|'pourcent', en_ligne: bool, axe_de_droite: bool, pointilles: bool, role: 'serie'|'comparaison'|'tendance'|'ecart'}
  * @phpstan-type EcartSurUnAn array{unite: 'euros'|'nombre'|'pourcent', lignes: list<array{actuel: int|null, precedent: int|null}>}
  */
 final class SerieDuGraphique
@@ -37,6 +37,20 @@ final class SerieDuGraphique
 
     /** Un écart en %, en centièmes de point : 1 250 pour « +12,5 % ». */
     public const POURCENT = 'pourcent';
+
+    /**
+     * Ce qu'une série est pour la carte (voir jeu()) : une série de la
+     * carte, la même série un an plus tôt (la comparaison), sa tendance, ou
+     * l'écart en % sur un an qui remplace les montants. L'écran en tire la
+     * couleur et la forme de chacune.
+     */
+    public const ROLE_SERIE = 'serie';
+
+    public const ROLE_COMPARAISON = 'comparaison';
+
+    public const ROLE_TENDANCE = 'tendance';
+
+    public const ROLE_ECART = 'ecart';
 
     /**
      * @param  list<string>  $etiquettes
@@ -63,11 +77,12 @@ final class SerieDuGraphique
      *
      * @param  list<int|null>  $valeurs
      * @param  'euros'|'nombre'|'pourcent'  $unite
+     * @param  'serie'|'comparaison'|'tendance'|'ecart'  $role
      * @return Jeu
      */
-    public static function jeu(string $libelle, array $valeurs, string $unite = self::EUROS, bool $enLigne = false, bool $axeDeDroite = false, bool $pointilles = false): array
+    public static function jeu(string $libelle, array $valeurs, string $unite = self::EUROS, bool $enLigne = false, bool $axeDeDroite = false, bool $pointilles = false, string $role = self::ROLE_SERIE): array
     {
-        return ['libelle' => $libelle, 'valeurs' => $valeurs, 'unite' => $unite, 'en_ligne' => $enLigne, 'axe_de_droite' => $axeDeDroite, 'pointilles' => $pointilles];
+        return ['libelle' => $libelle, 'valeurs' => $valeurs, 'unite' => $unite, 'en_ligne' => $enLigne, 'axe_de_droite' => $axeDeDroite, 'pointilles' => $pointilles, 'role' => $role];
     }
 
     /**

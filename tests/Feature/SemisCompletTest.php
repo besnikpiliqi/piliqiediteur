@@ -16,10 +16,12 @@ use App\Domain\Facturation\Events\FactureEmise;
 use App\Domain\TableauDeBord\Enums\DecoupageDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
+use App\Domain\TableauDeBord\Enums\NiveauDeLaBarre;
 use App\Domain\TableauDeBord\Enums\PeriodeDuTableauDeBord;
 use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
 use App\Domain\TableauDeBord\Services\PreferencesDesGraphiques;
 use App\Domain\TableauDeBord\Services\SeriesDesGraphiques;
+use App\Domain\TableauDeBord\Support\Barre;
 use App\Domain\TableauDeBord\Support\CalculDesSeries;
 use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
 use App\Domain\TableauDeBord\Support\Mois;
@@ -233,6 +235,7 @@ class SemisCompletTest extends TestCase
         $this->assertLesCasDesGraphiquesEtDesCaisses();
         $this->assertLesCasDeLEcartDesPrixDAchat();
         $this->assertLaCarteDesVentesParVendeur();
+        $this->assertLesGraphiquesParMoisTrimestreOuAnnee();
         $this->assertLesDatesDeLOperation();
         $this->assertLaListeDesComptesOuvreChaqueCompteActif();
         $this->assertLesRenouvellementsDesDemonstrations();
@@ -490,6 +493,57 @@ class SemisCompletTest extends TestCase
         $deConseilVasseur = $series($perimetres->delExpertComptable($marc), DecoupageDuTableauDeBord::Annee)[Graphique::VentesParVendeur->value];
         $this->assertContains('Bruno Caron', $deConseilVasseur->etiquettes, 'Un vendeur retiré de la société garde son nom sur ses ventes.');
         $this->assertNotContains($marc->name, $deConseilVasseur->etiquettes, 'Un expert-comptable ne vend jamais.');
+    }
+
+    /**
+     * Les graphiques par mois, par trimestre ou par année (lot GRAPH-AN) :
+     * la propriétaire de Maison Ferrand les lit par année, avec le chiffre
+     * d'affaires en écart en % sur un an et la marge avec sa tendance, sur les
+     * dix ans qui finissent cette année (les années d'avant octobre 2025, sans
+     * donnée, ne s'affichent pas) ; Camille Laurent lit les ventes des Halles
+     * cumulées depuis le début de l'année, avec l'année précédente cumulée ;
+     * Marc Petit lit le chiffre d'affaires de Conseil Vasseur par trimestre,
+     * avec sa tendance sur trois trimestres.
+     */
+    private function assertLesGraphiquesParMoisTrimestreOuAnnee(): void
+    {
+        $societe = Societe::query()->where('siren', SemisComplet::SIREN_COMMERCE)->sole();
+        $proprietaire = $societe->proprietaire()->sole();
+        $camille = User::query()->where('name', 'Camille Laurent')->sole();
+        $marc = User::query()->where('name', 'Marc Petit')->sole();
+        $perimetres = app(PerimetreDesGraphiques::class);
+        $preferences = app(PreferencesDesGraphiques::class);
+        $series = fn (Perimetre $perimetre, ReglagesDuTableauDeBord $reglages): array => app(SeriesDesGraphiques::class)->pour(new CalculDesSeries($perimetre, $reglages, $reglages->cartesVisibles($perimetre)));
+
+        app(TenantContext::class)->clear();
+        $deLaSociete = $perimetres->deLaSociete($proprietaire, $societe);
+        $desHalles = $perimetres->duMagasin($camille, $this->magasinDeMaisonFerrand('HALLES'));
+        $deMarc = $perimetres->delExpertComptable($marc);
+        $reglagesDeLaProprietaire = $preferences->lire($proprietaire, $deLaSociete);
+        $reglagesDeCamille = $preferences->lire($camille, $desHalles);
+        $reglagesDeMarc = $preferences->lire($marc, $deMarc);
+
+        $this->assertSame(DecoupageDuTableauDeBord::Annee, $reglagesDeLaProprietaire->decoupage);
+        $this->assertSame([true, true], [$reglagesDeLaProprietaire->carte(Graphique::ChiffreDAffairesParMois)?->ecart, $reglagesDeLaProprietaire->carte(Graphique::MargeBruteParMois)?->tendance]);
+        $this->assertSame([DecoupageDuTableauDeBord::Mois, true, true], [$reglagesDeCamille->decoupage, $reglagesDeCamille->cumul, $reglagesDeCamille->comparer]);
+        $this->assertSame([DecoupageDuTableauDeBord::Trimestre, true], [$reglagesDeMarc->decoupage, $reglagesDeMarc->carte(Graphique::ChiffreDAffairesParMois)?->tendance]);
+
+        $parAnnee = $series($deLaSociete, $reglagesDeLaProprietaire);
+        $chiffreDAffaires = $parAnnee[Graphique::ChiffreDAffairesParMois->value];
+        $this->assertGreaterThanOrEqual(2, count($chiffreDAffaires->barres), 'Octobre 2025 à aujourd\'hui : au moins deux années ont des ventes.');
+        $this->assertContains(NiveauDeLaBarre::Annee, array_map(fn (Barre $barre): NiveauDeLaBarre => $barre->niveau, $chiffreDAffaires->barres));
+        $this->assertNotNull($chiffreDAffaires->ecartSurUnAn, 'Le chiffre d\'affaires est lu en écart en % sur un an.');
+        $this->assertSame('pourcent', $chiffreDAffaires->jeux[0]['unite']);
+        $this->assertStringContainsString('plus anciennes sans donnée ne sont pas affichées', (string) $chiffreDAffaires->note, 'Les années d\'avant la première vente ne s\'affichent pas, une phrase grise le dit.');
+        $this->assertSame('Moyenne sur 3 ans', $parAnnee[Graphique::MargeBruteParMois->value]->jeux[1]['libelle']);
+
+        $cumule = $series($desHalles, $reglagesDeCamille)[Graphique::VentesEtAchatsParMois->value];
+        $this->assertTrue($cumule->jeux[0]['en_ligne'], 'Le cumul se dessine en courbe.');
+        $this->assertSame('Ventes HT (un an plus tôt)', $cumule->jeux[2]['libelle'], 'L\'année précédente cumulée accompagne le cumul de l\'année.');
+
+        $parTrimestre = $series($deMarc, $reglagesDeMarc)[Graphique::ChiffreDAffairesParMois->value];
+        $this->assertCount(4, $parTrimestre->barres, 'Les quatre blocs de trois mois des 12 derniers mois.');
+        $this->assertSame('Moyenne sur 3 trimestres', $parTrimestre->jeux[2]['libelle'], 'La tendance suit la comparaison, après la série et l\'an dernier.');
     }
 
     /**

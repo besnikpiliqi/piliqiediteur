@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 23/11/2026 à 23:29 UTC par pilotage-sync.sh : « Marge : texte de l'éditeur enregistré, course relancée (wf_401140ea-ff3) [skip ci] ».
+Mis à jour le 23/11/2026 à 23:35 UTC par pilotage-sync.sh : « Cahier de la marge : achat d'un lot à prix global, conseil sur la globalisation retiré [skip ci] ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

@@ -7147,3 +7147,17 @@ Ce qu'il faut retenir en une phrase
 
 "
 
+## 626. 2026-11-23 23:34 UTC
+
+<!-- attach -->
+
+> Une question pour vous : la « globalisation »
+
+> 
+
+> Le texte dit qu'un logiciel doit laisser choisir entre le calcul objet par objet et la globalisation (ventes du mois moins achats du mois). Je conseille de ne pas l'offrir :
+
+
+
+mais quand la societe achet un lot, qui ont des produits, alors comment gere ca dans piliqi ?
+

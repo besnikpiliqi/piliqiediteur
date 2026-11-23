@@ -1,0 +1,407 @@
+<?php
+
+namespace Tests\Feature\Qualite;
+
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Charges\Actions\DeposerUneChargeAction;
+use App\Domain\Charges\Services\PiecesDesCharges;
+use App\Domain\Charges\Support\SaisieDeCharge;
+use App\Domain\Contacts\Enums\TypeClient;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Actions\CloturerCaisseAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\FermerSaCaisseAction;
+use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\NatureOperation;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\FacturePdfGenerator;
+use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Fichiers\PieceDeposee;
+use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
+use App\Domain\TableauDeBord\Enums\Graphique;
+use App\Domain\TableauDeBord\Services\PreferencesDesGraphiques;
+use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
+use App\Domain\TableauDeBord\Support\ReglagesDuTableauDeBord;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\Cabinet\Pages\TableauDeBordDuCabinet;
+use App\Filament\GrilleDesGraphiques;
+use App\Filament\Societe\Pages\Charges;
+use App\Filament\Societe\Pages\LesCaisses;
+use App\Filament\Societe\Pages\TableauDeBord;
+use App\Models\User;
+use Closure;
+use Filament\Pages\Page;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Fixtures\FichiersDeTest;
+use Tests\TestCase;
+
+/**
+ * Le nombre de requêtes des pages les plus chargées (décision de l'éditeur
+ * du 01/11/2026, point 5) : dans le magasin, le tableau de bord, les
+ * listes des ventes, des paiements, des avoirs, des clients, des produits,
+ * des factures d'achat et des clôtures, la caisse, et le PDF d'une
+ * facture ; dans l'espace de la société, le tableau de bord et « Les
+ * caisses » ; dans celui d'un cabinet, le tableau de bord de ses clients ;
+ * et la grille des graphiques du tableau de bord sur ses quatre écrans.
+ * Chacune lit la base le même nombre de fois avec peu ou beaucoup de
+ * lignes, de magasins ou de clients (une requête par ligne serait une
+ * requête « N+1 »), sous un plafond qui n'en dépend pas.
+ */
+class PlafondsDeRequetesTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private Magasin $magasin;
+
+    private User $responsable;
+
+    /** Le jour de la dernière vente, compté depuis le 1er octobre 2026. */
+    private int $jour = 0;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->travelTo(self::aParis('2026-10-01 10:00:00'));
+        $this->magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete());
+        $this->responsable = self::responsableDeTest($this->magasin);
+        $this->actingAs($this->responsable);
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: int}>
+     */
+    public static function pages(): array
+    {
+        return [
+            'tableau de bord' => ['', 120],
+            'ventes' => ['/factures', 90],
+            'paiements' => ['/paiements', 80],
+            'avoirs' => ['/avoirs', 80],
+            'clients' => ['/clients', 80],
+            'produits' => ['/produits', 80],
+            'factures d’achat' => ['/facture-achats', 80],
+            'clôtures' => ['/cloture-caisses', 80],
+            'caisse' => ['/caisse', 90],
+        ];
+    }
+
+    #[DataProvider('pages')]
+    public function test_une_page_principale_lit_la_base_autant_de_fois_avec_deux_lignes_ou_huit(string $page, int $plafond): void
+    {
+        $requetes = [];
+
+        foreach ([2, 8] as $lignes) {
+            $this->remplir($lignes);
+            $adresse = '/app/'.$this->magasin->uuid.$page;
+            $this->get($adresse)->assertOk();
+            $requetes[$lignes] = $this->requetes(fn () => $this->get($adresse)->assertOk());
+        }
+
+        $this->assertSame($requetes[2], $requetes[8], "La page {$page} lit la base une fois de plus par ligne.");
+        $this->assertLessThanOrEqual($plafond, $requetes[8]);
+    }
+
+    /**
+     * La liste des ventes dit, sur chaque vente à l'export, qu'elle attend
+     * sa preuve de douane (colonne « À faire ») : ce drapeau se lit dans la
+     * requête de la liste, jamais facture par facture, avec deux ventes à
+     * l'export comme avec huit. Chacune est réglée par virement à son
+     * émission, comme les ventes des autres pages.
+     */
+    public function test_la_liste_des_ventes_a_l_export_lit_la_base_autant_de_fois_avec_deux_lignes_ou_huit(): void
+    {
+        $requetes = [];
+        $client = Client::factory()->create(['nom' => 'Acme Inc.', 'type_client' => TypeClient::Professionnel, 'pays' => 'US', 'etabli_en_france' => false, 'identifiant_etranger' => 'EIN 12-3456789']);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => '50.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $adresse = '/app/'.$this->magasin->uuid.'/factures';
+
+        foreach ([2, 8] as $lignes) {
+            while (Facture::query()->count() < $lignes) {
+                $brouillon = app(CreerFactureAction::class)->handle($this->responsable, $client, [['produit_id' => $produit->getKey(), 'quantite' => 1]], [
+                    'nature_operation' => NatureOperation::ExportHorsUe, 'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US',
+                ]);
+                $virement = new PartDeReglement(ModePaiement::Virement, app(CalculateurLigne::class)->enCentiemes($brouillon->total_ttc), 'VIR-'.$brouillon->getKey());
+                app(EmettreFactureAction::class)->handle($this->responsable, $brouillon, ReglementComptant::horsDeLaCaisse([$virement]));
+            }
+
+            $this->get($adresse)->assertOk()->assertSee('Preuve à fournir');
+            $requetes[$lignes] = $this->requetes(fn () => $this->get($adresse)->assertOk());
+        }
+
+        $this->assertSame($requetes[2], $requetes[8], 'La liste des ventes lit la base une fois de plus par vente à l\'export.');
+        $this->assertLessThanOrEqual(90, $requetes[8]);
+    }
+
+    public function test_le_pdf_d_une_facture_lit_la_base_autant_de_fois_avec_deux_lignes_ou_vingt(): void
+    {
+        $requetes = [];
+
+        foreach ([2, 20] as $lignes) {
+            $produits = Produit::factory()->count($lignes)->create(['prix_vente_ttc' => '9.99', 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 100]);
+            $vente = self::vendreAuComptant($this->responsable, Client::factory()->create(), $produits->map(fn (Produit $produit): array => ['produit_id' => $produit->getKey(), 'quantite' => 2])->all());
+            $facture = Facture::query()->findOrFail($vente->getKey());
+            $requetes[$lignes] = $this->requetes(fn () => app(FacturePdfGenerator::class)->generer($facture));
+        }
+
+        $this->assertSame($requetes[2], $requetes[20], 'Le PDF lit la base une fois de plus par ligne.');
+        $this->assertLessThanOrEqual(40, $requetes[20]);
+    }
+
+    /**
+     * @return array<string, array{0: class-string<Page>, 1: int}>
+     */
+    public static function pagesDeLaSociete(): array
+    {
+        return [
+            'tableau de bord de la société' => [TableauDeBord::class, 60],
+            'les caisses de la société' => [LesCaisses::class, 60],
+        ];
+    }
+
+    /**
+     * Dans l'espace de la société, le tableau de bord (chaque magasin, avec
+     * ses factures à encaisser) et « Les caisses » (les relevés et les
+     * caisses encore ouvertes de chaque magasin) lisent la base autant de
+     * fois avec un magasin ou trois, pour le propriétaire comme pour un
+     * administrateur de tous les magasins.
+     *
+     * @param  class-string<Page>  $page
+     */
+    #[DataProvider('pagesDeLaSociete')]
+    public function test_une_page_de_la_societe_lit_la_base_autant_de_fois_avec_un_magasin_ou_trois(string $page, int $plafond): void
+    {
+        $societe = $this->magasin->societe;
+        $comptes = ['propriétaire' => $this->proprietaireDe($this->magasin), 'administrateur' => $this->administrateur($this->magasin)];
+        $adresse = $page::getUrl(panel: 'societe', tenant: $societe);
+        $magasins = [$this->magasin];
+        $requetes = [];
+
+        foreach ([1, 3] as $nombre) {
+            while (count($magasins) < $nombre) {
+                $magasins[] = $this->ouvrirUnAutreMagasin($this->magasin, ['nom' => 'Boutique '.count($magasins), 'code' => 'BOUT'.count($magasins)]);
+            }
+
+            foreach (array_slice($magasins, $nombre === 1 ? 0 : 1) as $magasin) {
+                $this->remplirLaCaisseEtLesFactures($magasin);
+            }
+
+            foreach ($comptes as $role => $compte) {
+                app(TenantContext::class)->clear();
+                $this->flushSession();
+                $this->actingAs($compte);
+                $this->get($adresse)->assertOk();
+                $requetes[$role][$nombre] = $this->requetes(fn () => $this->get($adresse)->assertOk()->assertSee($magasins[$nombre - 1]->nom));
+            }
+        }
+
+        foreach ($requetes as $role => $parNombre) {
+            $this->assertSame($parNombre[1], $parNombre[3], "La page {$page} lit la base une fois de plus par magasin pour le {$role}.");
+            $this->assertLessThanOrEqual($plafond, $parNombre[3], $role);
+        }
+    }
+
+    /**
+     * La page « Charges » de l'espace de la société (lot CHARGES : le
+     * tableau « type de charge × mois » en une requête, puis la liste) lit
+     * la base autant de fois avec un magasin et deux charges qu'avec trois
+     * magasins et vingt charges de plusieurs types, réparties entre toute
+     * la société et chaque magasin, chacune avec sa pièce et ses lignes.
+     */
+    public function test_la_page_des_charges_lit_la_base_autant_de_fois_avec_un_magasin_et_deux_charges_ou_trois_et_vingt(): void
+    {
+        Storage::fake(PiecesDesCharges::DISQUE);
+        $societe = $this->magasin->societe;
+        $proprietaire = $this->proprietaireDe($this->magasin);
+        $adresse = Charges::getUrl(panel: 'societe', tenant: $societe);
+        $magasins = [$this->magasin];
+        $types = ['loyer', 'electricite', 'gaz', 'eau', 'assurances', 'honoraires', 'fournitures', 'carburant'];
+        $requetes = [];
+        $deposees = 0;
+
+        foreach ([[1, 2], [3, 20]] as [$nombreDeMagasins, $nombreDeCharges]) {
+            while (count($magasins) < $nombreDeMagasins) {
+                $magasins[] = $this->ouvrirUnAutreMagasin($this->magasin, ['nom' => 'Boutique '.count($magasins), 'code' => 'BOUT'.count($magasins)]);
+            }
+
+            for (; $deposees < $nombreDeCharges; $deposees++) {
+                app(TenantContext::class)->clear();
+                app(DeposerUneChargeAction::class)->handle($proprietaire, $societe, SaisieDeCharge::duFormulaire([
+                    'type' => 'piliqi:'.$types[$deposees % count($types)],
+                    'fournisseur' => 'Fournisseur '.$deposees,
+                    'numero_piece' => 'P-'.$deposees,
+                    'date_piece' => '2026-0'.(1 + $deposees % 5).'-02',
+                    'magasin' => $deposees % 2 === 0 ? null : (string) $magasins[$deposees % count($magasins)]->uuid,
+                    'lignes' => [['taux' => '2000', 'ht' => '100,00'], ['taux' => '550', 'ht' => '10,00']],
+                ]), new PieceDeposee('piece-'.$deposees.'.pdf', FichiersDeTest::pdf('Pièce '.$deposees)));
+            }
+
+            app(TenantContext::class)->clear();
+            $this->flushSession();
+            $this->actingAs($proprietaire);
+            $this->get($adresse)->assertOk();
+            $requetes[$nombreDeMagasins] = $this->requetes(fn () => $this->get($adresse)->assertOk()->assertSee('Ce qui est déjà saisi')->assertSee('P-'.($nombreDeCharges - 1)));
+        }
+
+        $this->assertSame($requetes[1], $requetes[3], 'La page des charges lit la base une fois de plus par magasin ou par charge.');
+        $this->assertLessThanOrEqual(45, $requetes[3]);
+    }
+
+    /**
+     * Le tableau de bord d'un cabinet d'expertise comptable (chaque client
+     * lié, avec les factures à encaisser de ses magasins) lit la base autant
+     * de fois pour son propriétaire avec un client ou trois.
+     */
+    public function test_le_tableau_de_bord_du_cabinet_lit_la_base_autant_de_fois_avec_un_client_ou_trois(): void
+    {
+        $cabinet = $this->ouvrirUnCabinet();
+        $proprietaire = $this->proprietaireDuCabinet($cabinet);
+        $adresse = TableauDeBordDuCabinet::getUrl(panel: 'cabinet', tenant: $cabinet);
+        $clients = [$this->magasin];
+        $this->lierLeCabinet($cabinet, $this->magasin);
+        $this->remplirLaCaisseEtLesFactures($this->magasin);
+        $requetes = [];
+
+        foreach ([1, 3] as $nombre) {
+            while (count($clients) < $nombre) {
+                $client = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Cliente '.count($clients), 'raison_sociale' => 'CLIENTE '.count($clients)]));
+                $this->remplirLaCaisseEtLesFactures($client);
+                $this->lierLeCabinet($cabinet, $client);
+                $clients[] = $client;
+            }
+
+            app(TenantContext::class)->clear();
+            $this->actingAs($proprietaire);
+            $this->get($adresse)->assertOk();
+            $requetes[$nombre] = $this->requetes(fn () => $this->get($adresse)->assertOk()->assertSee($clients[$nombre - 1]->societe()->firstOrFail()->raison_sociale));
+        }
+
+        $this->assertSame($requetes[1], $requetes[3], 'Le tableau de bord du cabinet lit la base une fois de plus par client.');
+        $this->assertLessThanOrEqual(60, $requetes[3]);
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function ecransDesGraphiques(): array
+    {
+        return [
+            'espace de la société' => [EcranDuTableauDeBord::Societe->value],
+            'panneau d’un magasin' => [EcranDuTableauDeBord::Magasin->value],
+            'page d’un client du cabinet' => [EcranDuTableauDeBord::Cabinet->value],
+            'page de l’expert-comptable déclaré' => [EcranDuTableauDeBord::ExpertComptable->value],
+        ];
+    }
+
+    /**
+     * Les chiffres clés et la grille de graphiques (décision de l'éditeur
+     * du 14/11/2026, lot GRAPH, et du 21/11/2026 pour l'écart des prix d'achat),
+     * avec les dix-neuf graphiques affichés et
+     * la comparaison cochée : chaque source se lit au plus une fois par
+     * page, quel que soit le nombre de cartes, et la grille lit la base
+     * autant de fois avec un magasin ou trois (dans le panneau d'un
+     * magasin, avec les documents d'une journée ou de trois), sous un
+     * plafond qui n'en dépend pas, pour le propriétaire, le propriétaire du
+     * cabinet lié et l'expert-comptable déclaré.
+     */
+    #[DataProvider('ecransDesGraphiques')]
+    public function test_la_grille_des_graphiques_lit_la_base_autant_de_fois_avec_un_magasin_ou_trois(string $ecran): void
+    {
+        $societe = $this->magasin->societe;
+        $compte = match (EcranDuTableauDeBord::from($ecran)) {
+            EcranDuTableauDeBord::Societe, EcranDuTableauDeBord::Magasin => $this->proprietaireDe($this->magasin),
+            EcranDuTableauDeBord::Cabinet => $this->proprietaireDuCabinet($cabinet = $this->ouvrirUnCabinet()),
+            EcranDuTableauDeBord::ExpertComptable => $this->expertComptable($this->magasin),
+        };
+        $lien = isset($cabinet) ? $this->lierLeCabinet($cabinet, $this->magasin) : null;
+        $magasins = [$this->magasin];
+        $this->remplirLaCaisseEtLesFactures($this->magasin);
+        $requetes = [];
+
+        foreach ([1, 3] as $nombre) {
+            app(TenantContext::class)->clear();
+
+            while (count($magasins) < $nombre) {
+                $magasins[] = $this->ouvrirUnAutreMagasin($this->magasin, ['nom' => 'Boutique '.count($magasins), 'code' => 'BOUT'.count($magasins)]);
+                $this->remplirLaCaisseEtLesFactures($ecran === EcranDuTableauDeBord::Magasin->value ? $this->magasin : $magasins[count($magasins) - 1]);
+            }
+
+            match (EcranDuTableauDeBord::from($ecran)) {
+                EcranDuTableauDeBord::Societe => $this->dansLEspaceDeLaSociete($societe, $compte),
+                EcranDuTableauDeBord::Cabinet => $this->dansLEspaceDuCabinet($compte->societe()->firstOrFail(), $compte),
+                EcranDuTableauDeBord::Magasin, EcranDuTableauDeBord::ExpertComptable => $this->dansLeMagasin($this->magasin, $compte),
+            };
+            $parametres = ['ecran' => $ecran, 'lien' => $lien === null ? null : (string) $lien->uuid];
+            $cartes = array_map(fn (Graphique $graphique): CarteDuTableauDeBord => CarteDuTableauDeBord::parDefaut($graphique), Graphique::cases());
+            app(PreferencesDesGraphiques::class)->enregistrer($compte, EcranDuTableauDeBord::from($ecran), new ReglagesDuTableauDeBord($cartes, comparer: true));
+            Livewire::test(GrilleDesGraphiques::class, $parametres)->assertSee('CA HT du mois');
+            $requetes[$nombre] = $this->requetes(fn () => Livewire::test(GrilleDesGraphiques::class, $parametres)->assertSee('Valeur du stock au coût moyen'));
+        }
+
+        $this->assertSame($requetes[1], $requetes[3], "La grille de l'écran {$ecran} lit la base une fois de plus par magasin.");
+        $this->assertLessThanOrEqual(45, $requetes[3], $ecran);
+    }
+
+    /**
+     * Dans ce magasin, une facture à encaisser, une vente au comptant dont
+     * la caisse est fermée (un relevé), puis une autre qui la laisse
+     * ouverte.
+     */
+    private function remplirLaCaisseEtLesFactures(Magasin $magasin): void
+    {
+        app(TenantContext::class)->runAs($magasin, function () use ($magasin): void {
+            $responsable = self::responsableDeTest($magasin);
+            $produit = Produit::factory()->create(['prix_vente_ttc' => '12.50', 'taux_tva' => 20, 'suivi_stock' => false]);
+            $client = Client::factory()->professionnel()->create();
+            app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, $client, [['produit_id' => $produit->getKey(), 'quantite' => 1]]));
+            self::vendreAuComptant($responsable, $client, [['produit_id' => $produit->getKey(), 'quantite' => 1]]);
+            app(FermerSaCaisseAction::class)->handle($responsable, $responsable);
+            self::vendreAuComptant($responsable, $client, [['produit_id' => $produit->getKey(), 'quantite' => 2]]);
+        });
+    }
+
+    /**
+     * Jusqu'à $lignes ventes, paiements, avoirs, clients, produits, factures
+     * d'achat et clôtures dans le magasin, une par jour.
+     */
+    private function remplir(int $lignes): void
+    {
+        $fournisseur = Fournisseur::query()->first() ?? Fournisseur::factory()->create();
+
+        while (Facture::query()->count() < $lignes) {
+            $this->travelTo(self::aParis(Calendrier::ajouterJours('2026-10-01', ++$this->jour).' 10:00:00'));
+            $produit = Produit::factory()->create(['prix_vente_ttc' => '12.50', 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 10]);
+            $client = Client::factory()->create();
+            $vente = self::vendreAuComptant($this->responsable, $client, [['produit_id' => $produit->getKey(), 'quantite' => 2]], ModePaiement::CarteBancaire);
+            app(EnregistrerAvoirAction::class)->handle($this->responsable, $client, [['ligne_facture_id' => $vente->lignes()->value('id'), 'quantite' => 1]], 'Retour');
+            app(ValiderFactureAchatAction::class)->handle($this->responsable, app(CreerFactureAchatAction::class)->handle($this->responsable, $fournisseur, [
+                ['produit_id' => $produit->getKey(), 'quantite' => 3, 'prix_unitaire_ht' => '5.00', 'taux_tva' => 20],
+            ], ['date_facture' => now()->format('Y-m-d')]));
+            app(CloturerCaisseAction::class)->handle($this->responsable, $this->magasin, $this->magasin->calendrier()->aujourdhui());
+        }
+    }
+
+    private function requetes(Closure $geste): int
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $geste();
+        $nombre = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return $nombre;
+    }
+}

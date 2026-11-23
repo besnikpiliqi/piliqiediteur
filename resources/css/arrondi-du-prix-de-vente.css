@@ -1,0 +1,247 @@
+/*
+ * La partie « Arrondir le prix de vente » de la page « Prix de vente » (voir
+ * App\Filament\App\Pages\ParametresPrixDeVente), au modèle validé par
+ * l'éditeur le 22/11/2026, écrite à la main avec les teintes du thème de
+ * Filament, en clair et en sombre (contraste AA) : chaque formule est une
+ * carte, celle qui est choisie a le fond et le filet de l'accent ; « Essayer
+ * le barème » montre le prix avant et après l'arrondi, le détail du calcul
+ * dans un encadré gris et le tableau d'exemples dans un cadre qui défile de
+ * côté sur un téléphone.
+ */
+.piliqi-arrondi__formules.fi-fo-radio {
+    gap: 0.5rem;
+    margin-top: 0;
+}
+
+.piliqi-arrondi__formules > div {
+    padding-top: 0;
+}
+
+.piliqi-arrondi__formules > div > label {
+    background: rgb(var(--gray-50));
+    border: 1px solid rgb(var(--gray-500));
+    border-radius: 0.5rem;
+    cursor: pointer;
+    padding: 0.75rem 0.875rem;
+}
+
+.dark .piliqi-arrondi__formules > div > label {
+    background: rgb(var(--gray-900));
+    border-color: rgb(var(--gray-500));
+}
+
+.piliqi-arrondi__formules > div > label:has(input:checked) {
+    background: rgb(var(--primary-50));
+    border-color: rgb(var(--primary-600));
+    box-shadow: inset 0 0 0 1px rgb(var(--primary-600));
+}
+
+.dark .piliqi-arrondi__formules > div > label:has(input:checked) {
+    background: rgb(var(--primary-950));
+    border-color: rgb(var(--primary-400));
+    box-shadow: inset 0 0 0 1px rgb(var(--primary-400));
+}
+
+.piliqi-arrondi__formules > div > label:has(input:focus-visible) {
+    outline: 2px solid rgb(var(--primary-600));
+    outline-offset: 2px;
+}
+
+.dark .piliqi-arrondi__formules > div > label:has(input:focus-visible) {
+    outline-color: rgb(var(--primary-400));
+}
+
+.piliqi-arrondi__formules p {
+    color: rgb(var(--gray-600));
+}
+
+.dark .piliqi-arrondi__formules p {
+    color: rgb(var(--gray-400));
+}
+
+.piliqi-arrondi {
+    display: grid;
+    gap: 1rem;
+}
+
+.piliqi-arrondi__resultats {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.piliqi-arrondi__resultat {
+    align-content: start;
+    display: grid;
+    gap: 0.375rem;
+    min-width: 0;
+}
+
+.piliqi-arrondi__etiquette {
+    color: rgb(var(--gray-700));
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.dark .piliqi-arrondi__etiquette {
+    color: rgb(var(--gray-300));
+}
+
+.piliqi-arrondi__valeur {
+    color: rgb(var(--gray-950));
+    font-size: 1.125rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    line-height: 1.75rem;
+    overflow-wrap: anywhere;
+}
+
+.dark .piliqi-arrondi__valeur {
+    color: #fff;
+}
+
+.piliqi-arrondi__valeur--arrondi {
+    color: rgb(var(--primary-700));
+}
+
+.dark .piliqi-arrondi__valeur--arrondi {
+    color: rgb(var(--primary-300));
+}
+
+.piliqi-arrondi__detail {
+    background: rgb(var(--gray-100));
+    border-radius: 0.5rem;
+    color: rgb(var(--gray-700));
+    display: grid;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+    gap: 0.25rem;
+    padding: 0.75rem 0.875rem;
+}
+
+.dark .piliqi-arrondi__detail {
+    background: rgb(var(--gray-800));
+    color: rgb(var(--gray-300));
+}
+
+.piliqi-arrondi__gris {
+    color: rgb(var(--gray-600));
+    font-size: 0.8125rem;
+}
+
+.dark .piliqi-arrondi__gris {
+    color: rgb(var(--gray-400));
+}
+
+.piliqi-arrondi__exemples {
+    border-top: 1px solid rgb(var(--gray-200));
+    display: grid;
+    gap: 0.75rem;
+    padding-top: 1.25rem;
+}
+
+.dark .piliqi-arrondi__exemples {
+    border-top-color: rgb(var(--gray-800));
+}
+
+.piliqi-arrondi__titre {
+    color: rgb(var(--gray-950));
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+}
+
+.dark .piliqi-arrondi__titre {
+    color: #fff;
+}
+
+.piliqi-arrondi__cadre {
+    border: 1px solid rgb(var(--gray-300));
+    border-radius: 0.5rem;
+    overflow-x: auto;
+}
+
+.dark .piliqi-arrondi__cadre {
+    border-color: rgb(var(--gray-700));
+}
+
+.piliqi-arrondi__cadre:focus-visible {
+    outline: 2px solid rgb(var(--primary-600));
+    outline-offset: 2px;
+}
+
+.dark .piliqi-arrondi__cadre:focus-visible {
+    outline-color: rgb(var(--primary-400));
+}
+
+.piliqi-arrondi__tableau {
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+    width: 100%;
+}
+
+.piliqi-arrondi__tableau th,
+.piliqi-arrondi__tableau td {
+    padding: 0.5rem 0.75rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.piliqi-arrondi__tableau th:first-child,
+.piliqi-arrondi__tableau td:first-child {
+    text-align: left;
+}
+
+.piliqi-arrondi__tableau thead th {
+    background: rgb(var(--gray-100));
+    color: rgb(var(--gray-700));
+    font-weight: 600;
+    vertical-align: bottom;
+    white-space: normal;
+}
+
+.dark .piliqi-arrondi__tableau thead th {
+    background: rgb(var(--gray-800));
+    color: rgb(var(--gray-300));
+}
+
+.piliqi-arrondi__tableau tbody tr + tr td {
+    border-top: 1px solid rgb(var(--gray-200));
+}
+
+.dark .piliqi-arrondi__tableau tbody tr + tr td {
+    border-top-color: rgb(var(--gray-800));
+}
+
+.piliqi-arrondi__tableau td {
+    color: rgb(var(--gray-950));
+}
+
+.dark .piliqi-arrondi__tableau td {
+    color: #fff;
+}
+
+.piliqi-arrondi__tableau td.piliqi-arrondi__apres {
+    font-weight: 600;
+}
+
+.piliqi-arrondi__tableau tr.piliqi-arrondi__ligne--inchangee td {
+    color: rgb(var(--gray-600));
+    font-weight: 400;
+}
+
+.dark .piliqi-arrondi__tableau tr.piliqi-arrondi__ligne--inchangee td {
+    color: rgb(var(--gray-400));
+}
+
+@media (max-width: 30rem) {
+    .piliqi-arrondi__resultats {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .piliqi-arrondi__tableau th,
+    .piliqi-arrondi__tableau td {
+        padding: 0.5rem;
+    }
+}

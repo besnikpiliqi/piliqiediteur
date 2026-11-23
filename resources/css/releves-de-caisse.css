@@ -1,0 +1,32 @@
+/*
+ * La cellule « Encaissé » des relevés de caisse (voir
+ * resources/views/filament/encaisse-par-mode.blade.php) : une ligne par
+ * mode, l'abréviation à gauche, le montant aligné à droite, jamais coupé
+ * avant son « € », puis la ligne « Total » en gras quand il y a plusieurs
+ * modes. Le bloc suit l'alignement de sa cellule.
+ */
+.piliqi-encaisse {
+    column-gap: 0.5rem;
+    display: inline-grid;
+    grid-template-columns: auto auto;
+    vertical-align: top;
+}
+
+.piliqi-encaisse__mode {
+    text-align: start;
+}
+
+abbr.piliqi-encaisse__mode {
+    cursor: help;
+    text-decoration: none;
+}
+
+.piliqi-encaisse__montant {
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+    white-space: nowrap;
+}
+
+.piliqi-encaisse__total {
+    font-weight: 600;
+}

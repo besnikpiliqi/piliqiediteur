@@ -1,0 +1,13 @@
+/*
+ * Le pied de chaque page des deux sites (voir
+ * resources/views/pied-de-page-du-site.blade.php) : la version servie et
+ * le site, en petit, au centre. Une feuille du site plutôt qu'un attribut
+ * style, que la politique de contenu stricte de la page du lien d'une
+ * démonstration (/d) refuse.
+ */
+.piliqi-pied-du-site {
+    color: inherit;
+    font-size: 0.75rem;
+    margin: 2rem auto 1rem;
+    text-align: center;
+}

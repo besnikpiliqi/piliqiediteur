@@ -1,0 +1,44 @@
+/*
+ * Les textes que Filament écrit trop pâles pour le contraste AA (décision
+ * de l'éditeur du 15/11/2026 : chaque écran se lit aussi bien en clair
+ * qu'en sombre, 4,5:1 pour un texte ; voir ContrasteDesDeuxModesTest) :
+ * le texte de remplacement d'une colonne ou d'une entrée vide (« Toute la
+ * société », « Non renseignée »), en gris 400 sur fond blanc et en gris
+ * 500 sur fond sombre, passe au gris 500 en clair et au gris 400 en
+ * sombre, comme les autres textes secondaires (sélecteurs qualifiés par
+ * leur balise, pour l'emporter sur les classes de Filament) ; le texte que
+ * le formulaire d'une vente ou d'un achat met en évidence (crédit
+ * disponible du client, quantité déjà retournée ; voir
+ * ClientResource::enEvidence()) reste orangé, plus clair en sombre ; et le
+ * texte d'attente d'un menu déroulant à recherche (« Sélectionnez une
+ * option ») se lit comme les autres textes secondaires. Les couleurs des boutons,
+ * des pastilles et des liens viennent des palettes lisibles des panneaux
+ * (voir App\Filament\CouleursLisibles).
+ */
+div.fi-ta-placeholder,
+div.fi-in-placeholder {
+    color: rgb(var(--gray-500));
+}
+
+.dark div.fi-ta-placeholder,
+.dark div.fi-in-placeholder {
+    color: rgb(var(--gray-400));
+}
+
+.piliqi-en-evidence {
+    color: #c2410c;
+    font-weight: 600;
+}
+
+.dark .piliqi-en-evidence {
+    color: #fb923c;
+}
+
+.fi-input-wrp .choices__placeholder.choices__item {
+    color: rgb(var(--gray-500));
+    opacity: 1;
+}
+
+.dark .fi-input-wrp .choices__placeholder.choices__item {
+    color: rgb(var(--gray-400));
+}

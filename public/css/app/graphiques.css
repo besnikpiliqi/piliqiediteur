@@ -1,0 +1,570 @@
+/*
+ * Les chiffres clés et la grille des graphiques du tableau de bord (voir
+ * App\Filament\GrilleDesGraphiques), écrits à la main avec les teintes du
+ * thème de Filament, en clair et en sombre : quatre chiffres sur une
+ * rangée qui se replie, puis les filtres, puis deux colonnes de cartes sur
+ * grand écran, une seule sur téléphone. La carte « Écart des prix
+ * d'achat » (décision de l'éditeur du 21/11/2026, D76, B7), qui n'a pas de
+ * canevas, a ses règles à la fin de cette feuille : celles de la feuille de
+ * style de la maquette validée, sous le préfixe
+ * piliqi-graphiques__ecart-, avec ses jetons de couleur (clair et sombre)
+ * en variables de la carte ; le fond, la bordure et le texte restent ceux
+ * des autres cartes.
+ */
+.piliqi-graphiques__chiffres {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+    gap: 0.75rem;
+}
+
+.piliqi-graphiques__chiffre,
+.piliqi-graphiques__carte {
+    background: #fff;
+    border-radius: 0.75rem;
+    box-shadow: 0 0 0 1px rgba(var(--gray-950), 0.05), 0 1px 2px rgba(0, 0, 0, 0.05);
+    min-width: 0;
+}
+
+.dark .piliqi-graphiques__chiffre,
+.dark .piliqi-graphiques__carte {
+    background: rgb(var(--gray-900));
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.piliqi-graphiques__chiffre {
+    padding: 0.75rem 1rem;
+}
+
+.piliqi-graphiques__libelle {
+    align-items: center;
+    color: rgb(var(--gray-600));
+    display: flex;
+    font-size: 0.8125rem;
+    gap: 0.25rem;
+}
+
+.piliqi-graphiques__valeur {
+    font-size: 1.25rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+.piliqi-graphiques__precision,
+.piliqi-graphiques__gris {
+    color: rgb(var(--gray-600));
+    font-size: 0.8125rem;
+}
+
+.dark .piliqi-graphiques__libelle,
+.dark .piliqi-graphiques__precision,
+.dark .piliqi-graphiques__gris {
+    color: rgb(var(--gray-400));
+}
+
+.piliqi-graphiques__filtres {
+    align-items: flex-end;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+    margin-block: 1rem;
+}
+
+.piliqi-graphiques__filtre {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.875rem;
+    gap: 0.25rem;
+}
+
+.piliqi-graphiques__case {
+    align-items: center;
+    display: flex;
+    font-size: 0.875rem;
+    gap: 0.5rem;
+    min-height: 2.25rem;
+}
+
+.piliqi-graphiques__grille {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1280px) {
+    .piliqi-graphiques__grille {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.piliqi-graphiques__carte {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+}
+
+/*
+ * L'en-tête d'une carte (constat de l'éditeur du 15/11/2026) : le titre
+ * prend la place qui reste à gauche et passe à la ligne dans sa propre
+ * colonne ; le type, « Monter », « Descendre » et la croix restent
+ * ensemble sur la première ligne, à droite, alignés en haut, sans jamais
+ * passer à la ligne ni bouger, quelle que soit la longueur du titre. Sur
+ * un téléphone, ils passent sous le titre, tous sur une ligne, la croix
+ * toujours à droite ; le menu du type se resserre au besoin.
+ */
+.piliqi-graphiques__tete {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+}
+
+.piliqi-graphiques__titre {
+    flex: 1 1 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.5rem;
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    padding-block: 0.375rem;
+}
+
+.piliqi-graphiques__commandes {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+}
+
+/* « Monter » et « Descendre » à la hauteur du menu du type et de la croix. */
+.piliqi-graphiques__commandes .fi-btn {
+    min-height: 2.25rem;
+}
+
+/*
+ * Le menu du type à la largeur du type choisi, là où le navigateur le
+ * permet, pour laisser au titre le plus de place possible ; ailleurs, à
+ * celle du plus long type.
+ */
+.piliqi-graphiques__type select {
+    field-sizing: content;
+}
+
+@media (max-width: 639px) {
+    .piliqi-graphiques__tete {
+        flex-wrap: wrap;
+    }
+
+    .piliqi-graphiques__titre {
+        flex-basis: 100%;
+        padding-block: 0;
+    }
+
+    .piliqi-graphiques__commandes {
+        flex: 1 1 100%;
+        justify-content: flex-end;
+        min-width: 0;
+    }
+
+    .piliqi-graphiques__type {
+        flex: 0 1 auto;
+        min-width: 0;
+    }
+}
+
+.piliqi-graphiques__mesure {
+    display: flex;
+}
+
+.piliqi-graphiques__zone {
+    height: 16rem;
+    position: relative;
+}
+
+/*
+ * Le canevas d'un graphique ne dépasse jamais sa carte : quand la fenêtre
+ * rétrécit, Chart.js ne le redimensionne qu'à l'image suivante, et sa
+ * largeur d'avant faisait déborder chaque carte jusque-là (CI rouge de
+ * d15af36, à 1 280 px).
+ */
+.piliqi-graphiques__zone canvas {
+    max-width: 100%;
+}
+
+.piliqi-graphiques__chiffres-de-la-carte {
+    overflow-x: auto;
+}
+
+.piliqi-graphiques__chiffres-de-la-carte table {
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    width: 100%;
+}
+
+.piliqi-graphiques__chiffres-de-la-carte th,
+.piliqi-graphiques__chiffres-de-la-carte td {
+    border-bottom: 1px solid rgba(var(--gray-950), 0.08);
+    padding: 0.25rem 0.5rem;
+    text-align: start;
+    white-space: nowrap;
+}
+
+.dark .piliqi-graphiques__chiffres-de-la-carte th,
+.dark .piliqi-graphiques__chiffres-de-la-carte td {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.piliqi-graphiques__chiffres-de-la-carte td.piliqi-graphiques__montant {
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+}
+
+/*
+ * La carte « Écart des prix d'achat ». Les jetons de la maquette (orange =
+ * payé plus cher, vert = payé moins cher) sont des variables de la carte,
+ * que lit aussi le `svg` écrit par le serveur (var(--plus), var(--moins),
+ * var(--doux), var(--grille), var(--texte), var(--carte)) ; --texte et
+ * --carte sont le texte et le fond des autres cartes.
+ */
+.piliqi-graphiques__carte--ecart {
+    --carte: #fff;
+    --texte: rgb(var(--gray-950));
+    --doux: rgb(var(--gray-600));
+    --bord: rgba(var(--gray-950), 0.12);
+    --plus: #c2410c;
+    --plus-fond: #fdeee4;
+    --moins: #0b7a5a;
+    --moins-fond: #e3f3ec;
+    --neutre-fond: #eceeed;
+    --grille: #e6e9e7;
+    --total-fond: #f4f6f5;
+    gap: 0.875rem;
+}
+
+.dark .piliqi-graphiques__carte--ecart {
+    --carte: rgb(var(--gray-900));
+    --texte: #fff;
+    --doux: rgb(var(--gray-400));
+    --bord: rgba(255, 255, 255, 0.14);
+    --plus: #f59e6b;
+    --plus-fond: #3d2615;
+    --moins: #4cc79d;
+    --moins-fond: #173a2e;
+    --neutre-fond: #232b28;
+    --grille: #29322e;
+    --total-fond: #1e2523;
+}
+
+.piliqi-graphiques__carte--ecart [hidden] {
+    display: none !important;
+}
+
+/* La vue de la carte (sa donnée Alpine `mois`) n'est pas une boîte : ses blocs restent ceux de la carte. */
+.piliqi-graphiques__ecart-vues {
+    display: contents;
+}
+
+.piliqi-graphiques__ecart-menu {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    gap: 0.5rem 0.625rem;
+}
+
+.piliqi-graphiques__ecart-menu .fi-input-wrp {
+    flex: 1 1 14rem;
+    min-width: 0;
+}
+
+.piliqi-graphiques__ecart-menu select {
+    font-weight: 600;
+    max-width: 100%;
+    text-overflow: ellipsis;
+}
+
+.piliqi-graphiques__ecart-mois {
+    color: var(--doux);
+    font-size: 0.8125rem;
+}
+
+.piliqi-graphiques__ecart-chiffre {
+    align-items: baseline;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.875rem;
+}
+
+.piliqi-graphiques__ecart-grand {
+    font-size: 1.875rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.piliqi-graphiques__ecart-grand.piliqi-graphiques__ecart-plus {
+    color: var(--plus);
+}
+
+.piliqi-graphiques__ecart-grand.piliqi-graphiques__ecart-moins {
+    color: var(--moins);
+}
+
+.piliqi-graphiques__ecart-pastille {
+    border-radius: 999px;
+    display: inline-block;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    padding: 0.1875rem 0.625rem;
+}
+
+.piliqi-graphiques__ecart-pastille.piliqi-graphiques__ecart-plus {
+    background: var(--plus-fond);
+    color: var(--plus);
+}
+
+.piliqi-graphiques__ecart-pastille.piliqi-graphiques__ecart-moins {
+    background: var(--moins-fond);
+    color: var(--moins);
+}
+
+.piliqi-graphiques__ecart-pastille.piliqi-graphiques__ecart-neutre {
+    background: var(--neutre-fond);
+    color: var(--doux);
+}
+
+.piliqi-graphiques__ecart-bloc {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+}
+
+.piliqi-graphiques__ecart-dessin {
+    display: block;
+    height: auto;
+    width: 100%;
+}
+
+.piliqi-graphiques__ecart-dessin .colonne {
+    cursor: pointer;
+}
+
+.piliqi-graphiques__ecart-dessin .colonne:focus-visible {
+    outline: none;
+}
+
+.piliqi-graphiques__ecart-dessin .colonne:focus-visible .focus {
+    stroke: var(--texte);
+    stroke-width: 2;
+}
+
+.piliqi-graphiques__ecart-legende {
+    color: var(--doux);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.8125rem;
+    gap: 0.375rem 1.125rem;
+}
+
+.piliqi-graphiques__ecart-legende span::before {
+    border-radius: 3px;
+    content: "";
+    display: inline-block;
+    height: 11px;
+    margin-right: 6px;
+    vertical-align: -1px;
+    width: 11px;
+}
+
+.piliqi-graphiques__ecart-l-plus::before {
+    background: var(--plus);
+}
+
+.piliqi-graphiques__ecart-l-moins::before {
+    background: var(--moins);
+}
+
+.piliqi-graphiques__ecart-l-net::before {
+    background: var(--texte);
+    border-radius: 1px;
+    height: 9px;
+    margin-right: 8px;
+    transform: rotate(45deg);
+    width: 9px;
+}
+
+.piliqi-graphiques__ecart-duo {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.piliqi-graphiques__ecart-stat {
+    border: 1px solid var(--bord);
+    border-radius: 0.625rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+    padding: 0.75rem 0.875rem;
+}
+
+.piliqi-graphiques__ecart-stat-nom {
+    color: var(--doux);
+    font-size: 0.8125rem;
+}
+
+.piliqi-graphiques__ecart-stat-val {
+    font-size: 1.25rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+.piliqi-graphiques__ecart-liens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.375rem;
+}
+
+.piliqi-graphiques__ecart-titre-du-calcul {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.piliqi-graphiques__ecart-notes {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.piliqi-graphiques__ecart-defiler {
+    overflow-x: auto;
+}
+
+.piliqi-graphiques__ecart-defiler.piliqi-graphiques__ecart-long {
+    max-height: 460px;
+    overflow-y: auto;
+    scroll-padding-top: 52px;
+}
+
+.piliqi-graphiques__ecart-defiler.piliqi-graphiques__ecart-long thead th {
+    background: var(--carte);
+    box-shadow: inset 0 -1px 0 var(--bord);
+    position: sticky;
+    top: 0;
+}
+
+.piliqi-graphiques__ecart-defiler table {
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+    width: 100%;
+}
+
+.piliqi-graphiques__ecart-defiler th,
+.piliqi-graphiques__ecart-defiler td {
+    border-bottom: 1px solid var(--bord);
+    font-size: 0.8125rem;
+    padding: 0.5rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.piliqi-graphiques__ecart-defiler th:first-child,
+.piliqi-graphiques__ecart-defiler td:first-child {
+    text-align: left;
+}
+
+.piliqi-graphiques__ecart-defiler th {
+    color: var(--doux);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.piliqi-graphiques__ecart-calcul th {
+    vertical-align: bottom;
+    white-space: normal;
+}
+
+.piliqi-graphiques__ecart-defiler tr.piliqi-graphiques__ecart-total td {
+    border-bottom: 0;
+    font-weight: 700;
+}
+
+.piliqi-graphiques__ecart-defiler tr.piliqi-graphiques__ecart-soustotal td {
+    border-top: 1px solid var(--doux);
+    font-weight: 700;
+}
+
+.piliqi-graphiques__ecart-calcul .piliqi-graphiques__ecart-long tr.piliqi-graphiques__ecart-soustotal td {
+    border-top: 2px solid var(--doux);
+}
+
+.piliqi-graphiques__ecart-calcul .piliqi-graphiques__ecart-long tr.piliqi-graphiques__ecart-total td {
+    background: var(--total-fond);
+    border-top: 3px solid var(--doux);
+}
+
+.piliqi-graphiques__ecart-defiler tr.piliqi-graphiques__ecart-soustotal td.piliqi-graphiques__ecart-mention,
+.piliqi-graphiques__ecart-defiler tr.piliqi-graphiques__ecart-total td.piliqi-graphiques__ecart-mention {
+    color: var(--doux);
+    font-size: 0.75rem;
+    font-weight: 400;
+}
+
+.piliqi-graphiques__ecart-defiler td.piliqi-graphiques__ecart-plus {
+    color: var(--plus);
+    font-weight: 600;
+}
+
+.piliqi-graphiques__ecart-defiler td.piliqi-graphiques__ecart-moins {
+    color: var(--moins);
+    font-weight: 600;
+}
+
+.piliqi-graphiques__ecart-defiler td.piliqi-graphiques__ecart-vide {
+    color: var(--doux);
+    text-align: left;
+}
+
+.piliqi-graphiques__ecart-defiler td.piliqi-graphiques__ecart-tiret {
+    color: var(--doux);
+}
+
+/*
+ * L'alerte de la grille (décision de l'éditeur du 23/11/2026) : un geste de
+ * préférence que le serveur n'a pas pu retenir (réseau coupé, erreur) remet
+ * l'écran à ce qui est enregistré et le dit ici, sans passer par le serveur ;
+ * le texte reste lisible en clair et en sombre.
+ */
+.piliqi-graphiques__alerte {
+    align-items: flex-start;
+    background: rgb(var(--danger-50));
+    border-radius: 0.5rem;
+    box-shadow: 0 0 0 1px rgb(var(--danger-300));
+    color: rgb(var(--danger-900));
+    display: flex;
+    font-size: 0.875rem;
+    gap: 0.75rem;
+    justify-content: space-between;
+    margin-block: 0.75rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.dark .piliqi-graphiques__alerte {
+    background: rgba(var(--danger-500), 0.15);
+    box-shadow: 0 0 0 1px rgba(var(--danger-400), 0.5);
+    color: rgb(var(--danger-200));
+}
+
+.piliqi-graphiques__alerte-fermer {
+    color: inherit;
+    font-size: 1.25rem;
+    line-height: 1;
+    padding: 0 0.25rem;
+}

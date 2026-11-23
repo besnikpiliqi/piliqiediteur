@@ -6825,3 +6825,7 @@ et pour ceux qui passe de franchisse en regim normal alors pour leur tva il faut
 
 tu arret tout ce que t es en train de faire et tu sauvegarde tout  pour recommencer quand je te dit
 
+## 618. 2026-11-23 22:47 UTC
+
+je sais pas si t as mis dans piliq ca " Régime particulier – Biens d’occasion – Article 297 A du CGI » " car je t avais dit pour les produit acheté chez le fournisseur qui vend des produit tva sur mage mais meme aux particulier ca devrais fonctioner?
+

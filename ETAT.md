@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 23/11/2026 à 10:25 UTC par pilotage-sync.sh : « Arrêt demandé par l'éditeur le 23/11/2026 : sauvegarde complète et notes de reprise [skip ci] ».
+Mis à jour le 23/11/2026 à 22:51 UTC par pilotage-sync.sh : « Notes de reprise : question sur la TVA sur la marge (297 A), rien n'est codé [skip ci] ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

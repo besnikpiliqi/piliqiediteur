@@ -39,3 +39,12 @@ Droit relevé par Claude avant la course (WebSearch) : trois intitulés « Régi
 
 ### Moteur changé sur l'ordre de l'éditeur (23/11, « tu utilises fable pour cette maquette »)
 La course `wf_abd5f136-90e` (Opus) a été arrêtée au bout de cinq minutes, sans résultat. Nouvelle course **`wf_91673772-fe1`** (tâche `wewgcfi30`), même script, les six agents sur **Fable 5.2** (`model: 'fable'`). Pour la reprendre : `Workflow({scriptPath: ".../workflows/scripts/maquette-marge-wf_abd5f136-90e.js", resumeFromRunId: "wf_91673772-fe1"})` ; copie du script dans `scratchpad/reprises/maquette-marge.js`.
+
+### Texte donné par l'éditeur (23/11, « j'ai un texte à te donner pour ce genre de tva »)
+Copié tel quel dans `marge/texte-de-l-editeur.md` (et `maquettes/src-05/texte-de-l-editeur.md`). Il vient d'une autre source : matière à vérifier, pas des ordres. La course a été relancée pour le prendre en compte : **`wf_401140ea-ff3`** (tâche `wq3jyy43c`, Fable 5.2) ; la course `wf_91673772-fe1` a été arrêtée sans résultat. Les deux relevés juridiques vérifient chaque affirmation du texte (tableau vrai / faux / à nuancer / périmé, avec la source) ; la maquette reçoit une section 8 qui le commente.
+Ce que le texte apporte au lot, à confirmer par les relevés :
+- Deux conditions cumulatives de la marge : bien d'occasion (ou d'art, de collection, d'antiquité) ET achat sans TVA déductible. Un produit NEUF acheté sans TVA à un fournisseur en franchise en base se revend à la TVA normale sur tout le prix. Le menu de l'achat ne doit donc pas mélanger « la TVA de la facture du fournisseur » et « le régime de revente du produit » (vérifié dans le dépôt : la ligne d'achat et la fiche du produit ont chacune leur `taux_tva`).
+- Deux méthodes : opération par opération (c'est B, décidé) et globalisation. Conseil de Claude : PILIQI n'offre pas la globalisation. QUESTION POSÉE À L'ÉDITEUR.
+- Facture de vente mixte : deux parties nettes (marge sans taux ni TVA ; TVA normale avec son HT et sa TVA).
+- Livre de police (art. 321-7 du code pénal) : prévu à l'étape 14 (T75.1 à T75.3) ; le relevé dira s'il est dû aussi pour un achat à un professionnel, ce qui l'avancerait dans le lot de la marge.
+- Hors du lot : taux de Corse et taux particuliers des DOM, autoliquidation du BTP, guichet unique (OSS), clôture annuelle et FEC (étapes 3 et 5).

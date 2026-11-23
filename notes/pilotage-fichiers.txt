@@ -306,3 +306,4 @@ maquettes-sauvegarde/04-page-tva.html
 outils-sauvegarde/sauvegarde-arbre.sh
 outils-sauvegarde/fusion-mots.py
 marge/cahier.md
+marge/texte-de-l-editeur.md

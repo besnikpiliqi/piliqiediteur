@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 23/11/2026 à 23:25 UTC par pilotage-sync.sh : « Maquette de la marge : course relancée sur Fable (wf_91673772-fe1) [skip ci] ».
+Mis à jour le 23/11/2026 à 23:29 UTC par pilotage-sync.sh : « Marge : texte de l'éditeur enregistré, course relancée (wf_401140ea-ff3) [skip ci] ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

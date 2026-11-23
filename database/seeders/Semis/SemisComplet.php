@@ -18,8 +18,10 @@ use App\Domain\Cabinets\Enums\EtatDuLien;
 use App\Domain\Cabinets\Mail\InvitationDuCabinetMail;
 use App\Domain\Cabinets\Mail\LienDuMotDePasseDeLExpertComptableMail;
 use App\Domain\Cabinets\Models\LienCabinet;
+use App\Domain\Calendrier\Calendrier;
 use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Services\PanierDeCaisse;
+use App\Domain\Facturation\Support\TableDesMentionsDeTva;
 use App\Domain\Tenancy\Actions\ChangerSonMotDePasseAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
@@ -475,7 +477,7 @@ final class SemisComplet
             'propriétaire cabinet' => 'Espace du cabinet : clients liés, invitations et demandes dans chaque état, collaborateurs et clients confiés ; la page « Graphiques » de Maison Ferrand montre « Écart des prix d\'achat » de l\'année précédente sans geste',
             'Nadia Benali' => 'Administratrice sans vente : tableau de bord de la société avec graphiques (dont « Écart des prix d\'achat », à ajouter par « Ajouter un graphique »), charges qu\'elle ajoute, magasins de sa portée',
             'Thomas Girard' => 'Administrateur qui vend dans deux magasins : sa caisse aux Halles puis à la République, ses relevés ; sans la case des graphiques, il ne voit pas « Écart des prix d\'achat »',
-            'Camille Laurent' => 'Responsable des Halles : « À faire » (exports sans preuve, détaxe, devis), graphiques dont « Écart des prix d\'achat » par mois (set de table acheté de cinq façons, boule de Noël d\'un mois à venir, plateau renommé), charges du magasin, vente sans stock, facture rejetée par la plateforme agréée et facture non transmise (incident technique), envoi en échec et envoi en attente',
+            'Camille Laurent' => 'Responsable des Halles : « À faire » (exports sans preuve, détaxe, devis), graphiques dont « Écart des prix d\'achat » par mois (set de table acheté de cinq façons, boule de Noël d\'un mois à venir, plateau renommé), charges du magasin, vente sans stock, facture rejetée par la plateforme agréée et facture non transmise (incident technique), envoi en échec et envoi en attente'.$this->deLaBascule('un export hors de l\'Union, une livraison vers un DOM et une livraison intracommunautaire, et le lendemain l\'avoir d\'une tasse de l\'export de la veille'),
             'Lucas Moreau' => 'Vendeur des Halles : ses tickets, sa caisse fermée par sa responsable, ses factures d\'export et de détaxe',
             'Inès Garcia' => 'Vendeuse des Halles qui garde son identifiant : connexion seulement depuis le poste reconnu « Caisse des Halles »',
             'Hugo Lefebvre' => 'Responsable de la République : inventaire d\'ouverture, réassorts, avoir du Studio Nord ; saisit la lampe qui perd 210 €, le cadre photo archivé et la théière ; devis de dépannage à domicile (Paramètres > Factures et devis ; devis signé chez Sylvie Caron, devis acceptés en ligne par Laurent Chevalier et Françoise Blanc, brouillon sans lieu pour Françoise Blanc ; six e-mails de devis qui ne partent pas, chacun avec sa cause dans les envois de la fiche du devis et dans sa cloche : devis accepté au magasin, envoi remplacé par un second, lien retiré, devis refusé, devis expiré, envoi remplacé par un second dont le lien est retiré à son tour) ; sans la case des graphiques, il ne voit pas « Écart des prix d\'achat »',
@@ -483,7 +485,7 @@ final class SemisComplet
             'Sarah Petit' => 'Vendeuse de la République qui voit les factures de toute l\'équipe',
             'Léa Fontaine' => 'Administratrice sans vente de la société de services',
             'Antoine Roux' => 'Administrateur qui vend au magasin de services',
-            'Claire Dubois' => 'Responsable du magasin de services : prestations à l\'étranger (autoliquidation, hors UE), mairie, prélèvement, devis de dépannage informatique à domicile (devis signé chez Monique Faure, devis acceptés en ligne par Gérard Lambert et Nathalie Roy, brouillon sans lieu pour Nathalie Roy ; six e-mails de devis qui ne partent pas, chacun avec sa cause dans les envois de la fiche du devis et dans sa cloche : devis accepté au magasin, envoi remplacé par un second, lien retiré, devis refusé, devis expiré, envoi remplacé par un second dont le lien est retiré à son tour)',
+            'Claire Dubois' => 'Responsable du magasin de services : prestations à l\'étranger (autoliquidation, hors UE), mairie, prélèvement, devis de dépannage informatique à domicile (devis signé chez Monique Faure, devis acceptés en ligne par Gérard Lambert et Nathalie Roy, brouillon sans lieu pour Nathalie Roy ; six e-mails de devis qui ne partent pas, chacun avec sa cause dans les envois de la fiche du devis et dans sa cloche : devis accepté au magasin, envoi remplacé par un second, lien retiré, devis refusé, devis expiré, envoi remplacé par un second dont le lien est retiré à son tour)'.$this->deLaBascule('une prestation autoliquidée dans l\'Union et une prestation hors de l\'Union'),
             'Maxime Henry' => 'Vendeur de services : ses tickets à la caisse',
             'Julie Mercier' => 'Vendeuse de services : ses tickets à la caisse',
             'Paul Lefèvre' => 'Collaborateur du cabinet : Maison Ferrand confiée (ses six magasins), charges à valider et validées, graphiques du client dont « Écart des prix d\'achat »',
@@ -505,7 +507,7 @@ final class SemisComplet
             'Léna Roussel' => 'Accès redonné en son absence : son mot de passe est redevenu son identifiant',
             'propriétaire comptoir' => 'Cinq magasins : Martinique (8,5 %), Lyon fermé temporairement, Bordeaux rouvert, Nantes cédé, Lille suspendu ; transmission en attente',
             'Gaëlle Hoarau' => 'Administratrice à qui la propriété est proposée (lien pas encore suivi)',
-            'Joëlle Marie-Sainte' => 'Responsable de Maison Ferrand Fort-de-France : heure des Antilles, TVA à 8,5 % et 2,1 %, réassorts, loyer à 8,5 % dans les charges, un savon acheté deux fois dont l\'un reçu sans date le dernier soir d\'un mois (rangé au jour de sa validation en Martinique) ; sans la case des graphiques, elle ne voit pas « Écart des prix d\'achat »',
+            'Joëlle Marie-Sainte' => 'Responsable de Maison Ferrand Fort-de-France : heure des Antilles, TVA à 8,5 % et 2,1 %, réassorts, loyer à 8,5 % dans les charges, un savon acheté deux fois dont l\'un reçu sans date le dernier soir d\'un mois (rangé au jour de sa validation en Martinique) ; sans la case des graphiques, elle ne voit pas « Écart des prix d\'achat »'.$this->deLaBascule('un export vers Miami, celui de la veille à 20 h, quand Paris a déjà changé de jour'),
             'Kévin Louisy' => 'Vendeur de Maison Ferrand Fort-de-France : ses tickets à l\'heure de la Martinique',
             'Joël Sainte-Rose' => 'Responsable en Martinique : heure des Antilles, TVA à 8,5 % et 2,1 %',
             'Maëva Jean-Louis' => 'Vendeuse en Martinique : ses tickets à l\'heure locale',
@@ -513,7 +515,7 @@ final class SemisComplet
             'Inès Lafitte' => 'Responsable de Bordeaux : magasin fermé pour cessation puis rouvert',
             'Ronan Guillou' => 'Responsable de Nantes : magasin cédé, en lecture seule',
             'Chloé Vandamme' => 'Responsable de Lille : magasin suspendu par l\'éditeur, en lecture seule',
-            'Mathilde Brun (atelier)' => 'Franchise en base : ventes à 0 %, « TVA non applicable, art. 293 B du CGI » ; devis de dépannage à domicile (Paramètres > Factures et devis ; devis signé chez Jeanne Roussel, devis acceptés en ligne par Bernard Petit et Hélène Garnier, brouillon sans lieu pour Hélène Garnier ; six e-mails de devis qui ne partent pas, chacun avec sa cause dans les envois de la fiche du devis et dans sa cloche : devis accepté au magasin, envoi remplacé par un second, lien retiré, devis refusé, devis expiré, envoi remplacé par un second dont le lien est retiré à son tour)',
+            'Mathilde Brun (atelier)' => 'Franchise en base : ventes à 0 %, '.$this->mentionsDeLaFranchiseDeLHistoire().' ; devis de dépannage à domicile (Paramètres > Factures et devis ; devis signé chez Jeanne Roussel, devis acceptés en ligne par Bernard Petit et Hélène Garnier, brouillon sans lieu pour Hélène Garnier ; six e-mails de devis qui ne partent pas, chacun avec sa cause dans les envois de la fiche du devis et dans sa cloche : devis accepté au magasin, envoi remplacé par un second, lien retiré, devis refusé, devis expiré, envoi remplacé par un second dont le lien est retiré à son tour)'.$this->deLaBascule('un ticket et un devis envoyé'),
             'Rémi Lacroix' => 'Option pour les débits : factures de services encaissées ; après la correction du SIREN, une facture rectificative émise et les autres factures à régulariser',
             'Julien Delattre' => 'Membre d\'un assujetti unique : ventes refusées',
             'Sophie Duval' => 'Société suspendue : lecture seule',
@@ -536,6 +538,52 @@ final class SemisComplet
         ] as $cle => $aRegarder) {
             $this->liste->regarder($this->compte($cle), $aRegarder);
         }
+    }
+
+    /**
+     * La mention de la franchise en base que portent les ventes de
+     * l'histoire semée, entre guillemets : celle de la table datée des
+     * mentions au premier des jours suivants de l'histoire (voir
+     * TableDesMentionsDeTva et ActiviteDesMagasins::joursSuivants()), puis
+     * celle de chaque version de la table de part et d'autre de laquelle le
+     * semis pose des documents (voir DocumentsDesCas::basculesSemees()),
+     * avec la veille et le premier jour de chacune (« … » jusqu'au
+     * 31/12/2026, puis « … » à partir du 01/01/2027).
+     */
+    private function mentionsDeLaFranchiseDeLHistoire(): string
+    {
+        $jours = [$this->horloge->jour(ActiviteDesMagasins::PREMIER_DES_JOURS_SUIVANTS), ...DocumentsDesCas::basculesSemees($this->horloge)];
+        $mentions = array_map(fn (string $jour): string => '« '.TableDesMentionsDeTva::mentionDeLaFranchise($jour).' »', $jours);
+
+        if (count($mentions) === 1) {
+            return $mentions[0];
+        }
+
+        $morceaux = [];
+
+        foreach ($mentions as $rang => $mention) {
+            $morceaux[] = match (true) {
+                $rang === 0 => $mention.' jusqu\'au '.Calendrier::afficherJour(Calendrier::ajouterJours($jours[1], -1), 'd/m/Y'),
+                default => 'puis '.$mention.' à partir du '.Calendrier::afficherJour($jours[$rang], 'd/m/Y'),
+            };
+        }
+
+        return implode(', ', $morceaux);
+    }
+
+    /**
+     * Ce qu'un compte de la liste trouve de part et d'autre de chaque
+     * version de la table des mentions de la TVA que l'histoire semée
+     * traverse (voir DocumentsDesCas::basculesSemees()) : ces documents, le
+     * soir de la veille et celui du premier jour, chacun avec la mention de
+     * son jour ; rien quand l'histoire n'en traverse aucune.
+     */
+    private function deLaBascule(string $documents): string
+    {
+        return implode('', array_map(
+            fn (string $premierJour): string => ' ; les soirs du '.Calendrier::afficherJour(Calendrier::ajouterJours($premierJour, -1), 'd/m/Y').' et du '.Calendrier::afficherJour($premierJour, 'd/m/Y').', de part et d\'autre du changement des articles de la TVA : '.$documents.', chacun avec la mention de son jour',
+            DocumentsDesCas::basculesSemees($this->horloge),
+        ));
     }
 
     /**

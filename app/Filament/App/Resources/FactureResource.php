@@ -542,13 +542,14 @@ class FactureResource extends Resource
 
     /**
      * La nature de l'opération d'une facture ou d'un devis, avec la mention
-     * qu'elle imprime (voir NatureOperation).
+     * qu'elle imprime : celle qu'une facture émise a signée, celle du jour
+     * d'un brouillon ou d'un devis (voir MentionsFiscales::mentionDeLaNature()).
      */
     public static function natureEntry(): TextEntry
     {
         return TextEntry::make('nature_operation')
             ->label('Nature de l\'opération')
-            ->helperText(fn (Facture|Devis $record): ?string => $record->nature_operation->mention());
+            ->helperText(fn (Facture|Devis $record): ?string => app(MentionsFiscales::class)->mentionDeLaNature($record));
     }
 
     /**

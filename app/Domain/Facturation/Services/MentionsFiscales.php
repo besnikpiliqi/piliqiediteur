@@ -2,16 +2,18 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Enums\CategorieOperation;
 use App\Domain\Facturation\Enums\MotifDeRegularisation;
 use App\Domain\Facturation\Enums\NatureLigne;
+use App\Domain\Facturation\Enums\ReferenceDeTva;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
-use App\Domain\Tenancy\Enums\RegimeTva;
+use App\Domain\Facturation\Support\TableDesMentionsDeTva;
 use App\Domain\Tenancy\Support\ValeurRequise;
 
 /**
@@ -24,14 +26,15 @@ use App\Domain\Tenancy\Support\ValeurRequise;
  *   lignes (voir NatureLigne) ;
  * - hors de la vente en France, le texte qui exonère la vente ou la place
  *   hors du champ de la TVA française (« Exonération de TVA, article 262
- *   I du CGI »..., voir NatureOperation::mention()), lu sur le document :
- *   un avoir reprend la nature des factures qu'il corrige, un devis celle
- *   qu'il propose ;
- * - « TVA non applicable, art. 293 B du CGI » quand le document a été
- *   enregistré en franchise en base de TVA (B10) : lue sur le document,
- *   jamais sur le régime actuel de la société, pour qu'un document réimprimé
- *   après la sortie de la franchise la porte toujours ; un devis la porte
- *   aussi, ses prix s'entendant sans TVA ;
+ *   I du CGI »..., voir TableDesMentionsDeTva::mentionDeLaNature()), selon
+ *   la nature lue sur le document : un avoir reprend la nature des
+ *   factures qu'il corrige, un devis celle qu'il propose ;
+ * - la mention de la franchise (« TVA non applicable, art. 293 B du CGI »,
+ *   voir TableDesMentionsDeTva::mentionDeLaFranchise()) quand le document a
+ *   été enregistré en franchise en base de TVA (B10) : lue sur le
+ *   document, jamais sur le régime actuel de la société, pour qu'un
+ *   document réimprimé après la sortie de la franchise la porte toujours ;
+ *   un devis la porte aussi, ses prix s'entendant sans TVA ;
  * - hors franchise, sur un ticket, une facture ou un avoir, l'option de
  *   son émetteur pour le paiement de la taxe d'après les débits (voir
  *   ParametresFiscauxSociete) : sans TVA due, elle n'a pas d'objet. Un avoir
@@ -39,6 +42,15 @@ use App\Domain\Tenancy\Support\ValeurRequise;
  *   document émis est celui qu'il a signé (voir FigeSonEmetteur) :
  *   réimprimé après un changement de l'option, il garde la mention de
  *   son émission.
+ *
+ * Le texte d'une mention qui cite un article de la loi est celui de la
+ * table datée des mentions au jour du document (voir jourDesMentions() et
+ * TableDesMentionsDeTva) : un avoir ou une facture rectificative suit le
+ * sien, jamais celui du document qu'il corrige. Un ticket, une facture ou
+ * un avoir émis imprime pour toujours les mentions qu'il a signées à son
+ * émission, et sa fiche les montre (voir imprimees(), mentionDeLaNature()
+ * et motifDuTauxZero()) : son PDF, téléchargé, réimprimé ou joint à un
+ * e-mail des années plus tard, cite les articles de son émission.
  *
  * Une facture dit d'abord la date de la livraison ou de la prestation
  * (T49, art. 242 nonies A de l'annexe II au CGI) quand elle n'est pas le
@@ -94,11 +106,17 @@ class MentionsFiscales
     private const PU_HT_EXACT = 'Le PU HT exact, écrit sous chaque article, est celui de la facture électronique : la quantité × ce prix retombe sur le total HT de la ligne à quelques centimes près.';
 
     /**
+     * Les mentions du document, calculées depuis ses colonnes, son émetteur
+     * et la table datée des mentions au jour du document (voir
+     * jourDesMentions()) : celles que l'émission signe (voir ContenuFiscal),
+     * et celles qu'imprime un brouillon ou un devis (voir imprimees()).
+     *
      * @param  Emetteur  $emetteur  celui qu'imprime le document : signé une fois émis (voir FigeSonEmetteur::emetteur()), figé au dernier envoi d'un devis (voir Devis::emetteur()), la société et le magasin d'aujourd'hui pour un brouillon et pour le document qu'on émet (voir ContenuFiscal)
      * @return list<string>
      */
     public function pour(Facture|Avoir|Devis $document, Emetteur $emetteur): array
     {
+        $jour = $this->jourDesMentions($document);
         $mentions = [];
 
         if ($document instanceof Facture && $document->estUneRectificative()) {
@@ -108,7 +126,7 @@ class MentionsFiscales
             if (($date = $document->dateDeLOperation()) !== null) {
                 $mentions[] = sprintf(self::DATE_DE_L_OPERATION_D_ORIGINE, $date);
             }
-        } elseif ($document instanceof Facture && $document->date_operation_fin !== null && $document->dateDeLOperationDiffereDu($this->jourDeLEmission($document))) {
+        } elseif ($document instanceof Facture && $document->date_operation_fin !== null && $document->dateDeLOperationDiffereDu($jour)) {
             $mentions[] = sprintf(self::DATE_DE_L_OPERATION, $document->dateDeLOperation());
         } elseif ($document instanceof Devis && ($date = $document->dateDeLOperation()) !== null) {
             $mentions[] = sprintf(self::DATE_PREVUE_DE_L_OPERATION, $date);
@@ -118,12 +136,14 @@ class MentionsFiscales
             $mentions[] = 'Catégorie de l\'opération : '.CategorieOperation::depuisNatures($document->lignes->map(fn (LigneFacture|LigneAvoir $ligne): NatureLigne => $ligne->nature))->getLabel();
         }
 
-        if ($document->nature_operation->mention() !== null) {
-            $mentions[] = $document->nature_operation->mention();
+        $mentionDeLaNature = TableDesMentionsDeTva::mentionDeLaNature($document->nature_operation, $jour);
+
+        if ($mentionDeLaNature !== null) {
+            $mentions[] = $mentionDeLaNature;
         }
 
         if ($document->franchise_en_base) {
-            $mentions[] = RegimeTva::MENTION_FRANCHISE;
+            $mentions[] = TableDesMentionsDeTva::mentionDeLaFranchise($jour);
         } elseif (! $document instanceof Devis && $emetteur->optionDebitsTva) {
             $mentions[] = self::OPTION_DEBITS;
         }
@@ -132,26 +152,115 @@ class MentionsFiscales
     }
 
     /**
-     * Le jour de l'émission d'une facture, au calendrier de son magasin ;
-     * aujourd'hui pour un brouillon, qui s'imprime comme il s'émettrait.
+     * Les mentions qu'imprime le document : celles qu'un ticket, une
+     * facture ou un avoir émis a signées à son émission, telles quelles
+     * pour toujours (voir FigeSonEmetteur::mentionsSignees()), même quand
+     * la table datée des mentions a reçu depuis une nouvelle version ; pour
+     * un brouillon ou un devis, celles de son jour (voir pour()).
+     *
+     * @param  Emetteur  $emetteur  celui qu'imprime le document (voir pour())
+     * @return list<string>
+     *
+     * @throws DocumentSansEnregistrementSigneException
      */
-    private function jourDeLEmission(Facture $facture): string
+    public function imprimees(Facture|Avoir|Devis $document, Emetteur $emetteur): array
     {
-        $calendrier = $facture->magasin->calendrier();
+        return self::estEmis($document) ? $document->mentionsSignees() : $this->pour($document, $emetteur);
+    }
 
-        return $facture->date_emission === null ? $calendrier->aujourdhui() : $calendrier->jourDe($facture->date_emission);
+    /**
+     * Le jour dont la table datée des mentions donne les textes du document,
+     * au calendrier de son magasin : sa date d'émission pour un ticket, une
+     * facture ou un avoir, ce qui est aussi le jour qu'il signe à son
+     * émission ; le jour de son dernier envoi pour un devis envoyé (voir
+     * EmettreDevisAction), qui se relit ainsi tel qu'il est parti, même
+     * consulté ou réimprimé plus tard ; aujourd'hui pour un brouillon, qui
+     * s'imprime comme il s'émettrait, et pour un devis modifié depuis son
+     * envoi, qui repartira à son prochain envoi.
+     */
+    public function jourDesMentions(Facture|Avoir|Devis $document): string
+    {
+        $calendrier = $document->magasin->calendrier();
+        $emission = $document instanceof Devis && $document->emetteur_fige === null ? null : $document->date_emission;
+
+        return $emission === null ? $calendrier->aujourdhui() : $calendrier->jourDe($emission);
+    }
+
+    /**
+     * La mention qu'imprime la nature d'opération du document (voir
+     * TableDesMentionsDeTva::mentionDeLaNature()), que sa fiche montre sous
+     * la nature : celle qu'un ticket, une facture ou un avoir émis a
+     * signée, celle de son jour pour un brouillon ou un devis ; aucune pour
+     * une vente en France.
+     *
+     * @throws DocumentSansEnregistrementSigneException
+     */
+    public function mentionDeLaNature(Facture|Avoir|Devis $document): ?string
+    {
+        $reference = ReferenceDeTva::deLaNature($document->nature_operation);
+
+        if ($reference === null) {
+            return null;
+        }
+
+        return self::estEmis($document)
+            ? self::signeeParmi($document, TableDesMentionsDeTva::textesDe($reference))
+            : TableDesMentionsDeTva::texte($reference, $this->jourDesMentions($document));
     }
 
     /**
      * Le motif qu'imprime, à côté de son taux de 0 %, le tableau de la TVA
      * d'un document (point 11) : le texte qui exonère la vente ou la place
      * hors du champ de la TVA française, sinon la franchise en base, lus
-     * sur le document comme ses mentions (voir pour()) ; aucun pour une
-     * vente en France, où un taux de 0 % n'a pas de texte à citer.
+     * comme ses mentions (voir imprimees()) : signés pour un document émis,
+     * du jour du document sinon ; aucun pour une vente en France, où un taux
+     * de 0 % n'a pas de texte à citer.
+     *
+     * @throws DocumentSansEnregistrementSigneException
      */
     public function motifDuTauxZero(Facture|Avoir|Devis $document): ?string
     {
-        return $document->nature_operation->mention() ?? ($document->franchise_en_base ? RegimeTva::MENTION_FRANCHISE : null);
+        $mentionDeLaNature = $this->mentionDeLaNature($document);
+
+        if ($mentionDeLaNature !== null || ! $document->franchise_en_base) {
+            return $mentionDeLaNature;
+        }
+
+        return self::estEmis($document)
+            ? self::signeeParmi($document, TableDesMentionsDeTva::textesDe(ReferenceDeTva::MentionDeLaFranchise))
+            : TableDesMentionsDeTva::mentionDeLaFranchise($this->jourDesMentions($document));
+    }
+
+    /**
+     * Le document a-t-il signé ses mentions : un ticket, une facture ou un
+     * avoir numéroté ? Un devis ne se signe jamais au registre fiscal.
+     *
+     * @phpstan-assert-if-true Facture|Avoir $document
+     */
+    private static function estEmis(Facture|Avoir|Devis $document): bool
+    {
+        return ! $document instanceof Devis && $document->numero !== null;
+    }
+
+    /**
+     * La première des mentions que le document émis a signées qui est l'un
+     * de ces textes, tous ceux qu'une référence de la table a eus : ce que
+     * le document imprime pour cette référence depuis son émission, ou rien
+     * s'il ne l'a pas signée.
+     *
+     * @param  list<string>  $textes
+     *
+     * @throws DocumentSansEnregistrementSigneException
+     */
+    private static function signeeParmi(Facture|Avoir $document, array $textes): ?string
+    {
+        foreach ($document->mentionsSignees() as $mention) {
+            if (in_array($mention, $textes, true)) {
+                return $mention;
+            }
+        }
+
+        return null;
     }
 
     /**

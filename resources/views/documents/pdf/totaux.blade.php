@@ -6,7 +6,9 @@
     - à gauche, le récapitulatif par taux -- la base HT, la TVA et le TTC de
       chaque taux, mention obligatoire (voir VentileLaTvaParTaux) --, avec,
       à côté d'un taux de 0 %, le motif qui l'explique : exonération,
-      opération hors du champ de la TVA française ou franchise en base (voir
+      opération hors du champ de la TVA française ou franchise en base, tel
+      qu'un document émis l'a signé, tel que la table datée des mentions le
+      donne au jour d'un brouillon ou d'un devis (voir
       MentionsFiscales::motifDuTauxZero()), une colonne qui n'apparaît que
       pour lui ; puis, sous lui, ce qui a réglé un ticket ou une facture à
       son émission (voir documents/pdf/reglements, constat C3), quand on le

@@ -104,6 +104,18 @@ final class HorlogeDuSemis
     }
 
     /**
+     * Le rang de ce jour (« AAAA-MM-JJ ») dans l'histoire, de 0 le premier
+     * à $jours - 1 la veille du semis ; null pour un jour hors de
+     * l'histoire.
+     */
+    public function rangDuJour(string $jour): ?int
+    {
+        $rang = Calendrier::joursEntre($this->premierJour, $jour);
+
+        return $rang >= 0 && $rang < $this->jours ? $rang : null;
+    }
+
+    /**
      * Avance l'horloge à cette heure murale (« HH:MM ») de ce jour de
      * l'histoire, en exécutant les tâches horaires à chaque minuit franchi.
      *

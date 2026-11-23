@@ -181,9 +181,11 @@ class TypeDActiviteTest extends TestCase
      * garde le refus des activités exonérées par la loi, mot pour mot sur
      * le formulaire d'inscription, la page du lien et la page d'une
      * invitation d'un cabinet ; l'ancienne phrase ne se lit plus nulle part.
+     * En 2026, la franchise cite l'article du CGI.
      */
     public function test_le_rappel_du_choix_definitif_prend_en_charge_la_franchise_en_base_et_garde_le_refus_des_activites_exonerees(): void
     {
+        $this->travelTo(self::aParis('2026-10-12 10:00:00'));
         Mail::fake();
         $application = config('app.name');
         $phrase = "Ce choix est définitif : il décide des menus de {$application} (articles, achats et stock) et ne changera pas, même si votre activité change ensuite. Dans le doute, choisissez « Commerce ou atelier », le plus complet. Les micro-entrepreneurs en franchise de TVA (art. 293 B du CGI) sont pris en charge. En revanche, {$application} ne permet pas de facturer une activité exonérée de TVA par la loi (soins médicaux, enseignement, assurance, location de logements…).";
@@ -468,11 +470,12 @@ class TypeDActiviteTest extends TestCase
     /**
      * Chaque avertissement du code d'activité s'affiche sur la page du
      * lien, et la société s'inscrit quand même avec le type choisi : aucun
-     * ne bloque.
+     * ne bloque. En 2026, ceux qui citent un article citent le CGI.
      */
     #[DataProvider('avertissements')]
     public function test_les_avertissements_du_code_d_activite_ne_bloquent_jamais(TypeDActivite $type, string $code, string $avertissement): void
     {
+        $this->travelTo(self::aParis('2026-10-12 10:00:00'));
         Mail::fake();
         app(RepertoireSirene::class)->exercer(self::SIREN, $code);
         $this->demander(['type_activite' => $type->value])->assertHasNoFormErrors();

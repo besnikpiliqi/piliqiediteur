@@ -851,10 +851,12 @@ class DevisResourceTest extends TestCase
     /**
      * Un devis d'export rouvert après l'entrée du magasin en franchise en
      * base repasse en vente en France : réenregistré, il ne cite plus
-     * l'exonération de l'export, seulement la franchise.
+     * l'exonération de l'export, seulement la franchise, celle du CGI en
+     * 2026.
      */
     public function test_un_devis_rouvert_apres_l_entree_du_magasin_en_franchise_repasse_en_vente_en_france(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         $magasin = $this->magasinQuiVendHorsDeFrance();
         $client = Client::factory()->create(['nom' => 'Acme Inc.', 'type_client' => TypeClient::Professionnel, 'pays' => 'US', 'etabli_en_france' => false, 'identifiant_etranger' => 'EIN 12-3456789']);
         $produit = Produit::factory()->create(['prix_vente_ttc' => '1.00', 'taux_tva' => 20, 'suivi_stock' => false]);

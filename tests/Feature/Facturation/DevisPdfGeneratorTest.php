@@ -168,11 +168,13 @@ class DevisPdfGeneratorTest extends TestCase
 
     /**
      * Le pied de page d'un devis porte l'identité de la société, ses
-     * conditions de paiement et la franchise de TVA du magasin ; ses notes
-     * restent dans le corps du devis (point 4).
+     * conditions de paiement et la franchise de TVA du magasin, avec
+     * l'article du CGI pour un devis envoyé en 2026 ; ses notes restent
+     * dans le corps du devis (point 4).
      */
     public function test_l_identite_de_la_societe_les_conditions_et_les_mentions_sont_dans_le_pied_de_page(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:00:00'));
         app(TenantContext::class)->set(Magasin::factory()->avecLaSociete(['raison_sociale' => 'Martin et Fils', 'siren' => '121212120', 'regime_tva' => RegimeTva::FranchiseEnBase])->create());
         $devis = app(EmettreDevisAction::class)->handle(self::auteur(), app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [
             ['produit_id' => Produit::factory()->create()->id, 'quantite' => 1],

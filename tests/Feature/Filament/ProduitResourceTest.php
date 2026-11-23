@@ -456,10 +456,13 @@ class ProduitResourceTest extends TestCase
 
     /**
      * Un magasin en franchise en base garde le taux de ses produits, mais
-     * la fiche rappelle qu'il vend sans TVA, au prix TTC indiqué (B10).
+     * la fiche rappelle qu'il vend sans TVA, au prix TTC indiqué (B10),
+     * avec l'article de la franchise du jour, au calendrier du magasin :
+     * celui du CGI le 31 décembre 2026, celui du CIBS le lendemain.
      */
     public function test_la_fiche_d_un_magasin_en_franchise_rappelle_qu_il_vend_sans_tva(): void
     {
+        $this->travelTo(self::aParis('2026-12-31 23:59:00'));
         $this->connecterProprietaire();
         $this->reglerLaSociete(Filament::getTenant(), ['regime_tva' => RegimeTva::FranchiseEnBase]);
         $produit = Produit::factory()->create(['taux_tva' => 20]);
@@ -467,6 +470,12 @@ class ProduitResourceTest extends TestCase
         Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
             ->assertFormSet(['taux_tva' => '20'])
             ->assertSee('Votre société est en franchise en base : vos ventes sont facturées sans TVA (art. 293 B du CGI), au prix TTC indiqué.');
+
+        $this->travelTo(self::aParis('2027-01-01 00:01:00'));
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->assertSee('Votre société est en franchise en base : vos ventes sont facturées sans TVA (art. L. 233-3 du CIBS), au prix TTC indiqué.')
+            ->assertDontSee('293 B');
     }
 
     /**

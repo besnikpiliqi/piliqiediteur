@@ -35,16 +35,25 @@ use Tests\TestCase;
 
 /**
  * Un magasin en franchise en base de TVA vend à 0 %, au même prix TTC,
- * avec la mention « TVA non applicable, art. 293 B du CGI » (B10). Le
- * document note la franchise à son enregistrement et la garde : l'émission
- * refuse un brouillon dont le régime du magasin a changé depuis, et la
- * mention se lit sur le document, jamais sur le régime actuel.
+ * avec la mention de la franchise (B10), « TVA non applicable, art. 293 B
+ * du CGI » pour un document de 2026, le jour où chaque test commence (voir
+ * TableDesMentionsDeTva). Le document note la franchise à son
+ * enregistrement et la garde : l'émission refuse un brouillon dont le
+ * régime du magasin a changé depuis, et la mention se lit sur le document,
+ * jamais sur le régime actuel.
  */
 class FranchiseEnBaseTest extends TestCase
 {
     use RefreshDatabase;
 
     private const MENTION = 'TVA non applicable, art. 293 B du CGI';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->travelTo(self::aParis('2026-10-09 10:15:00'));
+    }
 
     private const REFUS_REGIME_CHANGE = 'Le régime de TVA de la société a changé depuis l\'enregistrement de ce brouillon : ouvrez-le et enregistrez-le de nouveau pour recalculer ses lignes.';
 
@@ -171,7 +180,6 @@ class FranchiseEnBaseTest extends TestCase
      */
     public function test_le_brouillon_reenregistre_apres_le_passage_en_franchise_s_emet_a_zero_pour_cent(): void
     {
-        $this->travelTo(self::aParis('2026-10-09 10:15:00'));
         $magasin = $this->magasin(RegimeTva::ReelNormalMensuel);
         $client = Client::factory()->create();
         $produit = $this->produitA12Euros();

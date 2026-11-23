@@ -1787,7 +1787,7 @@ return [
         ],
         'prix.exoneration-et-franchise' => [
             'puce' => 'Prix et TVA des ventes',
-            'regle' => 'Une vente exonérée se paie au prix hors taxe, calculé de la même façon, sans TVA ; un magasin en franchise en base vend à 0 % au même prix TTC, avec la mention « TVA non applicable, art. 293 B du CGI ».',
+            'regle' => 'Une vente exonérée se paie au prix hors taxe, calculé de la même façon, sans TVA ; un magasin en franchise en base vend à 0 % au même prix TTC, avec la mention « TVA non applicable, art. 293 B du CGI » (« TVA non applicable, art. L. 233-3 du CIBS » pour un document émis à partir du 01/01/2027, voir hors.table-datee-des-mentions-de-tva).',
             'tests' => [
                 'tests/Feature/Facturation/NatureOperationTest.php::test_un_export_a_un_professionnel_se_paie_au_prix_hors_taxe_sans_tva_avec_sa_mention',
                 'tests/Feature/Filament/FactureResourceTest.php::test_sortir_de_la_tva_francaise_garde_le_montant_d_un_service_a_9_99_euros_ttc',
@@ -3011,6 +3011,45 @@ return [
                 'tests/Feature/Facturation/NatureOperationTest.php::test_un_magasin_en_franchise_ne_vend_qu_en_france',
                 'tests/Feature/Facturation/NatureOperationTest.php::test_une_facture_en_franchise_a_un_client_etranger_ne_porte_que_la_mention_de_franchise',
                 'tests/Feature/Facturation/NatureOperationTest.php::test_un_achat_dans_l_union_ne_change_pas_la_franchise_de_la_societe',
+            ],
+        ],
+        'hors.table-datee-des-mentions-de-tva' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'Les mentions de TVA (exonération de chaque nature d\'opération, franchise en base) et les articles que citent les écrans, les aides, les refus et les notifications se lisent dans une seule table datée : les articles du code général des impôts (CGI) pour un document émis jusqu\'au 31/12/2026, ceux du code des impositions sur les biens et services (CIBS) à partir du 01/01/2027, au calendrier du magasin du document (la Réunion bascule la première, les Antilles les dernières) ; un document émis imprime pour toujours, sur son PDF, téléchargé, réimprimé ou joint à un e-mail, et sur sa fiche, les mentions qu\'il a signées à son émission ; un avoir et une facture rectificative suivent le jour de leur propre émission ; un brouillon cite la mention du jour où il s\'imprime ; un devis envoyé, celle du jour de son dernier envoi, sur son PDF comme sur la page de son lien ; l\'aperçu de l\'e-reporting, celle du jour de sa clôture ; un écran, celle du jour, au calendrier du magasin dans son panneau, de Paris dans l\'espace de la société et à l\'inscription ; une notification se fige à son envoi ; l\'article 286, I, 3° bis du CGI (caisse sécurisée), maintenu en vigueur, ne change pas (décisions de Claude T40.1 et T40.2 du 22/11/2026, D76).',
+            'tests' => [
+                'tests/Unit/TableDesMentionsDeTvaTest.php::test_chaque_texte_cite_le_cgi_jusqu_au_31_decembre_2026_puis_le_cibs',
+                'tests/Unit/TableDesMentionsDeTvaTest.php::test_le_jour_du_document_se_lit_au_calendrier_de_son_magasin',
+                'tests/Unit/TableDesMentionsDeTvaTest.php::test_chaque_nature_imprime_la_mention_de_sa_reference',
+                'tests/Feature/Facturation/BasculeDesMentionsAuCibsTest.php::test_un_export_de_la_veille_cite_le_cgi_pour_toujours_et_celui_du_jour_meme_le_cibs',
+                'tests/Feature/Facturation/BasculeDesMentionsAuCibsTest.php::test_un_avoir_et_la_facture_d_un_devis_emis_en_2027_suivent_le_jour_de_leur_emission',
+                'tests/Feature/Facturation/BasculeDesMentionsAuCibsTest.php::test_un_brouillon_cite_la_mention_du_jour_ou_il_s_imprime_puis_celle_de_son_emission',
+                'tests/Feature/Facturation/BasculeDesMentionsAuCibsTest.php::test_les_tickets_en_franchise_et_l_apercu_de_l_e_reporting_suivent_le_calendrier_de_leur_magasin',
+                'tests/Feature/Facturation/BasculeDesMentionsAuCibsTest.php::test_un_devis_envoye_en_2026_garde_la_mention_de_son_envoi_jusqu_a_sa_modification',
+                'tests/Feature/Facturation/BasculeDesMentionsAuCibsTest.php::test_l_e_mail_d_une_facture_joint_le_pdf_de_son_emission',
+                'tests/Feature/Facturation/BasculeDesMentionsAuCibsTest.php::test_la_fiche_d_une_facture_montre_la_mention_qu_elle_a_signee',
+                'tests/Feature/Facturation/RegularisationDUneFactureTest.php::test_la_regularisation_faite_en_2027_d_une_facture_de_2026_cite_le_cibs_et_la_facture_garde_le_cgi',
+                'tests/Feature/Facturation/ReponseAuDevisEnLigneTest.php::test_la_page_du_lien_cite_la_mention_du_jour_de_l_envoi_du_devis',
+                'tests/Feature/Calendrier/ContenuSigneDeReferenceTest.php::test_le_contenu_signe_d_un_ticket_d_une_facture_d_un_avoir_et_d_une_consultation_vies_reste_identique',
+                'tests/Feature/Filament/ArticlesDeLaTvaALEcranTest.php::test_l_aide_de_la_nature_dit_la_mention_qu_imprimerait_le_document_emis_aujourd_hui',
+                'tests/Feature/Filament/ArticlesDeLaTvaALEcranTest.php::test_le_panneau_d_un_magasin_de_la_martinique_suit_son_calendrier_et_l_espace_de_la_societe_celui_de_paris',
+                'tests/Feature/Filament/ArticlesDeLaTvaALEcranTest.php::test_les_parametres_fiscaux_de_la_societe_citent_l_article_du_jour_a_paris',
+                'tests/Feature/Filament/ArticlesDeLaTvaALEcranTest.php::test_le_refus_et_l_aide_du_lieu_fixe_par_la_loi_citent_les_articles_du_jour',
+                'tests/Feature/Filament/ArticlesDeLaTvaALEcranTest.php::test_l_inscription_et_les_avertissements_du_code_d_activite_citent_l_article_du_jour_a_paris',
+                'tests/Feature/Filament/ArticlesDeLaTvaALEcranTest.php::test_l_avis_de_la_cession_cite_les_articles_du_jour_de_son_envoi_et_s_y_fige',
+                'tests/Feature/Filament/ProduitResourceTest.php::test_la_fiche_d_un_magasin_en_franchise_rappelle_qu_il_vend_sans_tva',
+                'tests/Feature/SemisDesMentionsDeTvaTest.php::test_le_premier_semis_qui_traverse_le_1er_janvier_2027_seme_chaque_mention_des_deux_cotes',
+                'tests/Feature/SemisDesMentionsDeTvaTest.php::test_le_semis_lance_apres_le_1er_janvier_2027_seme_chaque_mention_des_deux_cotes',
+            ],
+        ],
+        'hors.controle-de-la-table-des-mentions' => [
+            'puce' => 'Hors de CLAUDE.md',
+            'regle' => 'La table datée des mentions ne fait qu\'ajouter des versions, dans l\'ordre de leur premier jour, et le texte d\'une version ne se corrige plus : chaque texte de chaque version est écrit en entier dans son test ; une version ne change que les textes qu\'elle nomme, si bien qu\'un article dont le numéro du CIBS n\'est pas confirmé garde son texte du CGI jusqu\'à la version qui le nomme ; aucun texte ne cite le CIBS avant le 01/01/2027, aucun ne cite le CGI à partir de ce jour, et aucun un article abrogé du CGI au-delà du 30/06/2028, fin de la tolérance ; un jour mal écrit est refusé (décisions de Claude T40.1 et T40.2 du 22/11/2026, D76).',
+            'tests' => [
+                'tests/Unit/TableDesMentionsDeTvaTest.php::test_chaque_reference_a_ses_textes_dans_ce_test',
+                'tests/Unit/TableDesMentionsDeTvaTest.php::test_un_article_non_confirme_garde_le_texte_du_cgi_jusqu_a_la_version_qui_le_nomme',
+                'tests/Unit/TableDesMentionsDeTvaTest.php::test_les_versions_se_suivent_dans_l_ordre_de_leur_premier_jour',
+                'tests/Unit/TableDesMentionsDeTvaTest.php::test_aucun_texte_ne_cite_le_cibs_avant_sa_date_ni_le_cgi_apres',
+                'tests/Unit/TableDesMentionsDeTvaTest.php::test_un_jour_mal_ecrit_est_refuse',
             ],
         ],
         'hors.detaxe-outre-mer' => [
@@ -5786,7 +5825,7 @@ return [
                 'a_venir' => 'Étape 2 (intégration SUPER PDP) : catégorie G, code VATEX-EU-G et circuit de la livraison vers un DOM.',
             ],
             'T2.3-comptable' => [
-                'decision' => 'Codes de TVA d\'une société en franchise : Les factures d\'une société en franchise partiront en catégorie E, taux 0, avec « TVA non applicable, art. 293 B du CGI », le code VATEX-FR-FRANCHISE et son n° de TVA ; sans n° de TVA, autre règle (T2.10).',
+                'decision' => 'Codes de TVA d\'une société en franchise : Les factures d\'une société en franchise partiront en catégorie E, taux 0, avec « TVA non applicable, art. 293 B du CGI » (« TVA non applicable, art. L. 233-3 du CIBS » pour un document émis à partir du 01/01/2027), le code VATEX-FR-FRANCHISE et son n° de TVA ; sans n° de TVA, autre règle (T2.10).',
                 'a_venir' => 'Étape 2 (intégration SUPER PDP) : catégorie E, code VATEX-FR-FRANCHISE et n° de TVA des factures d\'une société en franchise (T2.10 sans n° de TVA).',
             ],
             'T2.4-comptable' => [
@@ -5804,7 +5843,7 @@ return [
                 'a_venir' => 'Étape 2 (intégration SUPER PDP) : e-reporting international de la livraison intracommunautaire en catégorie K (VATEX-EU-IC).',
             ],
             'T2.7-comptable' => [
-                'decision' => 'Catégorie E ou O d\'une prestation hors Union : Une prestation à un professionnel hors de l\'Union partira dans l\'e-reporting international en catégorie O, taux 0, code VATEX-EU-O, avec « TVA non applicable, art. 259-1° du CGI » et le n° de TVA de la société, que ce flux exige.',
+                'decision' => 'Catégorie E ou O d\'une prestation hors Union : Une prestation à un professionnel hors de l\'Union partira dans l\'e-reporting international en catégorie O, taux 0, code VATEX-EU-O, avec « TVA non applicable, art. 259-1° du CGI » (« TVA non applicable – article L. 211-92 du CIBS » pour un document émis à partir du 01/01/2027) et le n° de TVA de la société, que ce flux exige.',
                 'a_venir' => 'Étape 2 (intégration SUPER PDP) : e-reporting international de la prestation hors UE en catégorie O (VATEX-EU-O).',
             ],
             'T3.1-comptable' => [
@@ -5870,7 +5909,7 @@ return [
                 'a_venir' => 'Étape 1, lot BTP de la chaîne TVA, avant la campagne de tests 1 bis.',
             ],
             'T60.1' => [
-                'decision' => 'Mentions des ventes sous le régime de la marge : Une ligne sous la marge s\'imprimera sans taux ni TVA, avec la mention de son régime et « (art. 297 A du CGI) ». En facture électronique : code VATEX-EU-F, I ou J.',
+                'decision' => 'Mentions des ventes sous le régime de la marge : Une ligne sous la marge s\'imprimera sans taux ni TVA, avec la mention de son régime et « (art. 297 A du CGI) » (pour un document émis à partir du 01/01/2027, l\'article du CIBS qui le reprend, parmi L. 252-12 à L. 252-14, choisi par le lot qui écrira la mention). En facture électronique : code VATEX-EU-F, I ou J.',
                 'a_venir' => 'Étape 1, lot de la marge de la chaîne TVA, avant l\'étape 2 ; registre des objets achetés à l\'étape 14.',
             ],
             'T60.2' => [
@@ -5987,12 +6026,13 @@ return [
                 'regles' => ['documents.reponse-du-client-au-devis', 'documents.retractation-d-un-particulier'],
             ],
             'T40.1' => [
-                'decision' => 'Articles du nouveau code (CIBS) dans les mentions : Les mentions garderont les articles du CGI pour les documents émis jusqu\'au 31/12/2027, puis citeront ceux du nouveau code (CIBS), relus un à un sur Légifrance, pour les documents émis dès le 01/01/2028.',
-                'a_venir' => 'Table datée des mentions de la chaîne TVA, livrée avant le 01/01/2028 par le lot de mise à jour des paquets de décembre 2027 (CLAUDE.md, « Outillage »).',
+                'decision' => 'Articles du nouveau code (CIBS) dans les mentions : nouvelle décision du 22/11/2026, qui remplace celle qui gardait les articles du CGI jusqu\'au 31/12/2027, supprimée (le livre II du CIBS entre en vigueur le 01/01/2027, ordonnance n° 2026-671, art. 17). Les documents émis à partir du 01/01/2027, au calendrier de leur magasin, citent les articles du code des impositions sur les biens et services : franchise, « TVA non applicable, art. L. 233-3 du CIBS » ; export, « Exonération de TVA, articles L. 213-12, 2° et L. 213-14 du CIBS » ; livraison vers un DOM, « Exonération de TVA, articles L. 211-7, L. 213-12, 2° et L. 213-14 du CIBS » ; livraison intracommunautaire, « Exonération de TVA, articles L. 213-12, 1° et L. 213-13 du CIBS » ; prestation hors de l\'Union, « TVA non applicable – article L. 211-92 du CIBS ». Les documents émis jusqu\'au 31/12/2026 gardent pour toujours leurs articles du CGI. L\'art. 286, I, 3° bis, maintenu en vigueur, reste cité au CGI jusqu\'au décret qui le reprendra.',
+                'regles' => ['hors.table-datee-des-mentions-de-tva'],
+                'a_venir' => 'Étape 2 (intégration SUPER PDP) : la facture électronique transmettra la mention signée du document (BT-120), CGI ou CIBS selon sa date, avec son code VATEX inchangé, et un redépôt la gardera ; relecture des articles du CIBS cités après la promulgation de la loi de finances pour 2027, avant le 31/12/2026 à 20 h UTC, par le lot de mise à jour des paquets (CLAUDE.md, « Outillage »).',
             ],
             'T40.2' => [
-                'decision' => 'Date limite des articles du CGI sur les factures : Les articles du CGI restent admis jusqu\'au 30/06/2028 selon la date d\'émission ; PILIQI passera au nouveau code (CIBS) dès le 01/01/2028, six mois avant, sans jamais changer un document déjà émis.',
-                'a_venir' => 'Table datée des mentions de la chaîne TVA, livrée avant le 01/01/2028 par le lot de mise à jour des paquets de décembre 2027 (CLAUDE.md, « Outillage »).',
+                'decision' => 'Date limite des articles du CGI sur les factures : nouvelle décision du 22/11/2026, qui remplace celle qui passait au CIBS le 01/01/2028, supprimée. Le CGI reste admis sur les documents émis jusqu\'au 30/06/2028 (art. 46, II de l\'ordonnance n° 2025-1247 modifié ; BOI-RES-TVA-000253, § 3.1). PILIQI ne s\'en sert que de filet, pour un article dont le numéro du CIBS serait mis en doute, et jamais au-delà de cette date. Un document déjà émis ne change jamais.',
+                'regles' => ['hors.controle-de-la-table-des-mentions', 'hors.table-datee-des-mentions-de-tva'],
             ],
             'T27.2' => [
                 'decision' => 'Facture rectificative après correction du SIREN : La facture rectificative, faite sous le SIREN corrigé sans mouvement de stock, imprimera aussi la date de l\'opération d\'origine ; en facture électronique, elle partira comme facture ordinaire citant l\'originale.',
@@ -6132,7 +6172,7 @@ return [
                 'a_venir' => 'Étape 2 (intégration SUPER PDP).',
             ],
             'T2.3-prestataire' => [
-                'decision' => 'Catégorie E pour une facture en franchise en base : La facture d\'une société en franchise qui a un n° de TVA partira en catégorie E, taux 0, code VATEX-FR-FRANCHISE, avec ce numéro et « TVA non applicable, art. 293 B du CGI ».',
+                'decision' => 'Catégorie E pour une facture en franchise en base : La facture d\'une société en franchise qui a un n° de TVA partira en catégorie E, taux 0, code VATEX-FR-FRANCHISE, avec ce numéro et « TVA non applicable, art. 293 B du CGI » (« TVA non applicable, art. L. 233-3 du CIBS » pour un document émis à partir du 01/01/2027).',
                 'a_venir' => 'Étape 2 (intégration SUPER PDP).',
             ],
             'T2.6-prestataire' => [
@@ -6587,7 +6627,7 @@ return [
                 'a_venir' => 'Étape 1, lot des mentions d\'identité, après le lot MAT-PRO, sur l\'accord de l\'éditeur (CLAUDE.md, « Documents de vente », changé seulement avec lui) ; d\'ici là, la règle de CLAUDE.md s\'applique : l\'immatriculation (RCS, RM ou mention de dispense) reste exigée de toute entreprise (règle documents.identite-legale-complete).',
             ],
             'T81.1' => [
-                'decision' => 'Magasins en Guyane ou à Mayotte : PILIQI refuse déjà les magasins de Guyane et de Mayotte, où la TVA ne s\'applique pas. Si vous les ouvrez : ventes sans TVA, mention « TVA non applicable, art. 294 du CGI », aucun envoi à SUPER PDP.',
+                'decision' => 'Magasins en Guyane ou à Mayotte : PILIQI refuse déjà les magasins de Guyane et de Mayotte, où la TVA ne s\'applique pas. Si vous les ouvrez : ventes sans TVA, mention « TVA non applicable, art. 294 du CGI » (art. L. 211-7 du CIBS pour un document émis à partir du 01/01/2027), aucun envoi à SUPER PDP.',
                 'regles' => ['verification.controle-sirene-et-territoire'],
             ],
             'T81.2' => [
@@ -6628,7 +6668,7 @@ return [
                 'a_venir' => 'Chaîne TVA, lot M9 (après l\'étape 2) : TVA de ces achats calculée, sans déduction (T8.2 à T8.5).',
             ],
             'T8.7' => [
-                'decision' => 'Franchise : mention sur les ventes hors de France : Une société en franchise met déjà la seule mention « TVA non applicable, art. 293 B du CGI » sur toutes ses factures de marchandises, même vendues hors de France.',
+                'decision' => 'Franchise : mention sur les ventes hors de France : Une société en franchise met déjà la seule mention « TVA non applicable, art. 293 B du CGI » (« TVA non applicable, art. L. 233-3 du CIBS » pour un document émis à partir du 01/01/2027) sur toutes ses factures de marchandises, même vendues hors de France.',
                 'regles' => ['prix.exoneration-et-franchise', 'hors.franchise-hors-de-france'],
             ],
             'T25.1' => [
@@ -6718,8 +6758,8 @@ return [
                 'a_venir' => 'Étape 12 (abonnements SaaS) : clause des conditions générales qui dit que l\'utilisateur répond de ses mentions.',
             ],
             'T40.3' => [
-                'decision' => 'Décret sur les mentions par nature d\'opération : Tant que le décret n\'est pas paru, PILIQI garde les mentions actuelles du CGI ; à sa parution, une nouvelle version datée des mentions vaudra pour les documents émis ensuite, sans toucher aux anciens.',
-                'regles' => ['prix.exoneration-et-franchise', 'hors-france.natures-d-operation'],
+                'decision' => 'Décret sur les mentions par nature d\'opération : Tant que le décret n\'est pas paru, PILIQI garde les mentions de la table datée des mentions ; à sa parution, une nouvelle version datée des mentions vaudra pour les documents émis ensuite, sans toucher aux anciens.',
+                'regles' => ['prix.exoneration-et-franchise', 'hors-france.natures-d-operation', 'hors.table-datee-des-mentions-de-tva', 'hors.controle-de-la-table-des-mentions'],
                 'a_venir' => 'Lot de mise à jour des paquets qui suit la parution du décret (CLAUDE.md, « Outillage », Journal officiel relu à chaque mise à jour) : nouvelle version datée des mentions pour les documents émis ensuite, dans la table datée des mentions de la chaîne TVA.',
             ],
             'T1.6' => [
@@ -6876,7 +6916,7 @@ return [
                 'a_venir' => 'Chaîne TVA, lots M3 et M5 (étape 1).',
             ],
             'T18.1' => [
-                'decision' => 'Service immatériel vendu à un particulier hors Union : Un service immatériel (conseil, licence, publicité…) pour un particulier domicilié hors de l\'Union se vendra sans TVA française, avec « TVA non applicable, art. 259 B du CGI », preuve du domicile notée.',
+                'decision' => 'Service immatériel vendu à un particulier hors Union : Un service immatériel (conseil, licence, publicité…) pour un particulier domicilié hors de l\'Union se vendra sans TVA française, avec « TVA non applicable, art. 259 B du CGI » (art. L. 211-97 et L. 211-98 du CIBS pour un document émis à partir du 01/01/2027), preuve du domicile notée.',
                 'a_venir' => 'Chaîne TVA, lot M9 (après l\'étape 2).',
             ],
             'T18.2' => [

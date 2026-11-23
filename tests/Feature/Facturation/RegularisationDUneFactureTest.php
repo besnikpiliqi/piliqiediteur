@@ -204,8 +204,51 @@ class RegularisationDUneFactureTest extends TestCase
         $this->assertSame([$consultation->id, NatureOperation::LivraisonIntracommunautaire, '2026-10-12', 'Berlin', TransportPar::Acquereur], [$rectificative->consultation_vies_id, $rectificative->nature_operation, $rectificative->date_operation_fin, $rectificative->livraison_ville, $rectificative->transport_par]);
         $this->assertSame(['250.00', '0.00', '250.00'], [$rectificative->total_ht, $rectificative->total_tva, $rectificative->total_ttc]);
         $mentions = app(MentionsFiscales::class)->pour($rectificative, $rectificative->emetteur());
-        $this->assertContains(NatureOperation::LivraisonIntracommunautaire->mention(), $mentions);
+        $this->assertContains('Exonération de TVA, article 262 ter I du CGI', $mentions);
         $this->assertContains('Date de la livraison ou de la prestation d\'origine : 12/10/2026', $mentions);
+    }
+
+    /**
+     * L'avoir de régularisation et la facture rectificative faits en 2027
+     * d'une livraison intracommunautaire de 2026 citent l'article du code
+     * des impositions sur les biens et services (CIBS), au jour de leur
+     * propre émission, qu'ils signent et impriment ; la facture qu'ils
+     * régularisent garde l'article du CGI qu'elle a signé (décision de
+     * Claude T40.1, voir TableDesMentionsDeTva).
+     */
+    public function test_la_regularisation_faite_en_2027_d_une_facture_de_2026_cite_le_cibs_et_la_facture_garde_le_cgi(): void
+    {
+        $magasin = $this->magasinDeLyon();
+        $client = Client::factory()->etranger('DE', 'DE123456789')->create();
+        ConsultationVies::forceCreate([
+            'client_id' => $client->id,
+            'numero_tva' => 'DE123456789',
+            'valide' => true,
+            'identifiant_consultation' => 'WAPIAAAAW1234567',
+            'consultee_le' => self::aParis('2026-10-15 09:00:00'),
+            'reponse' => '{"valid":true}',
+        ]);
+        $facture = $this->facturer($magasin, $client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 25, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 12]], [
+            'nature_operation' => NatureOperation::LivraisonIntracommunautaire,
+            'livraison_adresse' => 'Musterstraße 1',
+            'livraison_code_postal' => '10115',
+            'livraison_ville' => 'Berlin',
+            'livraison_pays' => 'DE',
+            'date_operation_fin' => '2026-10-12',
+            'transport_par' => TransportPar::Acquereur,
+        ]);
+        $this->corrigerLeSirenDeLaSociete($magasin);
+        $this->travelTo(self::aParis('2027-01-05 10:00:00'));
+
+        [$avoir, $rectificative] = $this->regulariser($magasin, $facture);
+
+        $cibs = 'Exonération de TVA, articles L. 213-12, 1° et L. 213-13 du CIBS';
+        $this->assertContains($cibs, $avoir->mentionsSignees());
+        $this->assertContains($cibs, $rectificative->mentionsSignees());
+        $this->assertContains($cibs, PiedDePage::pour($rectificative, $rectificative->emetteur())->lignes);
+        $this->assertContains($cibs, PiedDePage::pour($avoir, $avoir->emetteur())->lignes);
+        $this->assertContains('Exonération de TVA, article 262 ter I du CGI', $facture->fresh()->mentionsSignees());
+        $this->assertNotContains($cibs, PiedDePage::pour($facture->fresh(), $facture->fresh()->emetteur())->lignes);
     }
 
     /**

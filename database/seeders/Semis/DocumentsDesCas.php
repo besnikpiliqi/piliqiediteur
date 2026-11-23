@@ -44,6 +44,7 @@ use App\Domain\Facturation\Models\LienDuDevis;
 use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Models\VisaDetaxe;
 use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Facturation\Support\TableDesMentionsDeTva;
 use App\Domain\Tenancy\Actions\ModifierLesParametresDuMagasinAction;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -83,7 +84,10 @@ use LogicException;
  * casDuDepannage()) ; et les incidents : une facture rejetée par
  * la plateforme agréée et une autre « non transmise : incident technique »
  * (voir transmettreAvecDesIncidents()), et un envoi en échec pendant une
- * panne du serveur d'envoi (voir ServeurDEnvoiEnPanne).
+ * panne du serveur d'envoi (voir ServeurDEnvoiEnPanne). De part et d'autre
+ * de chaque jour où la table datée des mentions de la TVA change, quand ce
+ * jour et sa veille sont dans l'histoire, les documents de chaque mention
+ * (voir enFinDeJour()).
  */
 final class DocumentsDesCas
 {
@@ -189,6 +193,15 @@ final class DocumentsDesCas
 
     private ?Facture $ticketEnDetaxe = null;
 
+    /**
+     * L'export des Halles de la veille de chaque bascule des mentions, par
+     * premier jour de la version, dont le jour même rend une partie (voir
+     * enFinDeJour()).
+     *
+     * @var array<string, Facture>
+     */
+    private array $exportsDeLaVeille = [];
+
     private ?EnvoiDocument $devisARefuserEnLigne = null;
 
     private ?EnvoiDocument $devisAAccepterEnLigne = null;
@@ -248,6 +261,45 @@ final class DocumentsDesCas
         if ($this->semis->seme('commerce') && $rang % 10 === 0) {
             $this->fermerUneCaisseLeSoir($rang, $this->gestes('halles'), $this->semis->compte('Camille Laurent'));
         }
+    }
+
+    /**
+     * Le travail de ce jour de l'histoire avant tout autre geste du jour :
+     * le premier jour d'une version de la table des mentions, à 1 h à
+     * Paris, quand Fort-de-France est encore la veille au soir, à 20 h, un
+     * export de ce magasin, qui cite les articles de la veille, ceux de son
+     * calendrier (voir enFinDeJour()).
+     */
+    public function auDebutDuJour(int $rang): void
+    {
+        if ($this->semis->seme('commerce') && in_array($this->horloge->jour($rang), self::basculesSemees($this->horloge), true)) {
+            $this->leSoir($rang, '01:00', fn (): Facture => $this->exporterDeFortDeFrance());
+        }
+    }
+
+    /**
+     * Le premier jour de chaque version de la table des mentions de la TVA
+     * (voir TableDesMentionsDeTva::premiersJoursDesVersions()) dont la
+     * veille et le jour même sont des jours suivants de cette histoire
+     * (voir ActiviteDesMagasins::joursSuivants()) : ceux de part et
+     * d'autre desquels le semis pose les documents de chaque mention (voir
+     * enFinDeJour()). Aucun tant que le lendemain du premier jour d'une
+     * version n'est pas passé : l'histoire finit la veille du semis.
+     *
+     * @return list<string>
+     */
+    public static function basculesSemees(HorlogeDuSemis $horloge): array
+    {
+        $dansLesJoursSuivants = static function (string $jour) use ($horloge): bool {
+            $rang = $horloge->rangDuJour($jour);
+
+            return $rang !== null && $rang >= ActiviteDesMagasins::PREMIER_DES_JOURS_SUIVANTS && $rang <= ActiviteDesMagasins::DERNIER_DES_JOURS_SUIVANTS;
+        };
+
+        return array_values(array_filter(
+            TableDesMentionsDeTva::premiersJoursDesVersions(),
+            fn (string $premierJour): bool => $dansLesJoursSuivants(Calendrier::ajouterJours($premierJour, -1)) && $dansLesJoursSuivants($premierJour),
+        ));
     }
 
     /**
@@ -418,6 +470,106 @@ final class DocumentsDesCas
         $conseil->fiche($claire, Client::class, ['nom' => 'Mairie de Montreuil', 'type_client' => TypeClient::Professionnel, 'siren' => IdentifiantsInsee::avecSaCle('00000029'), 'adresse' => 'Place Jean-Jaurès', 'code_postal' => '93100', 'ville' => 'Montreuil', 'pays' => 'FR', 'email' => 'finances@mairie-montreuil.exemple.test', 'delai_paiement_jours' => 30, 'mode_paiement_prefere' => ModePaiement::Virement->value]);
         $conseil->fiche($claire, Client::class, ['nom' => 'Salon Coiffure Élise', 'type_client' => TypeClient::Professionnel, 'siren' => IdentifiantsInsee::avecSaCle('00000028'), 'adresse' => '9 rue des Abbesses', 'code_postal' => '75018', 'ville' => 'Paris', 'pays' => 'FR', 'mode_paiement_prefere' => ModePaiement::Prelevement->value]);
         $conseil->fiche($claire, Client::class, ['nom' => 'Thomas Leroux', 'type_client' => TypeClient::Particulier, 'pays' => 'FR', 'mode_paiement_prefere' => ModePaiement::Especes->value]);
+    }
+
+    /**
+     * Les documents de chaque mention de la TVA de part et d'autre de chaque
+     * jour où la table datée des mentions change, quand ce jour et sa
+     * veille sont des jours suivants de l'histoire (voir basculesSemees()),
+     * comme le jour où les articles du code général des impôts (CGI) cèdent
+     * la place à ceux du code des impositions sur les biens et services
+     * (CIBS). Le soir de la veille et celui du jour même, à 23 h 45 à Paris,
+     * chaque document signe les articles de son jour (voir
+     * semerLesMentionsDuJour()) ; le jour même, l'avoir d'une partie de
+     * l'export de la veille cite les articles du jour, quand l'export garde
+     * ceux de la veille ; à Fort-de-France, à son calendrier, l'export du
+     * soir de la veille, à 20 h, part quand Paris a déjà changé de jour
+     * (voir auDebutDuJour()). Le semis des bases modèles du site de
+     * démonstration, refait chaque nuit, les montre dès que la veille et
+     * le jour même sont dans son histoire.
+     *
+     * C'est le dernier travail du jour, après tout autre geste, les
+     * démonstrations des sociétés comprises (voir
+     * ActiviteDesMagasins::joursSuivants()) : 23 h 45 vient après l'heure
+     * de chacun, si bien qu'aucun geste du jour ne change d'heure quand le
+     * jour d'une bascule tombe sur l'un de ses jours, quelle que soit la
+     * date du semis.
+     */
+    public function enFinDeJour(int $rang): void
+    {
+        $jour = $this->horloge->jour($rang);
+
+        foreach (self::basculesSemees($this->horloge) as $premierJour) {
+            if (in_array($jour, [Calendrier::ajouterJours($premierJour, -1), $premierJour], true)) {
+                $this->leSoir($rang, '23:45', fn () => $this->semerLesMentionsDuJour($rang, $premierJour, $jour === $premierJour));
+            }
+        }
+    }
+
+    /**
+     * Un document de chaque mention, ce soir : aux Halles, un export hors
+     * de l'Union, une livraison vers un DOM et une livraison
+     * intracommunautaire (n° de TVA vérifié sur VIES le jour même) ; au
+     * magasin de services, une prestation autoliquidée dans l'Union et une
+     * prestation hors de l'Union ; sur le poste, à l'Atelier Brun, en
+     * franchise en base, un ticket et un devis envoyé, valable trente jours,
+     * qui se relit ensuite avec la mention de son envoi. Le jour même, la
+     * cliente américaine rend l'une des tasses de l'export de la veille, et
+     * Fort-de-France exporte de nouveau, ce soir de son calendrier.
+     */
+    private function semerLesMentionsDuJour(int $rang, string $premierJour, bool $leJourMeme): void
+    {
+        $jour = $this->horloge->jour($rang);
+
+        if ($this->semis->seme('commerce')) {
+            $halles = $this->gestes('halles');
+            $camille = $this->semis->compte('Camille Laurent');
+            $acme = $this->client($halles, 'Acme Inc.');
+            $export = $halles->facturer($camille, $acme, [$this->ligne($halles, 'TASSE-GRES', 2)], [], ['nature_operation' => NatureOperation::ExportHorsUe, ...self::NEW_YORK]);
+            $halles->facturer($camille, $this->client($halles, 'Lucie Bernard'), [$this->ligne($halles, 'CARNET-A5', 2)], [], ['nature_operation' => NatureOperation::LivraisonDom, 'livraison_adresse' => '1 rue Victor Hugo', 'livraison_code_postal' => '97200', 'livraison_ville' => 'Fort-de-France', 'livraison_pays' => 'FR']);
+            $halles->facturer($camille, $this->verifieSurVies($halles, $camille, 'Muster GmbH'), [$this->ligne($halles, 'BOUGIE-FIGUE', 2)], [], ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, ...self::BERLIN, 'date_operation_fin' => $jour, 'transport_par' => TransportPar::Acquereur->value]);
+
+            if ($leJourMeme) {
+                $deLaVeille = $this->exportsDeLaVeille[$premierJour] ?? throw new LogicException('L\'export de la veille de la bascule n\'a pas été semé.');
+                $ligneDeLaVeille = $halles->dans(fn (): int => $deLaVeille->lignes()->sole()->id);
+                $halles->rendre($camille, $acme, [['ligne_facture_id' => $ligneDeLaVeille, 'quantite' => 1]], 'Une tasse arrivée fêlée, rendue au transporteur.');
+                $this->exporterDeFortDeFrance();
+            } else {
+                $this->exportsDeLaVeille[$premierJour] = $export;
+            }
+        }
+
+        if ($this->semis->seme('services')) {
+            $conseil = $this->gestes('conseil');
+            $claire = $this->semis->compte('Claire Dubois');
+            $conseil->facturer($claire, $this->verifieSurVies($conseil, $claire, 'Bauer Consulting GmbH'), [$this->ligne($conseil, 'Heure de conseil', 3)], [], ['nature_operation' => NatureOperation::PrestationUeAutoliquidation]);
+            $conseil->facturer($claire, $this->client($conseil, 'Northwind Trading Ltd'), [$this->ligne($conseil, 'Heure de conseil', 2)], [], ['nature_operation' => NatureOperation::PrestationHorsUe]);
+        }
+
+        if ($this->semis->seme('atelier')) {
+            $atelier = $this->gestes('atelier');
+            $mathilde = $this->semis->compte('Mathilde Brun (atelier)');
+            $atelier->vendreALaCaisse($mathilde, $atelier->comptoir(), [$atelier->ligne('Retouche de vêtement', 1)], ModePaiement::Especes);
+            $odile = $atelier->dans(fn (): ?Client => Client::query()->where('nom', 'Odile Marchand')->first())
+                ?? $atelier->fiche($mathilde, Client::class, ['nom' => 'Odile Marchand', 'type_client' => TypeClient::Particulier, 'pays' => 'FR', 'adresse' => '7 rue de la Roquette', 'code_postal' => '75011', 'ville' => 'Paris', 'email' => 'odile.marchand@exemple.test']);
+            $devis = $atelier->dans(fn (): Devis => app(CreerDevisAction::class)->handle($mathilde, $odile, [$atelier->ligne('Retouche de vêtement', 3)], ['date_validite' => Calendrier::ajouterJours($jour, 30), 'lieu_d_intervention' => "7 rue de la Roquette\n75011 Paris"]));
+            $atelier->dans(fn (): Devis => app(EmettreDevisAction::class)->handle($mathilde, $devis, GestesDuMagasin::jeton()));
+        }
+    }
+
+    /**
+     * Un export de Fort-de-France (Maison Ferrand) vers Miami, par sa
+     * responsable, à l'heure où le semis en est : son client, un importateur
+     * américain, se crée au premier export.
+     */
+    private function exporterDeFortDeFrance(): Facture
+    {
+        $fortDeFrance = $this->gestes('martinique');
+        $joelle = $this->semis->compte('Joëlle Marie-Sainte');
+        $importateur = $fortDeFrance->dans(fn (): ?Client => Client::query()->where('nom', 'Caribbean Imports LLC')->first())
+            ?? $fortDeFrance->fiche($joelle, Client::class, ['nom' => 'Caribbean Imports LLC', 'type_client' => TypeClient::Professionnel, 'pays' => 'US', 'etabli_en_france' => false, 'identifiant_etranger' => 'EIN 59-1234567', 'adresse' => '800 Brickell Avenue', 'code_postal' => '33131', 'ville' => 'Miami', 'email' => 'orders@caribbean-imports.exemple.test', 'mode_paiement_prefere' => ModePaiement::Virement->value]);
+
+        return $fortDeFrance->facturer($joelle, $importateur, [$this->ligne($fortDeFrance, 'THE-CITRONNELLE', 6)], [], ['nature_operation' => NatureOperation::ExportHorsUe, 'livraison_adresse' => '800 Brickell Avenue', 'livraison_code_postal' => '33131', 'livraison_ville' => 'Miami', 'livraison_pays' => 'US']);
     }
 
     /**

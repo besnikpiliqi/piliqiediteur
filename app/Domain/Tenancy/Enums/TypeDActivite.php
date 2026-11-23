@@ -2,6 +2,9 @@
 
 namespace App\Domain\Tenancy\Enums;
 
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Facturation\Enums\ReferenceDeTva;
+use App\Domain\Facturation\Support\TableDesMentionsDeTva;
 use App\Domain\Tenancy\Support\Reglage;
 use Filament\Support\Contracts\HasLabel;
 
@@ -74,13 +77,15 @@ enum TypeDActivite: string implements HasLabel
 
     /**
      * Ce que le formulaire rappelle toujours sous le menu, quelle que soit
-     * l'entrée choisie.
+     * l'entrée choisie, avec l'article de la franchise en base en vigueur
+     * aujourd'hui à Paris (voir TableDesMentionsDeTva).
      */
     public static function rappelDuChoixDefinitif(): string
     {
         $application = Reglage::texte('app.name');
+        $franchise = TableDesMentionsDeTva::texte(ReferenceDeTva::ArticleDeLaFranchise, Calendrier::deParis()->aujourdhui());
 
-        return "Ce choix est définitif : il décide des menus de {$application} (articles, achats et stock) et ne changera pas, même si votre activité change ensuite. Dans le doute, choisissez « ".self::Commerce->getLabel()." », le plus complet. Les micro-entrepreneurs en franchise de TVA (art. 293 B du CGI) sont pris en charge. En revanche, {$application} ne permet pas de facturer une activité exonérée de TVA par la loi (soins médicaux, enseignement, assurance, location de logements…).";
+        return "Ce choix est définitif : il décide des menus de {$application} (articles, achats et stock) et ne changera pas, même si votre activité change ensuite. Dans le doute, choisissez « ".self::Commerce->getLabel()." », le plus complet. Les micro-entrepreneurs en franchise de TVA ({$franchise}) sont pris en charge. En revanche, {$application} ne permet pas de facturer une activité exonérée de TVA par la loi (soins médicaux, enseignement, assurance, location de logements…).";
     }
 
     /**

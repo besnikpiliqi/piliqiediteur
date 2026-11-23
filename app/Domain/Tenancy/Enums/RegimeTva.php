@@ -16,9 +16,9 @@ use Filament\Support\Contracts\HasLabel;
  * opérations (voir EReportingDesParticuliers).
  *
  * En franchise en base, le magasin vend sans TVA (voir estFranchise()) :
- * ses ventes sont à 0 %, au même prix TTC, avec la mention
- * MENTION_FRANCHISE (B10, voir ConstructeurLigneDocument et
- * MentionsFiscales).
+ * ses ventes sont à 0 %, au même prix TTC, avec la mention de la
+ * franchise du jour de chaque document (B10, voir ConstructeurLigneDocument,
+ * MentionsFiscales et TableDesMentionsDeTva::mentionDeLaFranchise()).
  *
  * Le régime "réel simplifié" est amené à disparaître (loi n°2025-127,
  * art. 38, à compter du 1er janvier 2027, migration automatique vers le
@@ -30,19 +30,6 @@ enum RegimeTva: string implements HasLabel
     case ReelNormalTrimestriel = 'reel_normal_trimestriel';
     case ReelSimplifie = 'reel_simplifie';
     case FranchiseEnBase = 'franchise_en_base';
-
-    /**
-     * L'article qui dispense de TVA un magasin en franchise : seul endroit
-     * à changer quand la référence du code des impositions sur les biens
-     * et services (CIBS) sera confirmée, l'ancienne restant tolérée un
-     * temps.
-     */
-    public const ARTICLE_FRANCHISE = 'art. 293 B du CGI';
-
-    /**
-     * La mention qu'imprime toute vente en franchise.
-     */
-    public const MENTION_FRANCHISE = 'TVA non applicable, '.self::ARTICLE_FRANCHISE;
 
     public function getLabel(): string
     {

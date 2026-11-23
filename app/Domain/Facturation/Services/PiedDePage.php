@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
@@ -17,7 +18,9 @@ use InvalidArgumentException;
  * une facture ou un devis, les mentions entre professionnels d'une facture
  * à un professionnel (pénalités, indemnité forfaitaire, escompte), les
  * mentions fiscales du document (catégorie de l'opération, exonération,
- * franchise ou option pour les débits, voir MentionsFiscales), la mention
+ * franchise ou option pour les débits), celles qu'un document émis a
+ * signées, celles de son jour pour un brouillon ou un devis (voir
+ * MentionsFiscales::imprimees()), la mention
  * du bon d'avoir d'un avoir fait au client comptoir et celle de la
  * régularisation d'un avoir de régularisation, après la correction du
  * SIREN de la société. Le magasin qui vend reste en tête (voir
@@ -70,6 +73,8 @@ final readonly class PiedDePage
      * a signé une fois émis (voir FigeSonEmetteur), celui qu'un devis a
      * figé à son dernier envoi (voir Devis::emetteur()), la société et le
      * magasin d'aujourd'hui pour un brouillon.
+     *
+     * @throws DocumentSansEnregistrementSigneException
      */
     public static function pour(Facture|Avoir|Devis $document, Emetteur $emetteur): self
     {
@@ -79,7 +84,7 @@ final readonly class PiedDePage
                 $emetteur->ligneDeLAssurance(),
                 $document instanceof Avoir ? null : $document->conditions_paiement,
                 ...($document instanceof Facture && $document->estPourUnProfessionnel() ? array_values($emetteur->mentionsEntreProfessionnels) : []),
-                ...app(MentionsFiscales::class)->pour($document, $emetteur),
+                ...app(MentionsFiscales::class)->imprimees($document, $emetteur),
                 $document instanceof Avoir ? $document->mentionDuBonDAvoir() : null,
                 $document instanceof Avoir ? $document->mentionDeRegularisation() : null,
             ], filled(...))),

@@ -186,6 +186,31 @@ class ReponseAuDevisEnLigneTest extends TestCase
     }
 
     /**
+     * La page du lien d'un devis envoyé le 20 décembre 2026 et ouverte en
+     * janvier 2027 cite la franchise du jour de son envoi, avec l'article
+     * du CGI ; modifié puis renvoyé, le devis part avec un nouveau lien qui
+     * cite l'article du CIBS (décision de Claude T40.1, voir
+     * TableDesMentionsDeTva).
+     */
+    public function test_la_page_du_lien_cite_la_mention_du_jour_de_l_envoi_du_devis(): void
+    {
+        Societe::query()->whereKey($this->magasin->societe_id)->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $this->magasin->refresh();
+        app(TenantContext::class)->set($this->magasin);
+        $this->travelTo(self::aParis('2026-12-20 10:00:00'));
+        $client = Client::factory()->create();
+        $lignes = [['produit_id' => Produit::factory()->create(['nom' => 'Câble tressé', 'prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]];
+        $devis = $this->devisEnvoyable(['date_validite' => '2027-01-31'], $lignes, $client);
+        $jeton = $this->envoyer($devis);
+
+        $this->travelTo(self::aParis('2027-01-10 10:00:00'));
+        $this->repondre('get', $jeton)->assertOk()->assertSee('TVA non applicable, art. 293 B du CGI')->assertDontSee('CIBS');
+
+        $modifie = app(ModifierDevisAction::class)->handle(self::auteur(), $devis->fresh(), $client, $lignes, ['date_validite' => '2027-01-31']);
+        $this->repondre('get', $this->envoyer($modifie))->assertOk()->assertSee('TVA non applicable, art. L. 233-3 du CIBS')->assertDontSee('293 B');
+    }
+
+    /**
      * En franchise en base, la page du lien dit, comme le PDF, que la TVA
      * n'est pas applicable ; pour un professionnel, elle montre le PU HT
      * d'un article et l'explique, sans la phrase du PU HT exact.

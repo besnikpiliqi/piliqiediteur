@@ -35,5 +35,5 @@ test('le vendeur lit, dans les formulaires d’une nouvelle facture et d’un no
 });
 
 test('la page d’inscription dit qu’une société membre d’un assujetti unique ne vend pas encore dans PILIQI', function () {
-    $this->naviguer('/app/register')->voir(InscriptionSociete::INFORMATION_ASSUJETTI_UNIQUE);
+    $this->naviguer('/app/register')->voir(InscriptionSociete::informationAssujettiUnique());
 });

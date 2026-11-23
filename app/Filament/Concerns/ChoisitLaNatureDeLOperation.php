@@ -11,6 +11,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\SaisieDecimale;
+use App\Domain\Facturation\Support\TableDesMentionsDeTva;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
@@ -36,8 +37,9 @@ use InvalidArgumentException;
  * côté serveur, comme à l'enregistrement (voir
  * ContexteDeVente::pourEnregistrer()) : une liste
  * déroulante ne restreint ses choix qu'à l'affichage. L'aide dit la
- * mention imprimée et les conditions, que l'émission contrôle (voir
- * ControleNatureOperation).
+ * mention qu'imprimerait le document émis aujourd'hui, au calendrier du
+ * magasin (voir TableDesMentionsDeTva), et les conditions, que l'émission
+ * contrôle (voir ControleNatureOperation).
  *
  * Changer de nature peut faire entrer la vente dans la TVA française ou
  * l'en faire sortir : le prix saisi d'un service change alors de sens, et
@@ -393,9 +395,15 @@ trait ChoisitLaNatureDeLOperation
         return ContexteDeVente::pour(null, app(TenantContext::class)->magasin(), $nature)->retireLaTvaDuPrix();
     }
 
+    /**
+     * Les conditions de la nature, précédées de la mention qu'imprimerait le
+     * document émis aujourd'hui dans le magasin actif, à son calendrier.
+     */
     private static function aideDeLaNature(NatureOperation $nature): string
     {
-        return $nature->mention() === null ? $nature->conditions() : "Mention : « {$nature->mention()} ». {$nature->conditions()}";
+        $mention = TableDesMentionsDeTva::mentionDeLaNature($nature, app(TenantContext::class)->magasin()->calendrier()->aujourdhui());
+
+        return $mention === null ? $nature->conditions() : "Mention : « {$mention} ». {$nature->conditions()}";
     }
 
     /**

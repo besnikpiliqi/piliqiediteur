@@ -24,9 +24,9 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
  * l'imprime donc tel qu'il a été signé (voir FacturePdfGenerator et
  * AvoirPdfGenerator), et l'e-mail qui le porte le présente (voir
  * DocumentMail). Ce que le document a signé d'autre dans ce contexte se
- * relit au même endroit (voir contexteSigne()), comme la mention du bon
- * d'avoir d'un avoir fait au client comptoir (voir
- * Avoir::mentionDuBonDAvoir()).
+ * relit au même endroit (voir contexteSigne()), comme ses mentions
+ * fiscales (voir mentionsSignees()) et la mention du bon d'avoir d'un avoir
+ * fait au client comptoir (voir Avoir::mentionDuBonDAvoir()).
  */
 trait FigeSonEmetteur
 {
@@ -62,6 +62,22 @@ trait FigeSonEmetteur
         }
 
         return Emetteur::duContenuSigne(ValeursLues::tableauDe($this->contexteSigne(), 'emetteur'));
+    }
+
+    /**
+     * Les mentions fiscales que le document numéroté a signées à son
+     * émission, dans l'ordre où il les imprime pour toujours (voir
+     * MentionsFiscales::imprimees()) : leurs articles sont ceux de la table
+     * datée des mentions au jour de son émission, même quand elle a reçu
+     * depuis une nouvelle version (voir TableDesMentionsDeTva).
+     *
+     * @return list<string>
+     *
+     * @throws DocumentSansEnregistrementSigneException
+     */
+    public function mentionsSignees(): array
+    {
+        return ValeursLues::textes(ValeursLues::tableauDe($this->contexteSigne(), 'mentions'));
     }
 
     /**

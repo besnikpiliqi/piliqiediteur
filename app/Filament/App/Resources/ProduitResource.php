@@ -3,10 +3,11 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Enums\ReferenceDeTva;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
+use App\Domain\Facturation\Support\TableDesMentionsDeTva;
 use App\Domain\Recherche\RechercheSansAccents;
-use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\Reglage;
 use App\Domain\Tenancy\Support\RequeteDuModele;
@@ -163,15 +164,17 @@ class ProduitResource extends Resource
 
     /**
      * En franchise en base, le rappel que les ventes se font sans TVA au
-     * prix TTC indiqué (B10) ; et un taux saisi qui n'est pas en vigueur
-     * sur le territoire du magasin (X8).
+     * prix TTC indiqué (B10), avec l'article de la franchise en vigueur
+     * aujourd'hui au calendrier du magasin (voir TableDesMentionsDeTva) ; et
+     * un taux saisi qui n'est pas en vigueur sur le territoire du magasin
+     * (X8).
      */
     private static function aideSurLeTauxDeTva(mixed $taux): ?string
     {
         $magasin = app(TenantContext::class)->magasin();
         $aides = array_filter([
             $magasin->societe->estEnFranchiseDeTva()
-                ? 'Votre société est en franchise en base : vos ventes sont facturées sans TVA ('.RegimeTva::ARTICLE_FRANCHISE.'), au prix TTC indiqué.'
+                ? 'Votre société est en franchise en base : vos ventes sont facturées sans TVA ('.TableDesMentionsDeTva::texte(ReferenceDeTva::ArticleDeLaFranchise, $magasin->calendrier()->aujourdhui()).'), au prix TTC indiqué.'
                 : null,
             $magasin->territoireTva()?->aideSiTauxInhabituel($taux),
         ]);

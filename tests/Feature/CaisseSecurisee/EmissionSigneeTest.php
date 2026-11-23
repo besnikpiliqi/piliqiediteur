@@ -342,11 +342,12 @@ class EmissionSigneeTest extends TestCase
 
     /**
      * Une vente en franchise en base signe sa franchise et la mention
-     * qu'elle imprime (B10) ; l'option pour les débits, sans objet sans TVA
-     * due, n'y figure pas.
+     * qu'elle imprime (B10), celle du CGI pour une vente de 2026 ;
+     * l'option pour les débits, sans objet sans TVA due, n'y figure pas.
      */
     public function test_une_vente_en_franchise_signe_sa_franchise_et_sa_mention(): void
     {
+        $this->travelTo(self::aParis('2026-10-09 10:15:30'));
         $this->magasinActif(['regime_tva' => RegimeTva::FranchiseEnBase, 'option_debits_tva' => true]);
         $ticket = $this->encaisser(Client::factory()->create(), [[$this->produit('CAF-250', 'Café moulu 250 g', 12), 1]]);
 

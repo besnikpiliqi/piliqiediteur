@@ -5,7 +5,9 @@ namespace App\Filament\App\Resources;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Actions\ModifierUneFicheAction;
+use App\Domain\Facturation\Enums\ReferenceDeTva;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Support\TableDesMentionsDeTva;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\CleDuModele;
 use App\Domain\Tenancy\Support\CompteConnecte;
@@ -81,7 +83,7 @@ class ServiceResource extends Resource
                 ->columnSpanFull(),
             Toggle::make('lieu_specifique')
                 ->label('Lieu fixé par la loi : immeuble, transport de personnes, location courte de véhicule, restauration, accès à un événement')
-                ->helperText('Jamais facturé sans TVA française à un professionnel établi à l\'étranger (art. 259 A du CGI).')
+                ->helperText(fn (): string => 'Jamais facturé sans TVA française à un professionnel établi à l\'étranger ('.TableDesMentionsDeTva::texte(ReferenceDeTva::ArticlesDuLieuFixeParLaLoi, app(TenantContext::class)->magasin()->calendrier()->aujourdhui()).').')
                 ->default(false)
                 ->columnSpanFull(),
         ]);

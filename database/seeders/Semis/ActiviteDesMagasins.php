@@ -53,6 +53,19 @@ use LogicException;
  */
 final class ActiviteDesMagasins
 {
+    /**
+     * Le premier des jours suivants de l'histoire (voir joursSuivants()),
+     * qui vont jusqu'à l'avant-veille du semis : les jours d'avant
+     * remplissent les magasins.
+     */
+    public const PREMIER_DES_JOURS_SUIVANTS = 17;
+
+    /**
+     * Le dernier des jours suivants : l'avant-veille du semis, la veille
+     * ayant ses derniers gestes (voir DerniersGestes).
+     */
+    public const DERNIER_DES_JOURS_SUIVANTS = SemisComplet::JOURS - 2;
+
     public function __construct(
         private readonly HorlogeDuSemis $horloge,
         private readonly SemisComplet $semis,
@@ -339,7 +352,14 @@ final class ActiviteDesMagasins
      * sur trois selon son rang, sans jamais vendre au-delà du stock ; le
      * soir, les sociétés des cas vendent et changent (voir SocietesDesCas),
      * puis les comptes des cas (voir ComptesDesCas), puis les documents
-     * des cas se font (voir DocumentsDesCas) ;
+     * des cas se font (voir DocumentsDesCas), puis les démonstrations des
+     * sociétés (voir DemonstrationsDesSocietes) ; de part et d'autre de
+     * chaque jour où la table des mentions de la TVA change, la veille et
+     * le jour même finissent, après tout autre geste, à 23 h 45 à Paris,
+     * par les documents de chaque mention (voir
+     * DocumentsDesCas::enFinDeJour()), et le jour même commence, avant
+     * tout autre geste, à 1 h à Paris, par un export du soir de la veille
+     * à Fort-de-France (voir DocumentsDesCas::auDebutDuJour()) ;
      * toutes les deux semaines, le responsable de chaque magasin
      * réassortit son stock par une facture d'achat validée (un peu plus
      * que ce qui se vend en deux semaines), à un prix qui varie (le coût
@@ -406,7 +426,8 @@ final class ActiviteDesMagasins
         $achatsDeLEcart = new AchatsDeLEcartDesPrix($this->horloge, $this->semis, $gestes);
         $achatsDeLEcart->preparer();
 
-        for ($jour = 17; $jour <= SemisComplet::JOURS - 2; $jour++) {
+        for ($jour = self::PREMIER_DES_JOURS_SUIVANTS; $jour <= self::DERNIER_DES_JOURS_SUIVANTS; $jour++) {
+            $documents->auDebutDuJour($jour);
             $achatsDeLEcart->auJour($jour);
             $charges->auJour($jour);
 
@@ -445,6 +466,7 @@ final class ActiviteDesMagasins
             $this->comptesDesCas->auJour($jour);
             $documents->auJour($jour);
             $demonstrations?->auJour($jour);
+            $documents->enFinDeJour($jour);
         }
     }
 

@@ -6,10 +6,12 @@ use App\Domain\Calendrier\Calendrier;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Facturation\Enums\NatureOperation;
+use App\Domain\Facturation\Enums\ReferenceDeTva;
 use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Exceptions\NatureOperationRefuseeException;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Facturation\Support\TableDesMentionsDeTva;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use Illuminate\Support\Collection;
 
@@ -31,34 +33,39 @@ use Illuminate\Support\Collection;
  *   société, que la facture porte (règles BR-G-02, BR-IC-02 et BR-AE-02
  *   de la facture électronique). Il se lit par l'émetteur (voir
  *   Emetteur::duMagasin()), comme les autres réglages fiscaux.
- * - Export hors UE (art. 262 I du CGI) : des biens, et leurs frais
- *   accessoires, expédiés par le magasin à une adresse complète hors du
- *   territoire de TVA de l'Union, ni à Monaco ni dans un département
- *   d'outre-mer, qui a sa propre nature (voir TerritoireFiscal).
- * - Livraison vers un DOM (art. 294 du CGI) : des biens, et leurs frais
- *   accessoires, expédiés par le magasin à une adresse complète dans un
- *   département d'outre-mer autre que celui du magasin, que dit son
- *   territoire (voir Territoire::departement()), jamais son code postal,
- *   que le répertoire Sirene peut ne pas diffuser. La Guadeloupe et la
- *   Martinique forment un seul territoire (art. 294 du CGI) : entre
- *   elles, la vente reste au taux du magasin, comme sur place (décisions de
- *   Claude T2.2 et P41.4 de l'onglet « À faire vérifier par un
- *   professionnel »). Une livraison qui reste ainsi dans le territoire du
- *   magasin est refusée pour le même motif en « Livraison vers un DOM »
- *   et en export, qui ne renvoie jamais vers une nature elle aussi
- *   refusée.
- * - Livraison intracommunautaire (art. 262 ter I du CGI) : des biens, et
- *   leurs frais accessoires, livrés à un professionnel à une adresse
- *   complète d'un autre État membre (l'Irlande du Nord comprise), à une
- *   date donnée, par un transport précisé, le client ayant un n° de TVA
- *   d'un autre État membre (XI admis) valide sur VIES ce jour-là.
- * - Prestation autoliquidée (art. 259-1° du CGI) : des services au lieu
- *   non fixé par la loi, à un professionnel établi dans un autre État
- *   membre, dont le n° de TVA de cet État (jamais FR ni XI) est valide
- *   sur VIES ce jour-là.
- * - Prestation hors UE (art. 259-1° du CGI) : des services au lieu non
- *   fixé par la loi, à un professionnel établi hors de l'Union (ni à
- *   Monaco), identifié par son n° de TVA ou un autre identifiant.
+ * - Export hors UE (art. 262 I du CGI, L. 213-12, 2° et L. 213-14 du
+ *   CIBS) : des biens, et leurs frais accessoires, expédiés par le
+ *   magasin à une adresse complète hors du territoire de TVA de l'Union,
+ *   ni à Monaco ni dans un département d'outre-mer, qui a sa propre
+ *   nature (voir TerritoireFiscal).
+ * - Livraison vers un DOM (art. 294 du CGI, L. 211-7 du CIBS) : des
+ *   biens, et leurs frais accessoires, expédiés par le magasin à une
+ *   adresse complète dans un département d'outre-mer autre que celui du
+ *   magasin, que dit son territoire (voir Territoire::departement()),
+ *   jamais son code postal, que le répertoire Sirene peut ne pas
+ *   diffuser. La Guadeloupe et la Martinique forment un seul territoire
+ *   (art. 294 du CGI, L. 211-7 et L. 112-4, 2° du CIBS) : entre elles, la
+ *   vente reste au taux du magasin, comme sur place (décisions de Claude
+ *   T2.2 et P41.4 de l'onglet « À faire vérifier par un professionnel »).
+ *   Une livraison qui reste ainsi dans le territoire du magasin est
+ *   refusée pour le même motif en « Livraison vers un DOM » et en export,
+ *   qui ne renvoie jamais vers une nature elle aussi refusée.
+ * - Livraison intracommunautaire (art. 262 ter I du CGI, L. 213-12, 1° et
+ *   L. 213-13 du CIBS) : des biens, et leurs frais accessoires, livrés à
+ *   un professionnel à une adresse complète d'un autre État membre
+ *   (l'Irlande du Nord comprise), à une date donnée, par un transport
+ *   précisé, le client ayant un n° de TVA d'un autre État membre (XI
+ *   admis) valide sur VIES ce jour-là.
+ * - Prestation autoliquidée (art. 259-1° du CGI, L. 211-92 du CIBS) : des
+ *   services au lieu non fixé par la loi, à un professionnel établi dans
+ *   un autre État membre, dont le n° de TVA de cet État (jamais FR ni XI)
+ *   est valide sur VIES ce jour-là.
+ * - Prestation hors UE (art. 259-1° du CGI, L. 211-92 du CIBS) : des
+ *   services au lieu non fixé par la loi, à un professionnel établi hors
+ *   de l'Union (ni à Monaco), identifié par son n° de TVA ou un autre
+ *   identifiant ; le refus d'un service au lieu fixé par la loi cite les
+ *   articles en vigueur le jour de l'émission (voir
+ *   TableDesMentionsDeTva).
  *
  * Le client contrôlé est sa fiche, celle que la facture copie à son
  * émission (voir FigeLeClient). La consultation VIES retenue est la
@@ -71,8 +78,8 @@ class ControleNatureOperation
 {
     /**
      * La Guadeloupe et la Martinique, un seul territoire pour la TVA
-     * (art. 294 du CGI) : aucune livraison exonérée de l'une vers
-     * l'autre.
+     * (art. 294 du CGI, L. 211-7 et L. 112-4, 2° du CIBS) : aucune
+     * livraison exonérée de l'une vers l'autre.
      *
      * @var list<string>
      */
@@ -120,10 +127,10 @@ class ControleNatureOperation
         // Une nature exonérée qui ne porte pas sur des biens est une
         // prestation à un professionnel établi hors de France : le document
         // ne vend que des services dont le lieu suit celui du client (art.
-        // 259-1° du CGI), jamais un service au lieu fixé par la loi (voir
-        // Service::lieu_specifique).
+        // 259-1° du CGI, L. 211-92 du CIBS), jamais un service au lieu fixé
+        // par la loi (voir Service::lieu_specifique).
         return array_values(array_filter([
-            ...($nature->porteSurDesBiens() ? $this->manquementsDeLaLivraison($facture, $lignes) : $this->manquementsDeLaPrestation($facture, $client, $lignes)),
+            ...($nature->porteSurDesBiens() ? $this->manquementsDeLaLivraison($facture, $lignes) : $this->manquementsDeLaPrestation($facture, $client, $lignes, $jour)),
             ...($nature->exigeVies() ? $this->manquementsDuNumeroTva($nature, $client, $jour) : []),
             blank($emetteur->numeroTva) ? 'renseignez le n° de TVA intracommunautaire de la société (Administration de la société > Identité)' : null,
         ]));
@@ -222,12 +229,14 @@ class ControleNatureOperation
     /**
      * Prestation autoliquidée ou hors UE : un client établi hors de France,
      * dans l'Union ou hors de l'Union, identifié, et des services au lieu
-     * non fixé par la loi.
+     * non fixé par la loi, dont le refus cite les articles en vigueur le
+     * jour de l'émission (voir TableDesMentionsDeTva).
      *
      * @param  Collection<int, LigneFacture>  $lignes
+     * @param  string  $jour  le jour de l'émission (AAAA-MM-JJ)
      * @return list<string|null>
      */
-    private function manquementsDeLaPrestation(Facture $facture, Client $client, Collection $lignes): array
+    private function manquementsDeLaPrestation(Facture $facture, Client $client, Collection $lignes, string $jour): array
     {
         $autoliquidation = $facture->nature_operation === NatureOperation::PrestationUeAutoliquidation;
         $biens = $lignes->whereNull('service_id')->map(fn (LigneFacture $ligne): string => "« {$ligne->description} »")->unique()->implode(', ');
@@ -247,7 +256,7 @@ class ControleNatureOperation
             },
             ! $autoliquidation && blank($client->numero_tva) && blank($client->identifiant_etranger) ? 'indiquez le n° de TVA ou un autre identifiant du client sur sa fiche' : null,
             $biens === '' ? null : "{$biens} : seuls des services se facturent ainsi",
-            $lieuxFixes === '' ? null : "le lieu de {$lieuxFixes} est fixé par la loi (art. 259 A du CGI) : la TVA française s'applique",
+            $lieuxFixes === '' ? null : "le lieu de {$lieuxFixes} est fixé par la loi (".TableDesMentionsDeTva::texte(ReferenceDeTva::ArticlesDuLieuFixeParLaLoi, $jour).") : la TVA française s'applique",
         ];
     }
 

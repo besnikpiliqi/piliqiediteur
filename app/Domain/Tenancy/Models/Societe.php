@@ -9,6 +9,8 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Calendrier\Casts\Instant;
 use App\Domain\Facturation\Casts\NumeroTvaNormalise;
+use App\Domain\Facturation\Enums\ReferenceDeTva;
+use App\Domain\Facturation\Support\TableDesMentionsDeTva;
 use App\Domain\Tenancy\Concerns\RefuseUneCleIllisible;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\FormeJuridique;
@@ -702,6 +704,18 @@ class Societe extends Model implements HasName
     public static function parametresDeConformite(): array
     {
         return ['regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'membre_assujetti_unique', 'siren', 'numero_tva'];
+    }
+
+    /**
+     * Ce qu'est une société membre d'un assujetti unique, avec l'article de
+     * la loi en vigueur aujourd'hui à Paris, calendrier de la société (voir
+     * TableDesMentionsDeTva) : « assujetti unique (groupe TVA, art. 256 C du
+     * CGI) », que disent la case des paramètres fiscaux de la société et la
+     * page d'inscription.
+     */
+    public static function assujettiUnique(): string
+    {
+        return 'assujetti unique (groupe TVA, '.TableDesMentionsDeTva::texte(ReferenceDeTva::ArticleDeLAssujettiUnique, Calendrier::deParis()->aujourdhui()).')';
     }
 
     /**

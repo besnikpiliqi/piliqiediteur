@@ -3,6 +3,7 @@
 namespace App\Filament\Societe\Pages;
 
 use App\Domain\Calendrier\Calendrier;
+use App\Domain\Facturation\Support\TableDesMentionsDeTva;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
@@ -73,13 +74,18 @@ class ParametresFiscauxSociete extends Page implements HasForms
         $this->remplir();
     }
 
+    /**
+     * Les textes qui citent un article de la loi le citent tel qu'il est en
+     * vigueur aujourd'hui à Paris, calendrier de la société (voir
+     * TableDesMentionsDeTva et Societe::assujettiUnique()).
+     */
     public function form(Form $form): Form
     {
         return $form->schema([
             Select::make('regime_tva')
                 ->label('Régime de TVA')
                 ->options(RegimeTva::class)
-                ->helperText('Détermine la cadence de transmission de l\'e-reporting de tous vos magasins : ce n\'est pas une obligation journalière, la fréquence dépend de ce régime. En franchise, vos ventes sont à 0 % avec la mention « '.RegimeTva::MENTION_FRANCHISE.' » ; le prix TTC de vos produits ne change pas.')
+                ->helperText('Détermine la cadence de transmission de l\'e-reporting de tous vos magasins : ce n\'est pas une obligation journalière, la fréquence dépend de ce régime. En franchise, vos ventes sont à 0 % avec la mention « '.TableDesMentionsDeTva::mentionDeLaFranchise(Calendrier::deParis()->aujourdhui()).' » ; le prix TTC de vos produits ne change pas.')
                 ->required(),
             Toggle::make('option_debits_tva')
                 ->label('Option pour les débits')
@@ -93,7 +99,7 @@ class ParametresFiscauxSociete extends Page implements HasForms
                 ->required()
                 ->disabled(fn (): bool => $this->societe()->aVenduUneFois()),
             Toggle::make('membre_assujetti_unique')
-                ->label('La société est membre d\'un assujetti unique (groupe TVA, art. 256 C du CGI)')
+                ->label('La société est membre d\'un '.Societe::assujettiUnique())
                 ->helperText(Magasin::REFUS_ASSUJETTI_UNIQUE),
         ])
             ->statePath('data')

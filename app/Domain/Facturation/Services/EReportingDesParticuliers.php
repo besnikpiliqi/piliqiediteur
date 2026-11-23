@@ -18,7 +18,7 @@ use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
-use App\Domain\Tenancy\Enums\RegimeTva;
+use App\Domain\Facturation\Support\TableDesMentionsDeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Support\ValeurRequise;
 use App\Domain\Tenancy\Support\ValeurSimple;
@@ -46,10 +46,12 @@ use Illuminate\Support\Collection;
  * vente en franchise en base, comme une vente en France à 0 % hors
  * franchise, se range de même selon la nature de sa ligne, au taux 0 %,
  * avec son motif (règles T2.5 de l'onglet « À faire vérifier par un
- * professionnel ») ; un export ou une livraison vers un DOM à un
- * particulier se range parmi les opérations non soumises à la TVA en
- * France, au taux 0 %, avec sa nature d'opération pour motif (T108.1,
- * T108.2).
+ * professionnel »), dont l'article de la franchise est celui de la table
+ * datée des mentions au jour de la clôture (voir
+ * TableDesMentionsDeTva::motifDeLaFranchise()) ; un export ou une
+ * livraison vers un DOM à un particulier se range parmi les opérations non
+ * soumises à la TVA en France, au taux 0 %, avec sa nature d'opération
+ * pour motif (T108.1, T108.2).
  *
  * Les encaissements des prestations de services (la TVA d'un service est
  * due à l'encaissement), sans option pour les débits, se déclarent par
@@ -89,8 +91,6 @@ use Illuminate\Support\Collection;
  */
 class EReportingDesParticuliers
 {
-    public const MOTIF_FRANCHISE = 'Franchise en base de TVA ('.RegimeTva::ARTICLE_FRANCHISE.')';
-
     public const MOTIF_TAUX_ZERO = 'Vente en France à 0 %';
 
     public const MENTION_ENCAISSEMENTS = 'Encaissements des prestations de services payées par des particuliers, déclarés par jour et par taux de TVA. Un crédit d\'avoir compte à la date où il est utilisé, sauf la part qui annule les lignes que son avoir corrige sur ce ticket ; l\'avoir d\'une prestation déjà encaissée se déduit à la date où son crédit règle une autre vente.';
@@ -319,11 +319,12 @@ class EReportingDesParticuliers
      */
     private function transactions(ClotureCaisse $cloture): array
     {
+        $motifDeLaFranchise = TableDesMentionsDeTva::motifDeLaFranchise($cloture->date_cloture);
         $lignes = collect([
             ...self::declares($cloture->factures()->getQuery())->with('lignes')->get()
-                ->flatMap(fn (Facture $ticket): array => $ticket->lignes->map(fn (LigneFacture $ligne): array => $this->transaction($ticket, $ligne, 1))->all()),
+                ->flatMap(fn (Facture $ticket): array => $ticket->lignes->map(fn (LigneFacture $ligne): array => $this->transaction($ticket, $ligne, 1, $motifDeLaFranchise))->all()),
             ...self::declares($cloture->avoirs()->getQuery())->with('lignes')->get()
-                ->flatMap(fn (Avoir $avoir): array => $avoir->lignes->map(fn (LigneAvoir $ligne): array => $this->transaction($avoir, $ligne, -1))->all()),
+                ->flatMap(fn (Avoir $avoir): array => $avoir->lignes->map(fn (LigneAvoir $ligne): array => $this->transaction($avoir, $ligne, -1, $motifDeLaFranchise))->all()),
         ]);
         $ordre = array_flip(array_map(fn (CategorieEReporting $categorie): string => $categorie->value, CategorieEReporting::cases()));
         $groupes = [];
@@ -351,13 +352,14 @@ class EReportingDesParticuliers
      * parmi les opérations non soumises à la TVA en France ; une vente en
      * France à son taux, selon la nature de sa ligne.
      *
+     * @param  string  $motifDeLaFranchise  le motif de la franchise en base au jour de la clôture
      * @return array{categorie: CategorieEReporting, taux: int, ht: int, tva: int, motif: string|null}
      */
-    private function transaction(Facture|Avoir $document, LigneFacture|LigneAvoir $ligne, int $sens): array
+    private function transaction(Facture|Avoir $document, LigneFacture|LigneAvoir $ligne, int $sens, string $motifDeLaFranchise): array
     {
         $taux = $this->calculateur->enCentiemes($ligne->taux_tva);
         [$categorie, $motif] = match (true) {
-            $document->franchise_en_base => [CategorieEReporting::deLaNature($ligne->nature), self::MOTIF_FRANCHISE],
+            $document->franchise_en_base => [CategorieEReporting::deLaNature($ligne->nature), $motifDeLaFranchise],
             $document->nature_operation->exonere() => [CategorieEReporting::NonSoumisesALaTvaEnFrance, $document->nature_operation->getLabel()],
             $taux === 0 => [CategorieEReporting::deLaNature($ligne->nature), self::MOTIF_TAUX_ZERO],
             default => [CategorieEReporting::deLaNature($ligne->nature), null],

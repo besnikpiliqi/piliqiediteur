@@ -2,6 +2,9 @@
 
 namespace App\Domain\Tenancy\Support;
 
+use App\Domain\Calendrier\Calendrier;
+use App\Domain\Facturation\Enums\ReferenceDeTva;
+use App\Domain\Facturation\Support\TableDesMentionsDeTva;
 use App\Domain\Tenancy\Enums\TypeDActivite;
 use App\Domain\Tenancy\Services\ControleSirene;
 
@@ -20,7 +23,9 @@ use App\Domain\Tenancy\Services\ControleSirene;
  * Seuls les codes de la nomenclature NAF rév. 2 (NAFRev2) s'y lisent : un
  * code absent, inconnu ou d'une autre nomenclature n'avertit de rien, la
  * NAF 2025 n'ayant pas encore de table fixée par l'éditeur. Après
- * l'inscription, le code ne joue plus aucun rôle pour le type.
+ * l'inscription, le code ne joue plus aucun rôle pour le type. Un
+ * avertissement qui cite un article de la loi le cite tel qu'il est en
+ * vigueur aujourd'hui à Paris (voir TableDesMentionsDeTva).
  */
 final class AvertissementsDuCodeDActivite
 {
@@ -61,6 +66,7 @@ final class AvertissementsDuCodeDActivite
         $division = (int) $morceaux[1];
         $groupe = "{$morceaux[1]}.{$morceaux[2]}";
         $application = Reglage::texte('app.name');
+        $aujourdhui = Calendrier::deParis()->aujourdhui();
         $sansLeCabinet = [TypeDActivite::Commerce, TypeDActivite::Services];
         $entre = static fn (int $de, int $a): bool => $division >= $de && $division <= $a;
         $table = [
@@ -91,12 +97,12 @@ final class AvertissementsDuCodeDActivite
             ],
             [
                 $code === '68.20A',
-                "La location de logements est en général exonérée de TVA (art. 261 D du CGI) : {$application} ne permet pas de la facturer.",
+                'La location de logements est en général exonérée de TVA ('.TableDesMentionsDeTva::texte(ReferenceDeTva::ArticleDeLaLocationDeLogements, $aujourdhui).") : {$application} ne permet pas de la facturer.",
                 $sansLeCabinet,
             ],
             [
                 in_array($code, ['47.91A', '47.91B'], true),
-                "Au-delà de 10 000 € par an de ventes à distance à des particuliers d'autres pays de l'Union européenne, la TVA due est celle du pays de l'acheteur (art. 259 D du CGI) : {$application} ne prend pas ces ventes en charge.",
+                "Au-delà de 10 000 € par an de ventes à distance à des particuliers d'autres pays de l'Union européenne, la TVA due est celle du pays de l'acheteur (".TableDesMentionsDeTva::texte(ReferenceDeTva::ArticlesDesVentesADistance, $aujourdhui).") : {$application} ne prend pas ces ventes en charge.",
                 $sansLeCabinet,
             ],
             [

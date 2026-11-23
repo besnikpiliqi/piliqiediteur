@@ -767,23 +767,34 @@ final class SocietesDesCas
     }
 
     /**
-     * Le Studio Lumière raccourcit son exercice en cours, qui finira le
-     * dernier jour du mois suivant, par une décision de son assemblée
-     * générale extraordinaire, que l'éditeur enregistre par sa procédure
-     * (deux opérateurs, justification et pièce).
+     * Le Studio Lumière raccourcit son exercice en cours par une décision de
+     * son assemblée générale extraordinaire, que l'éditeur enregistre par sa
+     * procédure (deux opérateurs, justification et pièce) : l'exercice
+     * finira le dernier jour du mois en cours, sur une décision de la
+     * veille. Quand ce mois est déjà celui de la fin de son exercice (un
+     * semis lancé entre la fin de décembre et la fin de janvier, pour un
+     * exercice qui finit en décembre), aucun exercice ne s'y raccourcit
+     * ainsi : il finit alors le dernier jour du mois précédent, sur une
+     * décision prise ce jour-là.
      */
     private function changerLaFinDExercice(int $rang): void
     {
-        $finDuMoisSuivant = Calendrier::ajouterJours(Calendrier::premierJourDuMois(Calendrier::ajouterJours(Calendrier::premierJourDuMois($this->horloge->jour($rang)), 40)), -1);
+        $studio = $this->semis->societe('studio')->refresh();
+        $premierDuMois = Calendrier::premierJourDuMois($this->horloge->jour($rang));
+        $finDuMois = Calendrier::ajouterJours(Calendrier::premierJourDuMois(Calendrier::ajouterJours($premierDuMois, 40)), -1);
+        $dejaLaFinDeLExercice = (int) substr($finDuMois, 5, 2) === (int) $studio->mois_fin_exercice;
+        $fin = $dejaLaFinDeLExercice ? Calendrier::ajouterJours($premierDuMois, -1) : $finDuMois;
+        $decisionDu = $dejaLaFinDeLExercice ? $fin : $this->horloge->jour($rang - 1);
+
         app(ChangerFinExerciceAction::class)->handle(
-            $this->semis->societe('studio')->refresh(),
-            (int) substr($finDuMoisSuivant, 5, 2),
-            $finDuMoisSuivant,
-            $this->horloge->jour($rang - 1),
+            $studio,
+            (int) substr($fin, 5, 2),
+            $fin,
+            $decisionDu,
             OrganeDeLaDecision::AssembleeGeneraleExtraordinaire,
             null,
             null,
-            new InterventionDeLEditeur(self::JUSTIFICATION.' Procès-verbal de l\'assemblée reçu et vérifié.', 'Procès-verbal de l\'AGE du '.$this->horloge->jour($rang - 1), ['opérateur A', 'opérateur B']),
+            new InterventionDeLEditeur(self::JUSTIFICATION.' Procès-verbal de l\'assemblée reçu et vérifié.', 'Procès-verbal de l\'AGE du '.$decisionDu, ['opérateur A', 'opérateur B']),
         );
     }
 

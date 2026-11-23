@@ -17,10 +17,11 @@ use Filament\Support\Contracts\HasLabel;
  * produit se vend au prix TTC de son catalogue sans la TVA de son taux,
  * un service à son prix saisi sans TVA (K3, voir ContexteDeVente).
  *
- * Les mentions citent les articles du CGI en vigueur : elles passeront
- * aux articles du code des impositions sur les biens et services (CIBS)
- * une fois ceux-ci confirmés, comme celle de la franchise en base (voir
- * RegimeTva::MENTION_FRANCHISE).
+ * La mention qu'imprime une vente de chaque nature cite l'article du code
+ * général des impôts (CGI) ou celui du code des impositions sur les biens
+ * et services (CIBS) qui le reprend, selon le jour du document : elle se
+ * lit dans la table datée des mentions (voir TableDesMentionsDeTva et
+ * MentionsFiscales).
  */
 enum NatureOperation: string implements HasLabel
 {
@@ -40,23 +41,6 @@ enum NatureOperation: string implements HasLabel
             self::LivraisonIntracommunautaire => 'Livraison intracommunautaire à un professionnel',
             self::PrestationUeAutoliquidation => 'Prestation à un professionnel de l\'UE (autoliquidation)',
             self::PrestationHorsUe => 'Prestation à un professionnel hors UE',
-        };
-    }
-
-    /**
-     * La mention qu'imprime le document (art. 242 nonies A de l'annexe II
-     * au CGI) : le texte qui exonère la vente, ou qui la place hors du
-     * champ de la TVA française ; aucune pour une vente en France.
-     */
-    public function mention(): ?string
-    {
-        return match ($this) {
-            self::VenteEnFrance => null,
-            self::ExportHorsUe => 'Exonération de TVA, article 262 I du CGI',
-            self::LivraisonDom => 'Exonération de TVA en application de l\'article 294 du Code général des impôts',
-            self::LivraisonIntracommunautaire => 'Exonération de TVA, article 262 ter I du CGI',
-            self::PrestationUeAutoliquidation => 'Autoliquidation',
-            self::PrestationHorsUe => 'TVA non applicable – article 259-1° du CGI',
         };
     }
 
@@ -108,8 +92,9 @@ enum NatureOperation: string implements HasLabel
 
     /**
      * Le n° de TVA du client doit être valide sur VIES le jour de
-     * l'émission (I2, art. 262 ter I et 259-1° du CGI) : la consultation
-     * retenue se conserve avec la facture.
+     * l'émission (I2, art. 262 ter I et 259-1° du CGI, repris aux art.
+     * L. 213-13 et L. 211-92 du CIBS) : la consultation retenue se conserve
+     * avec la facture.
      */
     public function exigeVies(): bool
     {

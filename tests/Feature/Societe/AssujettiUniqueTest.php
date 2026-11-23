@@ -165,8 +165,8 @@ class AssujettiUniqueTest extends TestCase
     {
         $page = $this->get(route('filament.app.auth.register'));
 
-        $page->assertOk()->assertSee(InscriptionSociete::INFORMATION_ASSUJETTI_UNIQUE)->assertDontSee('membre_assujetti_unique');
-        $this->assertSame('Une société membre d\'un assujetti unique (groupe TVA, art. 256 C du CGI) ne peut pas encore vendre dans PILIQI : elle peut s\'inscrire, mais aucune vente, facture, avoir, encaissement ni devis numéroté réel n\'y sera possible.', InscriptionSociete::INFORMATION_ASSUJETTI_UNIQUE);
+        $page->assertOk()->assertSee(InscriptionSociete::informationAssujettiUnique())->assertDontSee('membre_assujetti_unique');
+        $this->assertSame('Une société membre d\'un assujetti unique (groupe TVA, art. 256 C du CGI) ne peut pas encore vendre dans PILIQI : elle peut s\'inscrire, mais aucune vente, facture, avoir, encaissement ni devis numéroté réel n\'y sera possible.', InscriptionSociete::informationAssujettiUnique());
     }
 
     private function chose(User $compte, Magasin $magasin): ?ChoseAFaire

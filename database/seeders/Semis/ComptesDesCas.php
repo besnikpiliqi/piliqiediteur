@@ -134,7 +134,7 @@ final class ComptesDesCas
     {
         $avantLaFin = SemisComplet::JOURS - $rang;
 
-        if ($rang % 5 === 0) {
+        if (SemisComplet::rangRecent($rang) % 5 === 0) {
             $this->vendreLeSoir($rang, $avantLaFin);
         }
 

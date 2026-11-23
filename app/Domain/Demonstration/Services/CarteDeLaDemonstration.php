@@ -109,8 +109,8 @@ final class CarteDeLaDemonstration
     public static function phraseACreer(TypeDActivite $type): string
     {
         return match ($type) {
-            TypeDActivite::Commerce => 'Une société fictive, déjà remplie : plusieurs magasins, toute l\'équipe, treize mois de ventes, d\'achats et de clôtures. Rien de votre vraie société n\'y entre.',
-            TypeDActivite::Services => 'Une société fictive, déjà remplie : un magasin, toute l\'équipe, treize mois de ventes et de clôtures. Rien de votre vraie société n\'y entre.',
+            TypeDActivite::Commerce => 'Une société fictive, déjà remplie : plusieurs magasins, toute l\'équipe, trois ans de ventes, d\'achats et de clôtures. Rien de votre vraie société n\'y entre.',
+            TypeDActivite::Services => 'Une société fictive, déjà remplie : un magasin, toute l\'équipe, trois ans de ventes et de clôtures. Rien de votre vraie société n\'y entre.',
             TypeDActivite::Cabinet => 'Un cabinet fictif, déjà rempli : ses collaborateurs, ses clients et ce qu\'ils vous autorisent. Rien de votre vrai cabinet n\'y entre.',
         };
     }

@@ -99,8 +99,10 @@ final class ActiviteDesMagasins
             $this->remplirLEpicerie(self::gestesDe($gestes, 'epicerie'));
         }
 
+        $demonstrations = $this->semis->surLePoste() ? new DemonstrationsDesSocietes($this->horloge, $this->semis) : null;
+        (new HistoireAncienne($this->horloge, $this->semis, $gestes, $this->semis->surLePoste() ? $this->societesDesCas : null, $demonstrations))->semer();
         $this->premieresSemaines($gestes);
-        $this->joursSuivants($gestes);
+        $this->joursSuivants($gestes, $demonstrations);
     }
 
     /**
@@ -213,7 +215,7 @@ final class ActiviteDesMagasins
         $services = $this->semis->seme('services');
         $client = $this->semis->seme('client');
 
-        $this->horloge->aller(3, '10:15');
+        $this->horloge->aller($this->rang(3), '10:15');
 
         if ($commerce) {
             $halles = $gestes['halles'];
@@ -232,7 +234,7 @@ final class ActiviteDesMagasins
             $dentiste = $this->client($conseil, 'Cabinet dentaire Morel');
         }
 
-        $this->horloge->aller(3, '11:00');
+        $this->horloge->aller($this->rang(3), '11:00');
 
         if ($commerce) {
             $halles->facturer($camille, $hotel, [$this->ligne($halles, 'DIFF-BAMBOU', 4), $this->ligne($halles, 'BOUGIE-FIGUE', 10)]);
@@ -247,11 +249,11 @@ final class ActiviteDesMagasins
             $epicerie->vendreALaCaisse($this->semis->compte('Chloé Bernard'), $epicerie->comptoir(), [$this->ligne($epicerie, 'HUILE-OLIVE', 2), $this->ligne($epicerie, 'MIEL-LAVANDE', 1)], ModePaiement::CarteBancaire);
         }
 
-        $this->horloge->aller(5, '10:00');
+        $this->horloge->aller($this->rang(5), '10:00');
 
         if ($commerce) {
             $facturePayee = $halles->facturer($camille, $horizon, [$this->ligne($halles, 'TASSE-GRES', 6), $this->ligne($halles, 'STYLO-PLUME', 2)]);
-            $halles->encaisser($camille, $facturePayee, [new PartDeReglement(ModePaiement::Virement, $facturePayee->resteDuEnCentimes())], $this->horloge->jour(5));
+            $halles->encaisser($camille, $facturePayee, [new PartDeReglement(ModePaiement::Virement, $facturePayee->resteDuEnCentimes())], $this->horloge->jour($this->rang(5)));
             $halles->facturer($camille, $this->client($halles, self::NOM_DU_CLIENT_TRES_LONG), [$this->ligne($halles, 'BOUGIE-SOJA-500', 6), $this->ligne($halles, 'PLATEAU-OLIVIER', 2)]);
             $halles->vendreALaCaisse($lucas, $halles->comptoir(), [$this->ligne($halles, 'BOUGIE-SOJA-500', 2)]);
         }
@@ -263,11 +265,11 @@ final class ActiviteDesMagasins
         if ($commerce) {
             $republique = $gestes['republique'];
             $republique->vendreALaCaisse($this->semis->compte('Sarah Petit'), $republique->comptoir(), [$this->ligne($republique, 'PLAID-LAINE', 1)], ModePaiement::CarteBancaire);
-            $this->horloge->aller(6, '11:00');
+            $this->horloge->aller($this->rang(6), '11:00');
             $partielle = $halles->facturer($camille, $hotel, [$this->ligne($halles, 'THE-SENCHA', 10), $this->ligne($halles, 'CARNET-A5', 10)]);
         }
 
-        $this->horloge->aller(7, '10:00');
+        $this->horloge->aller($this->rang(7), '10:00');
 
         if ($commerce) {
             $halles->dans(fn (): Devis => app(CreerDevisAction::class)->handle($camille, $horizon, [$this->ligne($halles, 'DIFF-BAMBOU', 10)], ['date_validite' => $this->validite()]));
@@ -282,10 +284,10 @@ final class ActiviteDesMagasins
             $conseil->dans(fn (): Devis => app(EmettreDevisAction::class)->handle($claire, app(CreerDevisAction::class)->handle($claire, $dentiste, [$this->ligne($conseil, 'Audit de site web', 1), $this->ligne($conseil, 'Forfait déplacement', 2)], ['date_validite' => $this->validite()]), GestesDuMagasin::jeton()));
         }
 
-        $this->horloge->aller(8, '09:30');
+        $this->horloge->aller($this->rang(8), '09:30');
 
         if ($commerce) {
-            $halles->encaisser($camille, $partielle, [new PartDeReglement(ModePaiement::Virement, 5000)], $this->horloge->jour(8));
+            $halles->encaisser($camille, $partielle, [new PartDeReglement(ModePaiement::Virement, 5000)], $this->horloge->jour($this->rang(8)));
         }
 
         if ($services) {
@@ -293,18 +295,18 @@ final class ActiviteDesMagasins
         }
 
         if ($commerce) {
-            $this->horloge->aller(9, '16:20');
+            $this->horloge->aller($this->rang(9), '16:20');
             app(TenantContext::class)->clear();
             app(RepondreAuDevisEnLigneAction::class)->accepter(self::jetonDuDevis($envoi), 'Sophie Arnaud', true);
 
-            $this->horloge->aller(10, '10:00');
+            $this->horloge->aller($this->rang(10), '10:00');
             $halles->dans(function () use ($camille, $devisAAccepter): Facture {
                 return app(EmettreFactureAction::class)->handle($camille, app(CreerFactureDepuisDevisAction::class)->handle($camille, $devisAAccepter->refresh()), null, null, GestesDuMagasin::jeton());
             });
 
-            $this->horloge->aller(11, '10:00');
+            $this->horloge->aller($this->rang(11), '10:00');
             $ticketRendu = $halles->vendreALaCaisse($lucas, $halles->comptoir(), [$this->ligne($halles, 'DIFF-BAMBOU', 1)], ModePaiement::CarteBancaire);
-            $this->horloge->aller(11, '15:30');
+            $this->horloge->aller($this->rang(11), '15:30');
             $ligneRendue = $halles->dans(fn (): int => $ticketRendu->lignes()->sole()->id);
             $halles->rendre($camille, $halles->comptoir(), [['ligne_facture_id' => $ligneRendue, 'quantite' => 1]], 'Cadeau en double : la cliente garde un bon d\'avoir.');
             $ligneDesTassesVendues = $halles->dans(fn (): int => $facturePayee->lignes()->orderBy('ordre')->firstOrFail()->id);
@@ -312,45 +314,45 @@ final class ActiviteDesMagasins
 
             $hugo = $this->semis->compte('Hugo Lefebvre');
             $studio = $this->client($republique, 'Studio Nord');
-            $this->horloge->aller(12, '11:00');
+            $this->horloge->aller($this->rang(12), '11:00');
             $factureDuStudio = $republique->facturer($hugo, $studio, [$this->ligne($republique, 'COUSSIN-LIN', 4)], [new PartDeReglement(ModePaiement::Virement, 10000)]);
 
-            $this->horloge->aller(13, '10:00');
+            $this->horloge->aller($this->rang(13), '10:00');
             $ligneDesCoussins = $republique->dans(fn (): int => $factureDuStudio->lignes()->sole()->id);
             $republique->rendre($hugo, $studio, [['ligne_facture_id' => $ligneDesCoussins, 'quantite' => 1]], 'Un coussin taché : le studio garde un crédit pour sa prochaine commande.');
             $achat = $halles->dans(fn () => FactureAchat::query()->where('numero_fournisseur', 'GL-2026-118')->sole());
             $ligneDesTasses = $halles->dans(fn () => $achat->lignes()->whereHas('produit', fn ($produit) => $produit->where('reference', 'TASSE-GRES'))->sole());
             $halles->retournerAuFournisseur($camille, $achat, [['ligne_achat_id' => $ligneDesTasses->id, 'quantite' => 2]], 'Deux tasses cassées au déballage.', 'AV-GL-2026-031');
 
-            $this->horloge->aller(14, '10:00');
-            $cheque = $halles->payer($camille, $partielle, ModePaiement::Cheque, '30.00', $this->horloge->jour(14));
-            $this->horloge->aller(14, '10:20');
+            $this->horloge->aller($this->rang(14), '10:00');
+            $cheque = $halles->payer($camille, $partielle, ModePaiement::Cheque, '30.00', $this->horloge->jour($this->rang(14)));
+            $this->horloge->aller($this->rang(14), '10:20');
             $halles->contrePasser($camille, $cheque, 'Chèque saisi par erreur : l\'hôtel a payé ces 30,00 € par virement.');
-            $halles->payer($camille, $partielle, ModePaiement::Virement, '30.00', $this->horloge->jour(14));
+            $halles->payer($camille, $partielle, ModePaiement::Virement, '30.00', $this->horloge->jour($this->rang(14)));
 
-            $this->horloge->aller(15, '17:45');
+            $this->horloge->aller($this->rang(15), '17:45');
             $halles->vendreALaCaisse($lucas, $halles->comptoir(), [$this->ligne($halles, 'TASSE-GRES', 2), $this->ligne($halles, 'Emballage cadeau', 1)], ModePaiement::Especes);
-            $this->horloge->aller(15, '18:30');
+            $this->horloge->aller($this->rang(15), '18:30');
             $halles->dans(fn () => app(FermerSaCaisseAction::class)->handle($lucas, $lucas, GestesDuMagasin::jeton()));
-            $this->horloge->aller(15, '19:30');
-            $halles->dans(fn () => app(CloturerLesJourneesAction::class)->parUnePersonne($camille, $halles->magasin, $this->horloge->jour(15), GestesDuMagasin::jeton()));
+            $this->horloge->aller($this->rang(15), '19:30');
+            $halles->dans(fn () => app(CloturerLesJourneesAction::class)->parUnePersonne($camille, $halles->magasin, $this->horloge->jour($this->rang(15)), GestesDuMagasin::jeton()));
 
             $thomas = $this->semis->compte('Thomas Girard');
-            $this->horloge->aller(16, '10:00');
+            $this->horloge->aller($this->rang(16), '10:00');
             $halles->vendreALaCaisse($thomas, $halles->comptoir(), [$this->ligne($halles, 'CARNET-A5', 2)], ModePaiement::Especes);
-            $this->horloge->aller(16, '12:00');
+            $this->horloge->aller($this->rang(16), '12:00');
             $halles->dans(fn () => app(FermerSaCaisseAction::class)->handle($thomas, $thomas, GestesDuMagasin::jeton()));
             // Une seconde fermeture le même jour : Thomas a revendu entre les
             // deux (une caisse sans vente ni encaissement ne se ferme pas).
-            $this->horloge->aller(16, '13:30');
+            $this->horloge->aller($this->rang(16), '13:30');
             $halles->vendreALaCaisse($thomas, $halles->comptoir(), [$this->ligne($halles, 'CARNET-A5', 1)], ModePaiement::CarteBancaire);
-            $this->horloge->aller(16, '14:00');
+            $this->horloge->aller($this->rang(16), '14:00');
             $halles->dans(fn () => app(FermerSaCaisseAction::class)->handle($thomas, $thomas, GestesDuMagasin::jeton()));
-            $this->horloge->aller(16, '15:00');
+            $this->horloge->aller($this->rang(16), '15:00');
             $republique->vendreALaCaisse($thomas, $republique->comptoir(), [$this->ligne($republique, 'COUSSIN-LIN', 2)], ModePaiement::CarteBancaire);
         }
 
-        $this->horloge->aller(16, '15:00');
+        $this->horloge->aller($this->rang(16), '15:00');
 
         if ($services) {
             $conseil->vendreALaCaisse($this->semis->compte('Antoine Roux'), $this->client($conseil, 'Paul Garnier'), [$this->ligne($conseil, 'Heure de conseil', 2)], ModePaiement::Virement);
@@ -363,12 +365,14 @@ final class ActiviteDesMagasins
 
     /**
      * Les jours suivants, jusqu'à l'avant-veille du semis, sur plus de
-     * treize mois : chaque vendeur fait un ou deux tickets presque chaque
-     * jour, entre 9 h et 20 h, dimanches compris, en se reposant un jour
-     * sur trois selon son rang, sans jamais vendre au-delà du stock ; le
-     * soir, les sociétés des cas vendent et changent (voir SocietesDesCas),
-     * puis les comptes des cas (voir ComptesDesCas), puis les documents
-     * des cas se font (voir DocumentsDesCas) ;
+     * treize mois (l'histoire détaillée, voir SemisComplet::JOURS_RECENTS,
+     * dont le rythme se compte depuis son premier jour, voir
+     * SemisComplet::rangRecent()) : chaque vendeur fait un ou deux tickets
+     * presque chaque jour, entre 9 h et 20 h, dimanches compris, en se
+     * reposant un jour sur trois selon son rang, sans jamais vendre au-delà
+     * du stock ; le soir, les sociétés des cas vendent et changent (voir
+     * SocietesDesCas), puis les comptes des cas (voir ComptesDesCas), puis
+     * les documents des cas se font (voir DocumentsDesCas) ;
      * toutes les deux semaines, le responsable de chaque magasin
      * réassortit son stock par une facture d'achat validée (un peu plus
      * que ce qui se vend en deux semaines), à un prix qui varie (le coût
@@ -382,10 +386,11 @@ final class ActiviteDesMagasins
      * démonstrations des sociétés (site réel) ne vivent que sur le poste.
      *
      * @param  array<string, GestesDuMagasin>  $gestes  les magasins que ce semis sème, par clé
+     * @param  DemonstrationsDesSocietes|null  $demonstrations  celles des sociétés du poste, que le semis d'une base modèle n'a pas
      */
-    private function joursSuivants(array $gestes): void
+    private function joursSuivants(array $gestes, ?DemonstrationsDesSocietes $demonstrations): void
     {
-        $this->horloge->aller(16, '18:00');
+        $this->horloge->aller($this->rang(16), '18:00');
         $documents = new DocumentsDesCas($this->horloge, $this->semis);
         $charges = new ChargesDesSocietes($this->horloge, $this->semis);
         $charges->preparer();
@@ -394,7 +399,7 @@ final class ActiviteDesMagasins
         $reassorts = [];
 
         if ($this->semis->seme('commerce')) {
-            $atelier = $gestes['republique']->fiche($this->semis->compte('Hugo Lefebvre'), Fournisseur::class, ['nom' => 'Atelier Lin et Laine', 'siret' => IdentifiantsInsee::avecSaCle('0000002170001'), 'adresse' => '12 quai de la Loire', 'code_postal' => '44000', 'ville' => 'Nantes', 'pays' => 'FR']);
+            $atelier = $gestes['republique']->dans(fn (): Fournisseur => Fournisseur::query()->where('nom', 'Atelier Lin et Laine')->sole());
             $artisans = $gestes['martinique']->fiche($this->semis->compte('Joëlle Marie-Sainte'), Fournisseur::class, ['nom' => 'Artisans de la Caraïbe', 'adresse' => '15 rue Victor Schœlcher', 'code_postal' => '97200', 'ville' => 'Fort-de-France', 'pays' => 'FR']);
             $grossiste = $gestes['halles']->dans(fn (): Fournisseur => Fournisseur::query()->where('nom', 'Grossiste Lumière')->sole());
             $reassorts[] = [$gestes['halles'], 'Camille Laurent', $grossiste, 'GL', ['BOUGIE-FIGUE' => [20, 600], 'TASSE-GRES' => [24, 420], 'THE-SENCHA' => [24, 310], 'CARNET-A5' => [44, 140]]];
@@ -429,24 +434,24 @@ final class ActiviteDesMagasins
         ], fn (array $vente): bool => isset($gestes[$vente[0]]));
         $modes = [ModePaiement::CarteBancaire, ModePaiement::Especes, ModePaiement::CarteBancaire, ModePaiement::Cheque];
 
-        $demonstrations = $this->semis->surLePoste() ? new DemonstrationsDesSocietes($this->horloge, $this->semis) : null;
         $achatsDeLEcart = new AchatsDeLEcartDesPrix($this->horloge, $this->semis, $gestes);
         $achatsDeLEcart->preparer();
 
-        for ($jour = 17; $jour <= SemisComplet::JOURS - 2; $jour++) {
+        for ($jour = $this->rang(17); $jour <= SemisComplet::JOURS - 2; $jour++) {
+            $rythme = SemisComplet::rangRecent($jour);
             $achatsDeLEcart->auJour($jour);
             $charges->auJour($jour);
 
-            if ($jour % 14 === 3) {
+            if ($rythme % 14 === 3) {
                 $this->horloge->aller($jour, '08:30');
 
                 foreach ($reassorts as [$gestesDuMagasin, $responsable, $fournisseur, $prefixe, $produits]) {
-                    $variation = ($jour / 14) % 3;
+                    $variation = intdiv($rythme, 14) % 3;
                     $gestesDuMagasin->acheter($this->semis->compte($responsable), $fournisseur, array_map(
                         fn (string $reference, array $achat): array => ['produit_id' => $gestesDuMagasin->produit($reference)->id, 'quantite' => $achat[0], 'prix_unitaire_ht' => number_format(($achat[1] + 10 * $variation) / 100, 2, '.', '')],
                         array_keys($produits),
                         $produits,
-                    ), ['date_facture' => $this->horloge->jour($jour - 1), 'numero_fournisseur' => sprintf('%s-R%03d', $prefixe, $jour)]);
+                    ), ['date_facture' => $this->horloge->jour($jour - 1), 'numero_fournisseur' => sprintf('%s-R%03d', $prefixe, $rythme)]);
                 }
             }
 
@@ -454,14 +459,14 @@ final class ActiviteDesMagasins
 
             foreach ([0, 1] as $passage) {
                 foreach ($ventes as $rang => [$magasin, $vendeur, $quantites]) {
-                    if (($jour + $rang) % 3 === 0 || ($passage === 1 && ($jour + $rang) % 4 !== 1)) {
+                    if (($rythme + $rang) % 3 === 0 || ($passage === 1 && ($rythme + $rang) % 4 !== 1)) {
                         continue;
                     }
 
                     $minute = 9 * 60 + 33 * $rang + 6 * 60 * $passage;
                     $this->horloge->aller($jour, sprintf('%02d:%02d', intdiv($minute, 60), $minute % 60));
                     $lignes = array_map(fn (string $reference, int $quantite): array => $this->ligne($gestes[$magasin], $reference, $quantite), array_keys($quantites), $quantites);
-                    $gestes[$magasin]->vendreALaCaisse($this->semis->compte($vendeur), $gestes[$magasin]->comptoir(), $lignes, $modes[($jour + $rang + $passage) % count($modes)]);
+                    $gestes[$magasin]->vendreALaCaisse($this->semis->compte($vendeur), $gestes[$magasin]->comptoir(), $lignes, $modes[($rythme + $rang + $passage) % count($modes)]);
                 }
             }
 
@@ -473,6 +478,17 @@ final class ActiviteDesMagasins
             $documents->auJour($jour);
             $demonstrations?->auJour($jour);
         }
+    }
+
+    /**
+     * Le jour de l'histoire entière qui répond à ce jour de l'histoire
+     * détaillée telle qu'elle se comptait avant les deux années qui la
+     * précèdent (voir HistoireAncienne) : les premières semaines et le
+     * rythme des jours suivants gardent leurs dates, à ce décalage près.
+     */
+    private function rang(int $jourDeLHistoireDetaillee): int
+    {
+        return SemisComplet::JOURS_ANCIENS + $jourDeLHistoireDetaillee;
     }
 
     /**

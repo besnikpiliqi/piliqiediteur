@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Demonstration;
 
+use App\Domain\Cabinets\Services\AccesDesCabinets;
 use App\Domain\Calendrier\Calendrier;
 use App\Domain\Demonstration\Bases\BasesDeLaDemonstration;
 use App\Domain\Demonstration\Bases\BrancherUneBase;
@@ -9,12 +10,20 @@ use App\Domain\Demonstration\Construction\ConstruireUnModele;
 use App\Domain\Demonstration\Construction\DossiersDeLaDemonstration;
 use App\Domain\Demonstration\Construction\SemisDuModeleParLeSemeur;
 use App\Domain\Demonstration\Contracts\SemisDUnModele;
+use App\Domain\Demonstration\Models\CompteDuBandeau;
 use App\Domain\Demonstration\Registre\Models\Modele;
 use App\Domain\Demonstration\Services\CarteDeLaDemonstration;
+use App\Domain\TableauDeBord\Enums\Graphique;
+use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
+use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
+use App\Domain\TableauDeBord\Support\ReglagesDuTableauDeBord;
 use App\Domain\Tenancy\Enums\TypeDActivite;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\Semis\ComptesDuBandeauDuModele;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
@@ -34,7 +43,11 @@ use Tests\DemonstrationTestCase;
  * magasin a son JET 100 ; les tables techniques sont vides ; chaque compte
  * du bandeau est un compte non retiré de la société mise en avant, avec le
  * mot de passe de démonstration du modèle, sans préférence de tableau de
- * bord (toutes ses cartes permises s'ouvrent).
+ * bord : à chaque écran de graphiques qu'il ouvre (espace de la société,
+ * panneau d'un magasin, espace du cabinet, page de l'expert-comptable
+ * déclaré), toutes les cartes que l'écran lui permet sont ouvertes au
+ * départ, « Ventes par vendeur » et, dans une société qui a des articles,
+ * « Écart des prix d'achat » compris (lot GRAPH-AN).
  */
 #[Group('copies')]
 class BasesModelesTest extends DemonstrationTestCase
@@ -188,6 +201,7 @@ class BasesModelesTest extends DemonstrationTestCase
             'preferences_du_bandeau' => DB::table('preferences_tableau_de_bord')
                 ->whereIn('user_id', DB::table('comptes_du_bandeau')->select('user_id'))
                 ->count(),
+            'cartes_du_bandeau' => $this->cartesOuvertesDesComptesDuBandeau(),
             'regimes_manquants' => DB::table('societes')->where('type_activite', '!=', TypeDActivite::Cabinet->value)->whereNull('regime_tva')->pluck('raison_sociale')->all(),
             'courriels' => DB::table('courriels_de_la_demonstration')
                 ->join('societes', 'societes.id', '=', 'courriels_de_la_demonstration.societe_id')
@@ -196,6 +210,56 @@ class BasesModelesTest extends DemonstrationTestCase
                 ->map(fn (object $ligne): array => (array) $ligne)
                 ->all(),
         ]);
+    }
+
+    /**
+     * Pour chaque compte du bandeau et chaque écran de graphiques qu'il
+     * ouvre, ce que l'écran lui permet (les graphiques dont il voit tous les
+     * documents) et ce que ses réglages par défaut ouvrent : un compte du
+     * bandeau n'a aucune préférence, la copie lui ouvre toutes les cartes
+     * permises. Un compte qui ne voit aucun graphique (un vendeur, un
+     * observateur, un responsable sans la case) n'a pas d'écran.
+     *
+     * @return list<array{nom: string, ecran: string, permises: list<string>, ouvertes: list<string>}>
+     */
+    private function cartesOuvertesDesComptesDuBandeau(): array
+    {
+        $perimetres = app(PerimetreDesGraphiques::class);
+        $acces = app(AccesDesCabinets::class);
+        $cartes = [];
+
+        foreach (CompteDuBandeau::query()->withoutGlobalScopes()->orderBy('ordre')->get() as $ligne) {
+            $compte = User::query()->withoutGlobalScopes()->findOrFail($ligne->user_id);
+            app(TenantContext::class)->clear();
+            $ecrans = [];
+
+            try {
+                if ($compte->estExpertComptable()) {
+                    $ecrans[] = $perimetres->delExpertComptable($compte);
+                } elseif ($compte->societe->estUnCabinet()) {
+                    foreach ($acces->liensOuverts($compte)->get() as $lien) {
+                        $ecrans[] = $perimetres->duClient($compte, $lien);
+                    }
+                } elseif ($compte->peutAdministrer()) {
+                    $ecrans[] = $perimetres->deLaSociete($compte, $compte->societe);
+                } else {
+                    $ecrans[] = $perimetres->duMagasin($compte, $compte->magasinsAccessibles()->firstOrFail());
+                }
+            } catch (AuthorizationException) {
+                continue;
+            }
+
+            foreach ($ecrans as $perimetre) {
+                $cartes[] = [
+                    'nom' => (string) $compte->name,
+                    'ecran' => $perimetre->ecran->value,
+                    'permises' => array_map(static fn (Graphique $graphique): string => $graphique->value, array_values(array_filter(Graphique::cases(), static fn (Graphique $graphique): bool => $perimetre->voit($graphique)))),
+                    'ouvertes' => array_map(static fn (CarteDuTableauDeBord $carte): string => $carte->graphique->value, ReglagesDuTableauDeBord::parDefaut($perimetre)->cartes),
+                ];
+            }
+        }
+
+        return $cartes;
     }
 
     /**
@@ -241,6 +305,14 @@ class BasesModelesTest extends DemonstrationTestCase
         $this->assertSame(array_fill_keys(ConstruireUnModele::TABLES_TECHNIQUES, 0), $lecture['tables_techniques']);
         $this->assertSame([], $lecture['regimes_manquants'], 'Chaque société qui vend a son régime de TVA.');
         $this->assertSame(0, $lecture['preferences_du_bandeau'], 'Aucun compte du bandeau n\'a de préférence de tableau de bord : chacun ouvre toutes les cartes que son écran permet (précision du 16/11/2026 vers 23 h 59).');
+        $this->assertIsArray($lecture['cartes_du_bandeau']);
+        $this->assertNotSame([], $lecture['cartes_du_bandeau'], 'Des comptes du bandeau voient des graphiques.');
+
+        foreach ($lecture['cartes_du_bandeau'] as $ecran) {
+            $this->assertGreaterThan(4, count($ecran['permises']), "{$ecran['nom']}, écran « {$ecran['ecran']} » : plusieurs cartes lui sont permises.");
+            $this->assertSame($ecran['permises'], $ecran['ouvertes'], "{$ecran['nom']}, écran « {$ecran['ecran']} » : toutes les cartes permises sont ouvertes au départ, dans l'ordre du catalogue.");
+            $this->assertContains(Graphique::VentesParVendeur->value, $ecran['permises'], "{$ecran['nom']}, écran « {$ecran['ecran']} » : « Ventes par vendeur » est permise, donc ouverte.");
+        }
         $this->assertIsArray($lecture['courriels']);
         $debut = Calendrier::deParis()->debutDuJour(Calendrier::ajouterJours(Calendrier::deParis()->jourDe(CarbonImmutable::now()), -DatabaseSeeder::JOURS_DES_E_MAILS_DES_MODELES));
 

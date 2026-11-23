@@ -59,7 +59,9 @@ use LogicException;
  * de l'Union, autoliquidée, et hors de l'Union), ventes en détaxe avec
  * leur bordereau, visé ou non, vente sans stock d'une responsable (stock
  * négatif), paiement par prélèvement, caisse d'un vendeur fermée par sa
- * responsable, devis refusés (en ligne et par le magasin), expiré, accepté
+ * responsable, ticket d'un administrateur qui vend rendu en entier par la
+ * responsable le lendemain (son chiffre d'affaires net est nul : pas de
+ * barre dans « Ventes par vendeur » sur douze mois), devis refusés (en ligne et par le magasin), expiré, accepté
  * et bientôt expiré, et les derniers jours, une facture de chaque état
  * (brouillon, émise, envoyée, payée en partie), un avoir en brouillon, une
  * facture d'achat et un avoir fournisseur en brouillon, un fournisseur de
@@ -106,6 +108,8 @@ final class DocumentsDesCas
 
     private ?Facture $ticketEnDetaxe = null;
 
+    private ?Facture $ticketDeThomasRendu = null;
+
     private ?EnvoiDocument $devisARefuserEnLigne = null;
 
     private ?EnvoiDocument $devisAAccepterEnLigne = null;
@@ -139,7 +143,7 @@ final class DocumentsDesCas
             $this->casDuConseil($rang, $avantLaFin);
         }
 
-        if ($this->semis->seme('commerce') && $rang % 10 === 0) {
+        if ($this->semis->seme('commerce') && SemisComplet::rangRecent($rang) % 10 === 0) {
             $this->fermerUneCaisseLeSoir($rang, $this->gestes('halles'), $this->semis->compte('Camille Laurent'));
         }
     }
@@ -192,6 +196,14 @@ final class DocumentsDesCas
                 $halles->dans(fn (): Devis => app(RefuserDevisAction::class)->handle($camille, $refuse));
             }),
             38 => $this->leSoir($rang, '23:10', fn (): mixed => app(RepondreAuDevisEnLigneAction::class)->refuser(self::jetonDuDevis($this->devisARefuserEnLigne), 'Nous avons choisi un autre fournisseur cette année.')),
+            36 => $this->aDouzeHeures($rang, function () use ($halles): void {
+                $this->ticketDeThomasRendu = $halles->vendreALaCaisse($this->semis->compte('Thomas Girard'), $halles->comptoir(), [$this->ligne($halles, 'CARNET-A5', 2)], ModePaiement::CarteBancaire);
+            }),
+            35 => $this->aDouzeHeures($rang, function () use ($halles, $camille): void {
+                $ticket = $this->ticketDeThomasRendu ?? throw new LogicException('Le ticket de Thomas Girard n\'a pas été semé.');
+                $ligne = $halles->dans(fn (): int => $ticket->lignes()->sole()->id);
+                $halles->rendre($camille, $halles->comptoir(), [['ligne_facture_id' => $ligne, 'quantite' => 2]], 'Cadeau en double : le ticket est rendu en entier, le vendeur n\'a finalement rien vendu.');
+            }),
             30 => $this->aDouzeHeures($rang, function () use ($halles): void {
                 $lucas = $this->semis->compte('Lucas Moreau');
                 $this->ticketEnDetaxe = $halles->vendreALaCaisse($lucas, $halles->comptoir(), [$this->ligne($halles, 'DIFF-BAMBOU', 3), $this->ligne($halles, 'BOUGIE-FIGUE', 4)], ModePaiement::CarteBancaire);

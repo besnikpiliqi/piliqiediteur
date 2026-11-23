@@ -82,7 +82,9 @@ final class DemonstrationsDesSocietes
     }
 
     /**
-     * Les gestes de ce jour du semis, le soir.
+     * Les gestes de ce jour du semis, le soir : le vingtième jour de
+     * l'histoire entière, avant que l'inscription sans code ne soit close le
+     * trentième (voir HistoireAncienne), puis ceux des derniers jours.
      */
     public function auJour(int $rang): void
     {

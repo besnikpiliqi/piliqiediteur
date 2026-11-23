@@ -18,6 +18,7 @@ use App\Domain\TableauDeBord\Enums\EcranDuTableauDeBord;
 use App\Domain\TableauDeBord\Enums\Graphique;
 use App\Domain\TableauDeBord\Enums\NiveauDeLaBarre;
 use App\Domain\TableauDeBord\Enums\PeriodeDuTableauDeBord;
+use App\Domain\TableauDeBord\Enums\TypeDeGraphique;
 use App\Domain\TableauDeBord\Services\PerimetreDesGraphiques;
 use App\Domain\TableauDeBord\Services\PreferencesDesGraphiques;
 use App\Domain\TableauDeBord\Services\SeriesDesGraphiques;
@@ -27,6 +28,7 @@ use App\Domain\TableauDeBord\Support\CarteDuTableauDeBord;
 use App\Domain\TableauDeBord\Support\Mois;
 use App\Domain\TableauDeBord\Support\Perimetre;
 use App\Domain\TableauDeBord\Support\ReglagesDuTableauDeBord;
+use App\Domain\TableauDeBord\Support\SerieDuGraphique;
 use App\Domain\TableauDeBord\Support\TextesDeLEcartDesPrixDAchat;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Isolation\ControlesDeLApplication;
@@ -39,9 +41,11 @@ use App\Models\User;
 use BackedEnum;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterval;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\Semis\ComptesSemes;
 use Database\Seeders\Semis\SemisComplet;
+use Database\Seeders\Semis\SocietesDesCas;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\Model;
@@ -62,8 +66,9 @@ use Tests\TestCase;
 /**
  * Le semis complet de toutes les tables et de tous les cas (demande de
  * l'éditeur du 15/11/2026, cahier SEED-TOUT § 5, point 6 du protocole de
- * rigueur de CLAUDE.md) : après php artisan db:seed, sur plus de treize
- * mois, chaque table de la base hors tables techniques du cadre a des
+ * rigueur de CLAUDE.md) : après php artisan db:seed, sur plus de trois
+ * ans (lot GRAPH-AN : Maison Ferrand et Conseil Vasseur ont trois années de
+ * ventes au moins, voir HistoireAncienne), chaque table de la base hors tables techniques du cadre a des
  * lignes, chaque valeur de chaque état apparaît (hors les états qu'aucune
  * action ne fait encore naître dans leur colonne, chacun avec sa raison), chaque société qui a vendu a un régime de TVA choisi, chaque
  * rôle a un compte qui a ses propres données, chaque compte qui vend a ses
@@ -115,14 +120,14 @@ class SemisCompletTest extends TestCase
      * @var array<string, int>
      */
     private const NOMBRES_DE_LIGNES = [
-        'actions_traitees' => 4746,
+        'actions_traitees' => 6555,
         'actions_traitees_de_la_societe' => 348,
         'affectations' => 40,
-        'autorisations_affectations' => 533,
+        'autorisations_affectations' => 534,
         'autorisations_cabinet' => 41,
         'autorisations_societe' => 6,
         'avoir_allocations' => 121,
-        'avoirs' => 118,
+        'avoirs' => 119,
         'avoirs_fournisseur' => 2,
         'bordereaux_detaxe' => 2,
         'cabinets' => 4,
@@ -130,10 +135,10 @@ class SemisCompletTest extends TestCase
         'charges' => 181,
         'clients' => 47,
         'clients_confies' => 2,
-        'clotures_caisse' => 2621,
-        'clotures_caisse_personnelles' => 3331,
-        'clotures_caisse_personnelles_factures' => 4010,
-        'clotures_caisse_personnelles_paiements' => 3920,
+        'clotures_caisse' => 5818,
+        'clotures_caisse_personnelles' => 5033,
+        'clotures_caisse_personnelles_factures' => 5712,
+        'clotures_caisse_personnelles_paiements' => 5622,
         'codes_confirmation' => 26,
         'comptes_expert_comptable' => 3,
         'consultations_vies' => 5,
@@ -141,38 +146,38 @@ class SemisCompletTest extends TestCase
         'demonstrations' => 15,
         'devis' => 225,
         'ecarts_sirene' => 2,
-        'enregistrements_fiscaux' => 10835,
+        'enregistrements_fiscaux' => 17440,
         'envois_documents' => 13,
         'evenements_transmission_pdp' => 62,
-        'factures' => 4011,
-        'factures_achat' => 182,
+        'factures' => 5713,
+        'factures_achat' => 288,
         'fournisseurs' => 13,
         'identifiants' => 67,
         'inventaires_ouverture' => 11,
         'invitations_cabinet' => 6,
-        'journal_audit' => 1801,
+        'journal_audit' => 2819,
         'liens_cabinet' => 15,
         'liens_des_devis' => 6,
-        'lignes_achat' => 355,
-        'lignes_avoir' => 146,
+        'lignes_achat' => 672,
+        'lignes_avoir' => 147,
         'lignes_avoir_fournisseur' => 2,
         'lignes_de_charge' => 180,
         'lignes_devis' => 393,
-        'lignes_facture' => 5992,
+        'lignes_facture' => 8424,
         'lignes_inventaire_ouverture' => 23,
         'lignes_recu_paiement' => 160,
         'magasins' => 22,
         'magasins_cabinet' => 1,
         'mandats_pdp' => 2,
         'messages_vers_la_demonstration' => 26,
-        'mouvements_stock' => 5112,
+        'mouvements_stock' => 6892,
         'notifications' => 191,
-        'paiement_allocations' => 3920,
-        'paiements' => 3920,
+        'paiement_allocations' => 5622,
+        'paiements' => 5622,
         'paniers_caisse' => 1,
-        'periodes_activite' => 23,
+        'periodes_activite' => 24,
         'pieces_de_charge' => 181,
-        'pieces_fournisseur' => 1,
+        'pieces_fournisseur' => 107,
         'pieces_verification' => 4,
         'postes_reconnus' => 1,
         'preferences_tableau_de_bord' => 4,
@@ -182,23 +187,23 @@ class SemisCompletTest extends TestCase
         'referentiel_autorisations_magasin' => 51,
         'referentiel_autorisations_societe' => 5,
         'reponses_des_devis' => 3,
-        'sequences_documents' => 98,
+        'sequences_documents' => 121,
         'services' => 9,
         'sirets_magasins' => 23,
         'site_de_la_base' => 1,
         'societes' => 21,
         'taux_avoirs_fournisseur' => 2,
-        'taux_factures_achat' => 239,
+        'taux_factures_achat' => 398,
         'telechargements_documents' => 5,
         'tetes_journal_audit' => 105,
         'tetes_registre_fiscal' => 22,
         'traces_audit' => 8,
-        'traces_evenements' => 2,
+        'traces_evenements' => 3,
         'transmissions_pdp' => 58,
         'transmissions_propriete' => 2,
         'types_de_charge_de_la_societe' => 2,
         'users' => 67,
-        'verifications_societe' => 566,
+        'verifications_societe' => 1370,
         'visas_detaxe' => 1,
     ];
 
@@ -236,6 +241,8 @@ class SemisCompletTest extends TestCase
         $this->assertLesCasDeLEcartDesPrixDAchat();
         $this->assertLaCarteDesVentesParVendeur();
         $this->assertLesGraphiquesParMoisTrimestreOuAnnee();
+        $this->assertLesTroisAnsDeVentesEtLesAnneesSansVente();
+        $this->assertLesVendeursAuChiffreNulEtLaPhraseGrise();
         $this->assertLesDatesDeLOperation();
         $this->assertLaListeDesComptesOuvreChaqueCompteActif();
         $this->assertLesRenouvellementsDesDemonstrations();
@@ -381,7 +388,7 @@ class SemisCompletTest extends TestCase
               and not exists (select 1 from clotures_caisse_personnelles c where c.vendeur_id = u.id)
             SQL));
         $this->assertGreaterThan(20, (int) DB::table('factures')->whereNotNull('numero')->distinct()->count('cree_par'));
-        $this->assertGreaterThan(390, (int) DB::table('clotures_caisse')->distinct()->count('date_cloture'));
+        $this->assertGreaterThan(1080, (int) DB::table('clotures_caisse')->distinct()->count('date_cloture'), 'Plus de trois ans de journées clôturées.');
     }
 
     /**
@@ -499,7 +506,7 @@ class SemisCompletTest extends TestCase
      * Les graphiques par mois, par trimestre ou par année (lot GRAPH-AN) :
      * la propriétaire de Maison Ferrand les lit par année, avec le chiffre
      * d'affaires en écart en % sur un an et la marge avec sa tendance, sur les
-     * dix ans qui finissent cette année (les années d'avant octobre 2025, sans
+     * dix ans qui finissent cette année (les années d'avant octobre 2023, sans
      * donnée, ne s'affichent pas) ; Camille Laurent lit les ventes des Halles
      * cumulées depuis le début de l'année, avec l'année précédente cumulée ;
      * Marc Petit lit le chiffre d'affaires de Conseil Vasseur par trimestre,
@@ -530,7 +537,7 @@ class SemisCompletTest extends TestCase
 
         $parAnnee = $series($deLaSociete, $reglagesDeLaProprietaire);
         $chiffreDAffaires = $parAnnee[Graphique::ChiffreDAffairesParMois->value];
-        $this->assertGreaterThanOrEqual(2, count($chiffreDAffaires->barres), 'Octobre 2025 à aujourd\'hui : au moins deux années ont des ventes.');
+        $this->assertGreaterThanOrEqual(4, count($chiffreDAffaires->barres), 'Octobre 2023 à aujourd\'hui : quatre années ont des ventes, dont trois années entières.');
         $this->assertContains(NiveauDeLaBarre::Annee, array_map(fn (Barre $barre): NiveauDeLaBarre => $barre->niveau, $chiffreDAffaires->barres));
         $this->assertNotNull($chiffreDAffaires->ecartSurUnAn, 'Le chiffre d\'affaires est lu en écart en % sur un an.');
         $this->assertSame('pourcent', $chiffreDAffaires->jeux[0]['unite']);
@@ -544,6 +551,119 @@ class SemisCompletTest extends TestCase
         $parTrimestre = $series($deMarc, $reglagesDeMarc)[Graphique::ChiffreDAffairesParMois->value];
         $this->assertCount(4, $parTrimestre->barres, 'Les quatre blocs de trois mois des 12 derniers mois.');
         $this->assertSame('Moyenne sur 3 trimestres', $parTrimestre->jeux[2]['libelle'], 'La tendance suit la comparaison, après la série et l\'an dernier.');
+    }
+
+    /**
+     * Les années de ventes semées (lot GRAPH-AN, demande de l'éditeur du
+     * 16/11/2026) : Maison Ferrand et Conseil Vasseur, les sociétés que le
+     * propriétaire ouvre dans la démonstration, ont trois années de ventes au
+     * moins, chaque année plus fournie que celle d'avant ; l'Atelier Brun a
+     * une année entière sans vente entre deux années de ventes (son magasin,
+     * fermé un an, se rouvre), que « Découper par : année » garde à 0, et
+     * l'année d'après se compare à une année qui vaut zéro (« – ») ; le
+     * Studio Lumière, dont l'exercice finit en octobre, a trois exercices,
+     * chacun une barre.
+     */
+    private function assertLesTroisAnsDeVentesEtLesAnneesSansVente(): void
+    {
+        $perimetres = app(PerimetreDesGraphiques::class);
+        $parAnnee = function (Perimetre $perimetre, bool $ecart = false): SerieDuGraphique {
+            $carte = new CarteDuTableauDeBord(Graphique::ChiffreDAffairesParMois, TypeDeGraphique::Barres, ecart: $ecart);
+
+            return app(SeriesDesGraphiques::class)->pour(new CalculDesSeries($perimetre, new ReglagesDuTableauDeBord([$carte], PeriodeDuTableauDeBord::DouzeDerniersMois, null, false, DecoupageDuTableauDeBord::Annee), [$carte]))[Graphique::ChiffreDAffairesParMois->value];
+        };
+        $parEtiquette = static fn (SerieDuGraphique $serie): array => array_combine($serie->etiquettes, $serie->jeux[0]['valeurs']);
+
+        app(TenantContext::class)->clear();
+        $maisonFerrand = Societe::query()->where('siren', SemisComplet::SIREN_COMMERCE)->sole();
+        $deMaisonFerrand = $parEtiquette($parAnnee($perimetres->deLaSociete($maisonFerrand->proprietaire()->sole(), $maisonFerrand)));
+        $this->assertSame(['2023', '2024', '2025', '2026'], array_map(strval(...), array_keys($deMaisonFerrand)), 'Maison Ferrand vend depuis octobre 2023 : quatre années, dont trois entières, les six années d\'avant cachées.');
+        $this->assertSame([], array_filter($deMaisonFerrand, static fn (?int $montant): bool => $montant === null || $montant <= 0), 'Chaque année a des ventes.');
+        $this->assertGreaterThan($deMaisonFerrand['2024'], $deMaisonFerrand['2025'], 'L\'année 2025, qui finit avec toute l\'activité détaillée, vaut plus que 2024, aux seuls établissements d\'origine.');
+        $this->assertGreaterThan($deMaisonFerrand['2025'], $deMaisonFerrand['2026']);
+
+        $deConseilVasseur = $parEtiquette($parAnnee($perimetres->delExpertComptable(User::query()->where('name', 'Marc Petit')->sole())));
+        $this->assertSame(['2023', '2024', '2025', '2026'], array_map(strval(...), array_keys($deConseilVasseur)), 'Conseil Vasseur a aussi plus de trois années de ventes.');
+        $this->assertSame([], array_filter($deConseilVasseur, static fn (?int $montant): bool => $montant === null || $montant <= 0));
+
+        $atelier = Societe::query()->where('siren', SocietesDesCas::SIREN_ATELIER)->sole();
+        $proprietaireDeLAtelier = $atelier->proprietaire()->sole();
+        $perimetreDeLAtelier = $perimetres->deLaSociete($proprietaireDeLAtelier, $atelier);
+        $deLAtelier = $parEtiquette($parAnnee($perimetreDeLAtelier));
+        $this->assertSame(['2024', '2025', '2026'], array_map(strval(...), array_keys($deLAtelier)), 'L\'Atelier Brun a des ventes en 2024, aucune en 2025, puis de nouveau en 2026.');
+        $this->assertSame(0, $deLAtelier['2025'], 'Une année vide au milieu reste à 0.');
+        $this->assertGreaterThan(0, $deLAtelier['2024']);
+        $this->assertGreaterThan(0, $deLAtelier['2026']);
+
+        $enEcart = $parAnnee($perimetreDeLAtelier, ecart: true);
+        $this->assertSame([null, -10000, null], $enEcart->jeux[0]['valeurs'], '2024 n\'a pas d\'année d\'avant (« – »), 2025 perd tout (−100 %), 2026 se compare à une année qui vaut zéro (« – »).');
+        $this->assertSame(0, $enEcart->ecartSurUnAn['lignes'][2]['precedent'] ?? null);
+        $this->assertSame(
+            [['temporaire'], [null]],
+            $this->lignes('select p.motif_fin from periodes_activite p join magasins m on m.id = p.magasin_id join societes s on s.id = m.societe_id where s.siren = ? order by p.debut', [SocietesDesCas::SIREN_ATELIER]),
+            'Le magasin de l\'Atelier Brun a deux périodes d\'activité : la première finie par sa fermeture temporaire, la seconde ouverte depuis sa réouverture.',
+        );
+        $this->assertSame(0, DB::table('factures')
+            ->join('magasins', 'magasins.id', '=', 'factures.magasin_id')
+            ->join('societes', 'societes.id', '=', 'magasins.societe_id')
+            ->where('societes.siren', SocietesDesCas::SIREN_ATELIER)
+            ->whereNotNull('factures.numero')
+            ->whereBetween('factures.date_emission', [self::aParis('2025-01-01 00:00:00'), self::aParis('2025-12-31 23:59:59')])
+            ->count(), 'Aucune vente de l\'Atelier Brun en 2025 : son magasin est fermé toute l\'année.');
+
+        $studio = Societe::query()->whereKey(Magasin::query()->withoutGlobalScopes()->where('code', 'STUDIO')->sole()->societe_id)->sole();
+        $this->assertSame(10, (int) $studio->mois_fin_exercice, 'L\'exercice du Studio Lumière finit en octobre.');
+        $duStudio = $parAnnee($perimetres->deLaSociete($studio->proprietaire()->sole(), $studio));
+        $this->assertSame(['2024-25', '2025-26', '2026-27'], $duStudio->etiquettes, 'Trois exercices, un par barre.');
+        $this->assertSame([], array_filter($parEtiquette($duStudio), static fn (?int $montant): bool => $montant === null || $montant <= 0));
+    }
+
+    /**
+     * « Ventes par vendeur » et la phrase grise (lot GRAPH-AN) : Thomas
+     * Girard, administrateur qui vend, a vendu aux Halles un ticket que sa
+     * responsable a rendu en entier : sur les 12 derniers mois son chiffre
+     * est nul, il n'a pas de barre ; sur les dix dernières années, où il a
+     * d'autres ventes, il en a une. Il voit les graphiques des Halles et de
+     * la République, mais pas les factures de toute l'équipe de la
+     * République : ce magasin n'est pas compté, une phrase grise le dit sans
+     * le nommer, que ni la propriétaire ni Nadia Benali, qui voient tout,
+     * n'ont. Bruno Caron, retiré de Conseil Vasseur, garde son nom sur ses
+     * ventes.
+     */
+    private function assertLesVendeursAuChiffreNulEtLaPhraseGrise(): void
+    {
+        $perimetres = app(PerimetreDesGraphiques::class);
+        $societe = Societe::query()->where('siren', SemisComplet::SIREN_COMMERCE)->sole();
+        $thomas = User::query()->where('name', 'Thomas Girard')->sole();
+        $nadia = User::query()->where('name', 'Nadia Benali')->sole();
+        $parVendeur = CarteDuTableauDeBord::parDefaut(Graphique::VentesParVendeur);
+        $chiffreDAffaires = CarteDuTableauDeBord::parDefaut(Graphique::ChiffreDAffairesParMois);
+        $lire = function (Perimetre $perimetre, DecoupageDuTableauDeBord $decoupage) use ($parVendeur, $chiffreDAffaires): array {
+            $reglages = new ReglagesDuTableauDeBord([$parVendeur, $chiffreDAffaires], PeriodeDuTableauDeBord::DouzeDerniersMois, null, false, $decoupage);
+
+            return app(SeriesDesGraphiques::class)->pour(new CalculDesSeries($perimetre, $reglages, [$parVendeur, $chiffreDAffaires]));
+        };
+
+        app(TenantContext::class)->clear();
+        $deThomas = $lire($perimetres->deLaSociete($thomas, $societe), DecoupageDuTableauDeBord::Mois);
+        $deNadia = $lire($perimetres->deLaSociete($nadia, $societe), DecoupageDuTableauDeBord::Mois);
+        $dixAns = $lire($perimetres->deLaSociete($thomas, $societe), DecoupageDuTableauDeBord::Annee);
+
+        $this->assertSame('1 magasin n\'est pas compté : vous n\'y voyez pas toutes les ventes.', $deThomas[Graphique::ChiffreDAffairesParMois->value]->note);
+        $this->assertSame('1 magasin n\'est pas compté : vous n\'y voyez pas toutes les ventes.', $deThomas[Graphique::VentesParVendeur->value]->note);
+        $this->assertStringNotContainsString('République', (string) $deThomas[Graphique::VentesParVendeur->value]->note);
+        $this->assertNull($deNadia[Graphique::ChiffreDAffairesParMois->value]->note, 'Nadia Benali voit toutes les ventes de chaque magasin.');
+        $this->assertNull($deNadia[Graphique::VentesParVendeur->value]->note);
+
+        $ticketsDeThomas = DB::table('factures')->where('cree_par', $thomas->getKey())->whereNotNull('numero')->where('date_emission', '>', Calendrier::deParis()->decaler(now(), CarbonInterval::months(-12)))->count();
+        $this->assertGreaterThan(0, $ticketsDeThomas, 'Thomas Girard a vendu un ticket dans les 12 derniers mois.');
+        $this->assertSame([], array_filter($deNadia[Graphique::VentesParVendeur->value]->etiquettes, static fn (string $etiquette): bool => str_starts_with($etiquette, 'Thomas Girard')), 'Le ticket rendu en entier laisse son chiffre à zéro : pas de barre.');
+        $this->assertSame([], array_filter($deThomas[Graphique::VentesParVendeur->value]->etiquettes, static fn (string $etiquette): bool => str_starts_with($etiquette, 'Thomas Girard')));
+        $this->assertNotSame([], array_filter($dixAns[Graphique::VentesParVendeur->value]->etiquettes, static fn (string $etiquette): bool => str_starts_with($etiquette, 'Thomas Girard')), 'Sur dix ans, ses autres ventes lui donnent une barre.');
+
+        $retire = User::query()->where('name', 'Bruno Caron')->sole();
+        $this->assertSame(StatutCompte::Retire, $retire->statut, 'Bruno Caron est retiré de la société.');
+        $this->assertGreaterThan(0, (int) DB::table('factures')->where('cree_par', $retire->getKey())->where('cree_par_nom', 'Bruno Caron')->whereNotNull('numero')->count(), 'Ses ventes gardent son nom.');
     }
 
     /**
@@ -969,11 +1089,11 @@ class SemisCompletTest extends TestCase
     /**
      * Qui voit la carte et qui ne la voit pas : la propriétaire de Maison
      * Ferrand (espace de la société et panneau de chaque magasin), son
-     * administratrice cochée aux graphiques, la responsable des Halles
-     * cochée, le cabinet Martin (son propriétaire et Paul Lefèvre pour Maison
-     * Ferrand), le propriétaire de l'Épicerie ;
-     * pas les responsables sans la case, l'administrateur sans la case, les
-     * vendeurs, l'observatrice, l'expert-comptable d'une société de services,
+     * administratrice et son administrateur qui vend, cochés aux graphiques,
+     * la responsable des Halles cochée, le cabinet Martin (son propriétaire
+     * et Paul Lefèvre pour Maison Ferrand), le propriétaire de l'Épicerie ;
+     * pas les responsables sans la case, l'administratrice du Comptoir des
+     * Îles sans la case, les vendeurs, l'observatrice, l'expert-comptable d'une société de services,
      * ni Emma Rousseau ni le cabinet pour l'Épicerie Lemoine, dont le lien
      * reste actif mais dont le propriétaire a retiré au cabinet les
      * consultations d'achats.
@@ -988,6 +1108,7 @@ class SemisCompletTest extends TestCase
             'la propriétaire de Maison Ferrand' => $societe->proprietaire()->sole(),
             'Nadia Benali' => User::query()->where('name', 'Nadia Benali')->sole(),
             'Camille Laurent' => User::query()->where('name', 'Camille Laurent')->sole(),
+            'Thomas Girard (graphiques cochés dans les Halles et la République)' => User::query()->where('name', 'Thomas Girard')->sole(),
             'le propriétaire du cabinet Martin' => $cabinet->proprietaire()->sole(),
             'Paul Lefèvre' => User::query()->where('name', 'Paul Lefèvre')->sole(),
             'le propriétaire de l\'Épicerie Lemoine' => $epicerie->proprietaire()->sole(),
@@ -996,7 +1117,7 @@ class SemisCompletTest extends TestCase
             'Emma Rousseau (Épicerie, consultations d\'achats retirées au cabinet)' => User::query()->where('name', 'Emma Rousseau')->sole(),
             'Hugo Lefebvre' => User::query()->where('name', 'Hugo Lefebvre')->sole(),
             'Joëlle Marie-Sainte' => User::query()->where('name', 'Joëlle Marie-Sainte')->sole(),
-            'Thomas Girard' => User::query()->where('name', 'Thomas Girard')->sole(),
+            'Gaëlle Hoarau (administratrice du Comptoir des Îles, sans la case des graphiques)' => User::query()->where('name', 'Gaëlle Hoarau')->sole(),
             'Inès Garcia' => User::query()->where('name', 'Inès Garcia')->sole(),
             'Sarah Petit' => User::query()->where('name', 'Sarah Petit')->sole(),
             'Kévin Louisy' => User::query()->where('name', 'Kévin Louisy')->sole(),

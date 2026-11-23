@@ -104,6 +104,23 @@ final class HorlogeDuSemis
     }
 
     /**
+     * Le rang de ce jour (« AAAA-MM-JJ ») dans l'histoire semée : 0 le
+     * premier jour, $jours - 1 la veille du semis.
+     *
+     * @throws LogicException quand ce jour n'est pas dans l'histoire semée
+     */
+    public function rangDuJour(string $jour): int
+    {
+        $rang = Calendrier::joursEntre($this->premierJour, $jour);
+
+        if ($rang < 0 || $rang >= $this->jours) {
+            throw new LogicException("Le jour {$jour} n'est pas dans l'histoire semée ({$this->premierJour} à ".$this->jour($this->jours - 1).').');
+        }
+
+        return $rang;
+    }
+
+    /**
      * Avance l'horloge à cette heure murale (« HH:MM ») de ce jour de
      * l'histoire, en exécutant les tâches horaires à chaque minuit franchi.
      *

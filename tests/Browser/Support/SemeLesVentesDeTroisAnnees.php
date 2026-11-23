@@ -12,6 +12,7 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 
 /**
  * Le jeu des tests en navigateur des graphiques par mois, par trimestre ou
@@ -64,20 +65,20 @@ trait SemeLesVentesDeTroisAnnees
             Client::factory()->professionnel()->create(['nom' => 'Hôtel des Pins']),
         ]);
         $responsable = self::responsableDeTest($magasin);
-        $vendre = fn (string $instant, int $lampes) => app(TenantContext::class)->runAs($magasin, function () use ($instant, $lampes, $responsable, $particulier, $lampe): void {
-            $this->travelTo(self::aParis($instant));
+        $vendre = fn (CarbonImmutable $instant, int $lampes) => app(TenantContext::class)->runAs($magasin, function () use ($instant, $lampes, $responsable, $particulier, $lampe): void {
+            $this->travelTo($instant);
             self::vendreAuComptant($responsable, $particulier, [['produit_id' => $lampe->id, 'quantite' => $lampes]]);
         });
-        $acheter = fn (string $instant, string $jourDeLaFacture, int $cables) => app(TenantContext::class)->runAs($magasin, function () use ($instant, $jourDeLaFacture, $cables, $responsable, $cable): void {
-            $this->travelTo(self::aParis($instant));
+        $acheter = fn (CarbonImmutable $instant, string $jourDeLaFacture, int $cables) => app(TenantContext::class)->runAs($magasin, function () use ($instant, $jourDeLaFacture, $cables, $responsable, $cable): void {
+            $this->travelTo($instant);
             app(ValiderFactureAchatAction::class)->handle($responsable, app(CreerFactureAchatAction::class)->handle($responsable, Fournisseur::factory()->create(['nom' => 'Grossiste Est']), [
                 ['produit_id' => $cable->id, 'quantite' => $cables, 'prix_unitaire_ht' => '5.00', 'taux_tva' => 20],
             ], ['date_facture' => $jourDeLaFacture]));
         });
 
-        $vendre('2023-05-10 10:00:00', 1);
-        $vendre('2025-03-04 10:00:00', 1);
-        $acheter('2025-03-05 10:00:00', '2025-03-05', 10);
+        $vendre(self::aParis('2023-05-10 10:00:00'), 1);
+        $vendre(self::aParis('2025-03-04 10:00:00'), 1);
+        $acheter(self::aParis('2025-03-05 10:00:00'), '2025-03-05', 10);
         app(TenantContext::class)->runAs($magasin, function () use ($responsable, $hotel, $lampe): void {
             $this->travelTo(self::aParis('2026-01-12 10:00:00'));
             app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, $hotel, [['produit_id' => $lampe->id, 'quantite' => 1]]));
@@ -90,10 +91,10 @@ trait SemeLesVentesDeTroisAnnees
             Client::factory()->create(['nom' => 'Julie Petit']),
         ]);
 
-        $vendre('2026-02-10 10:00:00', 1);
-        $vendre('2026-03-03 10:00:00', 1);
-        $acheter('2026-03-04 10:00:00', '2026-03-04', 5);
-        $vendre('2026-03-05 10:00:00', 2);
+        $vendre(self::aParis('2026-02-10 10:00:00'), 1);
+        $vendre(self::aParis('2026-03-03 10:00:00'), 1);
+        $acheter(self::aParis('2026-03-04 10:00:00'), '2026-03-04', 5);
+        $vendre(self::aParis('2026-03-05 10:00:00'), 2);
         app(TenantContext::class)->runAs($autre, function () use ($autre, $lampeDeLaGare, $clientDeLaGare): void {
             $this->travelTo(self::aParis('2026-03-05 10:30:00'));
             self::vendreAuComptant(self::responsableDeTest($autre), $clientDeLaGare, [['produit_id' => $lampeDeLaGare->id, 'quantite' => 1]]);

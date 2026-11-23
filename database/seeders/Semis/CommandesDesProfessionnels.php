@@ -118,7 +118,10 @@ final class CommandesDesProfessionnels
         ],
     ];
 
-    /** Le premier jour des commandes, une fois les fiches et les réassorts en place. */
+    /**
+     * Le premier jour des commandes, une fois les fiches et les réassorts en
+     * place, compté dans l'histoire détaillée (voir SemisComplet::rangRecent()).
+     */
     private const PREMIER_JOUR = 20;
 
     /**
@@ -180,19 +183,21 @@ final class CommandesDesProfessionnels
             unset($this->suites[$rang]);
         }
 
-        if ($rang < self::PREMIER_JOUR || $rang > SemisComplet::JOURS - 12) {
+        $rythme = SemisComplet::rangRecent($rang);
+
+        if ($rythme < self::PREMIER_JOUR || $rang > SemisComplet::JOURS - 12) {
             return;
         }
 
         foreach (self::MAGASINS as $magasin => $reglages) {
-            if ($this->semis->semeLeMagasin($magasin) && $rang % $reglages['periode'] === $reglages['decalage']) {
+            if ($this->semis->semeLeMagasin($magasin) && $rythme % $reglages['periode'] === $reglages['decalage']) {
                 $this->horloge->aller($rang, '08:50');
                 $this->commander($magasin, $rang);
             }
         }
 
         if ($this->semis->semeLeMagasin('halles')) {
-            $this->bonDAvoirDesHalles($rang);
+            $this->bonDAvoirDesHalles($rang, $rythme);
         }
     }
 
@@ -311,18 +316,18 @@ final class CommandesDesProfessionnels
      * du dernier ticket du comptoir de Lucas Moreau (bon d'avoir), et ce
      * bon règle une partie d'une vente au comptoir cinq jours plus tard.
      */
-    private function bonDAvoirDesHalles(int $rang): void
+    private function bonDAvoirDesHalles(int $rang, int $rythme): void
     {
         $halles = $this->gestes('halles');
         $camille = $this->semis->compte('Camille Laurent');
 
-        if ($rang % 30 === 25 && $this->bonDAvoirARegler !== null) {
+        if ($rythme % 30 === 25 && $this->bonDAvoirARegler !== null) {
             $this->horloge->aller($rang, '08:55');
             $halles->vendreALaCaisse($camille, $halles->comptoir(), $this->lignes($halles, ['CARNET-A5' => 3, 'THE-SENCHA' => 1]), ModePaiement::CarteBancaire, [], [$this->bonDAvoirARegler]);
             $this->bonDAvoirARegler = null;
         }
 
-        if ($rang % 30 === 20) {
+        if ($rythme % 30 === 20) {
             $this->horloge->aller($rang, '08:55');
             $lucas = $this->semis->compte('Lucas Moreau');
             $ligne = $halles->dans(fn (): int => Facture::query()

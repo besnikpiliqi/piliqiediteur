@@ -76,18 +76,41 @@ use LogicException;
  * aucun produit ne naît hors d'une facture d'achat ou d'un inventaire
  * d'ouverture validé, et le stock suit son grand livre. L'histoire se
  * déroule dans l'ordre, sur JOURS jours qui finissent la veille du semis
- * (voir HorlogeDuSemis), puis l'activité des magasins se sème (voir
+ * (voir HorlogeDuSemis) : les sociétés s'inscrivent, valident leur code et
+ * ouvrent leurs magasins le premier jour, les établissements qui existent
+ * depuis le début vendent à un rythme léger pendant JOURS_ANCIENS jours (les
+ * graphiques par année de trois ans, voir HistoireAncienne), puis toute
+ * l'activité des magasins se sème, sur les JOURS_RECENTS derniers jours (voir
  * ActiviteDesMagasins).
  */
 final class SemisComplet
 {
     /**
-     * Le nombre de jours de l'histoire semée, qui finit la veille du semis :
-     * plus de treize mois, pour que les graphiques aient leurs douze derniers
-     * mois et « Comparer avec l'année précédente » de quoi comparer, et
-     * qu'une facture à 30 jours émise au début soit en retard à la fin.
+     * Le nombre de jours de l'histoire détaillée, les derniers avant la fin
+     * de l'histoire : plus de treize mois, pour que les graphiques aient
+     * leurs douze derniers mois et « Comparer avec l'année précédente » de
+     * quoi comparer, et qu'une facture à 30 jours émise au début soit en
+     * retard à la fin. Tout ce que le semis fait avec un rythme de jours
+     * (réassorts, ventes, commandes, caisses du soir) s'y compte depuis son
+     * premier jour (voir rangRecent()), pour que ce rythme ne change pas
+     * quand l'histoire s'allonge.
      */
-    public const JOURS = 400;
+    public const JOURS_RECENTS = 400;
+
+    /**
+     * Le nombre de jours qui précèdent l'histoire détaillée : deux ans, pour
+     * qu'une société ait plus de trois années de ventes (« Découper par :
+     * année » montre les dix dernières années, celles du début, sans
+     * donnée, cachées), sur lesquels seuls les établissements d'origine
+     * vendent, à un rythme léger (voir HistoireAncienne).
+     */
+    public const JOURS_ANCIENS = 730;
+
+    /**
+     * Le nombre de jours de l'histoire semée, qui finit la veille du semis :
+     * trois ans de ventes au moins pour Maison Ferrand et Conseil Vasseur.
+     */
+    public const JOURS = self::JOURS_ANCIENS + self::JOURS_RECENTS;
 
     public const SIREN_COMMERCE = '000000109';
 
@@ -144,6 +167,17 @@ final class SemisComplet
     private const NIC_DE_L_EPHEMERE = '0005';
 
     private const NIC_DU_MARCHE = '0006';
+
+    /**
+     * Le rang de ce jour dans l'histoire détaillée : 0 le premier de ses
+     * JOURS_RECENTS jours, négatif avant elle. Le rythme des gestes d'un
+     * jour sur N (« tous les quatorze jours », « un vendeur sur trois ») se
+     * compte sur ce rang, jamais sur celui de l'histoire entière.
+     */
+    public static function rangRecent(int $rang): int
+    {
+        return $rang - self::JOURS_ANCIENS;
+    }
 
     /**
      * Les sociétés qui s'inscrivent le premier jour de l'histoire, par
@@ -322,7 +356,11 @@ final class SemisComplet
 
         if ($this->seme('commerce')) {
             $this->administrateur('commerce', 'Nadia Benali', null, [], [PermissionRegistry::GRAPHIQUES_VOIR, PermissionRegistry::CHARGES_AJOUTER], AutorisationsSociete::modeleDeLAdministrateur());
-            $this->administrateur('commerce', 'Thomas Girard', ['halles', 'republique'], PermissionRegistry::deVente());
+            // Il voit les graphiques des deux magasins (le propriétaire lui coche la
+            // case), mais à la République il ne voit pas les factures de toute
+            // l'équipe : ce magasin n'est pas compté, une phrase grise le dit
+            // (lot GRAPH-AN).
+            $this->administrateur('commerce', 'Thomas Girard', ['halles', 'republique'], PermissionRegistry::deVente(), [PermissionRegistry::GRAPHIQUES_VOIR], [], ['republique' => [PermissionRegistry::FACTURE_VIEW_TOUTES]]);
             $this->membre('halles', 'Camille Laurent', RoleMagasin::Responsable);
             $this->membre('halles', 'Lucas Moreau', RoleMagasin::Vendeur);
             $this->membre('halles', 'Inès Garcia', RoleMagasin::Vendeur, gardeSonIdentifiant: true);
@@ -470,12 +508,12 @@ final class SemisComplet
     private function direCeQuIlFautRegarder(): void
     {
         foreach ([
-            'propriétaire commerce' => 'Espace de la société : tableau de bord et graphiques de ses six magasins, dont la carte « Écart des prix d\'achat » à l\'affichage des 12 mois (choix « Tous mes magasins », l\'Entrepôt qui porte tous les cas mois par mois, l\'Éphémère sans aucun achat validé, le Marché dont l\'unique produit n\'est acheté qu\'une fois ; le menu « Période » dit « Année précédente » pour les achats d\'avant), « Les caisses », charges, équipe, cabinet lié, téléchargements (prêts, et un en préparation) ; ne vend pas ; saisit et valide les achats des trois magasins de plus',
-            'propriétaire services' => 'Espace de la société : expert-comptable déclaré (deux comptes), charges validées par lui, magasin de services',
+            'propriétaire commerce' => 'Espace de la société : tableau de bord et graphiques de ses six magasins, dont la carte « Écart des prix d\'achat » à l\'affichage des 12 mois (choix « Tous mes magasins », l\'Entrepôt qui porte tous les cas mois par mois, l\'Éphémère sans aucun achat validé, le Marché dont l\'unique produit n\'est acheté qu\'une fois ; le menu « Période » dit « Année précédente » pour les achats d\'avant), « Les caisses », charges, équipe, cabinet lié, téléchargements (prêts, et un en préparation) ; ne vend pas ; saisit et valide les achats des trois magasins de plus ; ses graphiques par année sur quatre années de ventes (trois entières), le chiffre d\'affaires en écart en % sur un an (« – » la première année) et « Ventes par vendeur » sans Thomas Girard, dont le seul ticket de l\'année a été rendu en entier',
+            'propriétaire services' => 'Espace de la société : expert-comptable déclaré (deux comptes), charges validées par lui, magasin de services ; ses graphiques par année sur quatre années de ventes, par trimestre, et « Ventes par vendeur » avec Bruno Caron, retiré, qui garde son nom sur ses ventes',
             'propriétaire cabinet' => 'Espace du cabinet : clients liés, invitations et demandes dans chaque état, collaborateurs et clients confiés ; la page « Graphiques » de Maison Ferrand montre « Écart des prix d\'achat » de l\'année précédente sans geste',
             'Nadia Benali' => 'Administratrice sans vente : tableau de bord de la société avec graphiques (dont « Écart des prix d\'achat », à ajouter par « Ajouter un graphique »), charges qu\'elle ajoute, magasins de sa portée',
-            'Thomas Girard' => 'Administrateur qui vend dans deux magasins : sa caisse aux Halles puis à la République, ses relevés ; sans la case des graphiques, il ne voit pas « Écart des prix d\'achat »',
-            'Camille Laurent' => 'Responsable des Halles : « À faire » (exports sans preuve, détaxe, devis), graphiques dont « Écart des prix d\'achat » par mois (set de table acheté de cinq façons, boule de Noël d\'un mois à venir, plateau renommé), charges du magasin, vente sans stock, facture rejetée par la plateforme agréée et facture non transmise (incident technique), envoi en échec et envoi en attente',
+            'Thomas Girard' => 'Administrateur qui vend dans deux magasins : sa caisse aux Halles puis à la République, ses relevés ; le propriétaire lui a coché les graphiques des deux magasins, mais sans les factures de toute l\'équipe à la République : ses graphiques de ventes ne comptent que les Halles et le disent (« 1 magasin n\'est pas compté : vous n\'y voyez pas toutes les ventes. ») ; son ticket rendu en entier le laisse à zéro dans « Ventes par vendeur » sur 12 mois, il y a une barre sur dix ans ; « Écart des prix d\'achat » des deux magasins',
+            'Camille Laurent' => 'Responsable des Halles : « À faire » (exports sans preuve, détaxe, devis), graphiques dont « Écart des prix d\'achat » par mois (set de table acheté de cinq façons, boule de Noël d\'un mois à venir, plateau renommé), ses ventes cumulées depuis le début de l\'année avec l\'année précédente cumulée, « Ventes par vendeur » (elle a rendu en entier un ticket de Thomas Girard), charges du magasin, vente sans stock, facture rejetée par la plateforme agréée et facture non transmise (incident technique), envoi en échec et envoi en attente',
             'Lucas Moreau' => 'Vendeur des Halles : ses tickets, sa caisse fermée par sa responsable, ses factures d\'export et de détaxe',
             'Inès Garcia' => 'Vendeuse des Halles qui garde son identifiant : connexion seulement depuis le poste reconnu « Caisse des Halles »',
             'Hugo Lefebvre' => 'Responsable de la République : inventaire d\'ouverture, réassorts, avoir du Studio Nord ; saisit la lampe qui perd 210 €, le cadre photo archivé et la théière ; sans la case des graphiques, il ne voit pas « Écart des prix d\'achat »',
@@ -494,7 +532,7 @@ final class SemisComplet
             'Nicolas Lemoine' => 'Responsable de l\'Épicerie : équipe (vendeuse suspendue puis réactivée, accès redonné)',
             'Chloé Bernard' => 'Vendeuse de l\'Épicerie : ses tickets et ses relevés',
             'Mehdi Brahimi' => 'Vendeur de l\'Épicerie : ses tickets et ses relevés',
-            'Marc Petit' => 'Expert-comptable déclaré : « Tableau de bord de la société » avec tous ses graphiques affichés (« Tous les graphiques sont affichés »), charges à valider, magasins en lecture ; société de services, sans achats : pas de « Écart des prix d\'achat »',
+            'Marc Petit' => 'Expert-comptable déclaré : « Tableau de bord de la société » avec tous ses graphiques affichés (« Tous les graphiques sont affichés ») par trimestre, le chiffre d\'affaires avec sa tendance, quatre années de ventes par année, « Ventes par vendeur » avec Bruno Caron retiré, charges à valider, magasins en lecture ; société de services, sans achats : pas de « Écart des prix d\'achat »',
             'propriétaire inscription' => 'Inscription qui attend le code du courrier : aucune vente avant sa validation',
             'Élodie Fabre' => 'Observatrice des Halles : tout en lecture, aucune vente ; reçoit les alertes de stock (la propriétaire lui a coché « ajuster le stock »)',
             'Victor Blanchard' => 'Observateur du magasin de services',
@@ -513,7 +551,7 @@ final class SemisComplet
             'Inès Lafitte' => 'Responsable de Bordeaux : magasin fermé pour cessation puis rouvert',
             'Ronan Guillou' => 'Responsable de Nantes : magasin cédé, en lecture seule',
             'Chloé Vandamme' => 'Responsable de Lille : magasin suspendu par l\'éditeur, en lecture seule',
-            'Mathilde Brun (atelier)' => 'Franchise en base : ventes à 0 %, « TVA non applicable, art. 293 B du CGI »',
+            'Mathilde Brun (atelier)' => 'Franchise en base : ventes à 0 %, « TVA non applicable, art. 293 B du CGI » ; son magasin a été fermé temporairement plus d\'un an (une année entière sans vente), puis rouvert',
             'Rémi Lacroix' => 'Option pour les débits : factures de services encaissées ; après la correction du SIREN, une facture rectificative émise et les autres factures à régulariser',
             'Julien Delattre' => 'Membre d\'un assujetti unique : ventes refusées',
             'Sophie Duval' => 'Société suspendue : lecture seule',
@@ -525,8 +563,8 @@ final class SemisComplet
             'propriétaire cabinet non vérifié' => 'Cabinet inscrit, pas encore vérifié à l\'Ordre : aucun client',
             'propriétaire cabinet suspendu' => 'Cabinet vérifié puis suspendu',
             'propriétaire cabinet radié' => 'Cabinet radié du tableau de l\'Ordre (constat de l\'éditeur) : plus vérifié, son lien avec la Boulangerie Duval a pris fin',
-            'propriétaire atelier' => 'Franchise en base ; sa demande de lien au cabinet attend la réponse',
-            'propriétaire studio' => 'Option pour les débits ; sa demande de lien a expiré ; SIREN corrigé par l\'éditeur : une facture régularisée par son avoir de régularisation, les autres à régulariser ; exercice qui ne finit plus en décembre : le menu « Période » des graphiques propose l\'exercice en cours et le précédent',
+            'propriétaire atelier' => 'Franchise en base ; sa demande de lien au cabinet attend la réponse ; magasin fermé temporairement plus d\'un an puis rouvert : « Découper par : année » garde l\'année entière sans vente à 0 entre deux années de ventes, et l\'écart en % de l\'année qui suit est « – » (l\'année d\'avant vaut zéro)',
+            'propriétaire studio' => 'Option pour les débits ; sa demande de lien a expiré ; SIREN corrigé par l\'éditeur : une facture régularisée par son avoir de régularisation, les autres à régulariser ; exercice qui ne finit plus en décembre : le menu « Période » des graphiques propose l\'exercice en cours et le précédent, et « Découper par : année » donne une barre par exercice sur trois exercices de ventes',
             'propriétaire groupe' => 'Assujetti unique ; son lien avec le cabinet a pris fin',
             'propriétaire boulangerie' => 'Société suspendue ; lien terminé par le cabinet Martin, puis par la radiation du cabinet Faure',
             'propriétaire refusée' => 'Inscription close par l\'éditeur (refus) : se connecte seulement avec son identifiant',
@@ -765,17 +803,28 @@ final class SemisComplet
      * @param  list<string>  $vente
      * @param  list<string>  $autresCases  les cases réservées au propriétaire, qu'il coche ici (graphiques, ajout des charges)
      * @param  list<string>  $casesDeSociete  les autorisations de société (voir AutorisationsSociete)
+     * @param  array<string, list<string>>  $casesRetirees  les cases que le propriétaire ne coche pas dans ces magasins de la sélection, par clé de magasin : il règle chaque magasin de la sélection à part
      */
-    public function administrateur(string $societe, string $nom, ?array $magasins, array $vente, array $autresCases = [], array $casesDeSociete = []): void
+    public function administrateur(string $societe, string $nom, ?array $magasins, array $vente, array $autresCases = [], array $casesDeSociete = [], array $casesRetirees = []): void
     {
         $type = $this->societe($societe)->type_activite;
         $cases = array_values(array_intersect(PermissionRegistry::pourLeType($type), [...PermissionRegistry::modeleDeLAdministrateur($type), ...$vente, ...$autresCases]));
+        $casesParMagasin = $cases;
+
+        if ($casesRetirees !== []) {
+            $casesParMagasin = [];
+
+            foreach ($magasins ?? throw new LogicException('Des cases retirées ne se règlent que magasin par magasin, dans une sélection.') as $cle) {
+                $casesParMagasin[$this->magasin($cle)->id] = array_values(array_diff($cases, $casesRetirees[$cle] ?? []));
+            }
+        }
+
         $compte = $this->horsDeToutContexte(fn (): User => app(CreerAdministrateurAction::class)->handle(
             $this->proprietaire($societe),
             $this->societe($societe),
             ['name' => $nom],
             $magasins === null ? null : array_map(fn (string $cle): int => $this->magasin($cle)->id, $magasins),
-            $cases,
+            $casesParMagasin,
             $casesDeSociete,
             GestesDuMagasin::jeton(),
         ));

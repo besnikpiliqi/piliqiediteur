@@ -21,6 +21,7 @@ use App\Filament\App\Resources\FactureAchatResource\Pages\ListFacturesAchat;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\FiltreDUnJour;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -46,8 +47,8 @@ class FiltreDUnJourDesListesTest extends TestCase
     public function test_la_liste_des_factures_ne_montre_que_les_documents_du_jour_du_magasin(): void
     {
         [$magasin, $responsable, $client, $lampe] = $this->magasinEtLampe();
-        $veille = $this->vendre($magasin, $responsable, $client, $lampe, '2026-03-09 23:30:00');
-        $matin = $this->vendre($magasin, $responsable, $client, $lampe, '2026-03-10 00:30:00');
+        $veille = $this->vendre($magasin, $responsable, $client, $lampe, self::aParis('2026-03-09 23:30:00'));
+        $matin = $this->vendre($magasin, $responsable, $client, $lampe, self::aParis('2026-03-10 00:30:00'));
         $this->dansLeMagasin($magasin, $this->proprietaireDe($magasin));
 
         Livewire::test(ListFactures::class)
@@ -65,9 +66,9 @@ class FiltreDUnJourDesListesTest extends TestCase
     public function test_la_liste_des_avoirs_ne_montre_que_les_avoirs_du_jour(): void
     {
         [$magasin, $responsable, $client, $lampe] = $this->magasinEtLampe();
-        $ticket = $this->vendre($magasin, $responsable, $client, $lampe, '2026-03-09 10:00:00', 2);
-        $premier = $this->rendre($magasin, $responsable, $client, $ticket, '2026-03-09 23:45:00');
-        $second = $this->rendre($magasin, $responsable, $client, $ticket, '2026-03-10 00:15:00');
+        $ticket = $this->vendre($magasin, $responsable, $client, $lampe, self::aParis('2026-03-09 10:00:00'), 2);
+        $premier = $this->rendre($magasin, $responsable, $client, $ticket, self::aParis('2026-03-09 23:45:00'));
+        $second = $this->rendre($magasin, $responsable, $client, $ticket, self::aParis('2026-03-10 00:15:00'));
         $this->dansLeMagasin($magasin, $this->proprietaireDe($magasin));
 
         Livewire::test(ListAvoirs::class)
@@ -119,8 +120,8 @@ class FiltreDUnJourDesListesTest extends TestCase
     public function test_une_valeur_qui_n_est_pas_un_jour_reel_ne_filtre_rien(): void
     {
         [$magasin, $responsable, $client, $lampe] = $this->magasinEtLampe();
-        $premiere = $this->vendre($magasin, $responsable, $client, $lampe, '2026-03-09 10:00:00');
-        $seconde = $this->vendre($magasin, $responsable, $client, $lampe, '2026-03-10 10:00:00');
+        $premiere = $this->vendre($magasin, $responsable, $client, $lampe, self::aParis('2026-03-09 10:00:00'));
+        $seconde = $this->vendre($magasin, $responsable, $client, $lampe, self::aParis('2026-03-10 10:00:00'));
         $this->dansLeMagasin($magasin, $this->proprietaireDe($magasin));
 
         foreach (['2026-02-30', 'demain', ''] as $valeur) {
@@ -137,7 +138,7 @@ class FiltreDUnJourDesListesTest extends TestCase
     public function test_le_filtre_ne_montre_jamais_les_documents_d_un_autre_magasin(): void
     {
         [$magasin, $responsable, $client, $lampe] = $this->magasinEtLampe();
-        $duPort = $this->vendre($magasin, $responsable, $client, $lampe, '2026-03-10 10:00:00');
+        $duPort = $this->vendre($magasin, $responsable, $client, $lampe, self::aParis('2026-03-10 10:00:00'));
         $this->travelTo(self::aParis('2026-03-10 09:00:00'));
         $gare = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Gare', 'code' => 'GARE']);
         [$lampeDeLaGare, $clientDeLaGare] = app(TenantContext::class)->runAs($gare, fn (): array => [
@@ -145,7 +146,7 @@ class FiltreDUnJourDesListesTest extends TestCase
             Client::factory()->create(['nom' => 'Julie Petit']),
         ]);
         $this->travelTo(self::aParis('2026-03-10 11:00:00'));
-        $deLaGare = $this->vendre($gare, self::responsableDeTest($gare), $clientDeLaGare, $lampeDeLaGare, '2026-03-10 11:00:00');
+        $deLaGare = $this->vendre($gare, self::responsableDeTest($gare), $clientDeLaGare, $lampeDeLaGare, self::aParis('2026-03-10 11:00:00'));
         $this->dansLeMagasin($magasin, $this->proprietaireDe($magasin));
 
         Livewire::test(ListFactures::class)
@@ -170,16 +171,16 @@ class FiltreDUnJourDesListesTest extends TestCase
         return [$magasin, self::responsableDeTest($magasin), $client, $lampe];
     }
 
-    private function vendre(Magasin $magasin, User $responsable, Client $client, Produit $lampe, string $instant, int $lampes = 1): Facture
+    private function vendre(Magasin $magasin, User $responsable, Client $client, Produit $lampe, CarbonImmutable $instant, int $lampes = 1): Facture
     {
-        $this->travelTo(self::aParis($instant));
+        $this->travelTo($instant);
 
         return app(TenantContext::class)->runAs($magasin, fn (): Facture => self::vendreAuComptant($responsable, $client, [['produit_id' => $lampe->id, 'quantite' => $lampes]]));
     }
 
-    private function rendre(Magasin $magasin, User $responsable, Client $client, Facture $ticket, string $instant): Avoir
+    private function rendre(Magasin $magasin, User $responsable, Client $client, Facture $ticket, CarbonImmutable $instant): Avoir
     {
-        $this->travelTo(self::aParis($instant));
+        $this->travelTo($instant);
 
         return app(TenantContext::class)->runAs($magasin, fn (): Avoir => app(EnregistrerAvoirAction::class)->handle($responsable, $client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour'));
     }

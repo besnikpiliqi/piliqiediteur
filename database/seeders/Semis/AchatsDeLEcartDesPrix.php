@@ -87,10 +87,11 @@ final class AchatsDeLEcartDesPrix
     private const SOIR_EN_MARTINIQUE = '04:30';
 
     /**
-     * Le premier jour de la boucle des jours du semis : un achat posé plus
-     * tôt ne se ferait jamais.
+     * Le premier jour de la boucle des jours de l'histoire détaillée du
+     * semis, le dix-septième de celle-ci : un achat posé plus tôt ne se
+     * ferait jamais.
      */
-    private const PREMIER_JOUR_DE_LA_BOUCLE = 17;
+    private const PREMIER_JOUR_DE_LA_BOUCLE = SemisComplet::JOURS_ANCIENS + 17;
 
     /**
      * Le préfixe du numéro de facture de chaque fournisseur.

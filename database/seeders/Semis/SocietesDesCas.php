@@ -180,6 +180,19 @@ final class SocietesDesCas
     private const DEBUT_DES_AUTRES = 60;
 
     /**
+     * Le jour, compté depuis la fin de l'histoire, où le Studio Lumière
+     * commence à vendre : deux exercices entiers avant l'exercice en cours
+     * (voir vendreAuStudioEtALAtelier()).
+     */
+    private const DEBUT_DU_STUDIO = 740;
+
+    /**
+     * Le nombre de jours, avant sa fermeture temporaire, pendant lesquels
+     * l'Atelier Brun vend (voir vendreAuStudioEtALAtelier()).
+     */
+    private const VENTES_DE_L_ATELIER_AVANT_SA_FERMETURE = 70;
+
+    /**
      * Les jours, comptés depuis la fin de l'histoire, de chaque événement.
      */
     private const FERMETURE_DE_LYON = 100;
@@ -559,13 +572,17 @@ final class SocietesDesCas
     {
         $avantLaFin = SemisComplet::JOURS - $rang;
 
-        if ($rang === 60) {
+        $this->rouvrirLAtelierSiCEstLeJour($rang);
+
+        if (SemisComplet::rangRecent($rang) === 60) {
             $this->leSoir($rang, '20:00', fn () => $this->semis->horsDeToutContexte(fn () => app(MettreFinAuLienAction::class)->handle($this->semis->proprietaire('groupe'), $this->lien('groupe', EtatDuLien::Actif))));
         }
 
         if ($avantLaFin <= self::DEBUT_DU_COMPTOIR) {
             $this->vendre($rang, $avantLaFin);
         }
+
+        $this->vendreAuStudioEtALAtelier($rang);
 
         match ($avantLaFin) {
             self::FERMETURE_DE_LYON => $this->leSoir($rang, '21:30', fn () => $this->fermer('lyon', MotifFermeture::Temporaire)),
@@ -668,14 +685,15 @@ final class SocietesDesCas
      */
     private function vendre(int $rang, int $avantLaFin): void
     {
+        $rythme = SemisComplet::rangRecent($rang);
         $this->horloge->aller($rang, '20:00');
         $fortDeFrance = new GestesDuMagasin($this->semis->magasin('fort-de-france'));
 
-        if ($rang % 4 !== 0) {
-            $fortDeFrance->vendreALaCaisse($this->semis->compte($rang % 2 === 0 ? 'Joël Sainte-Rose' : 'Maëva Jean-Louis'), $fortDeFrance->comptoir(), [$fortDeFrance->ligne('SAVON-COCO', 2), $fortDeFrance->ligne('COLOMBO', 1)], ModePaiement::CarteBancaire);
+        if ($rythme % 4 !== 0) {
+            $fortDeFrance->vendreALaCaisse($this->semis->compte($rythme % 2 === 0 ? 'Joël Sainte-Rose' : 'Maëva Jean-Louis'), $fortDeFrance->comptoir(), [$fortDeFrance->ligne('SAVON-COCO', 2), $fortDeFrance->ligne('COLOMBO', 1)], ModePaiement::CarteBancaire);
         }
 
-        if ($rang % 3 !== 0) {
+        if ($rythme % 3 !== 0) {
             return;
         }
 
@@ -710,17 +728,120 @@ final class SocietesDesCas
     }
 
     /**
-     * Le propriétaire du Comptoir des Îles ferme ce magasin, pour ce motif,
-     * en redonnant son mot de passe (et en retapant le nom du magasin pour
-     * une cession).
+     * Le travail de ce jour de l'histoire ancienne (voir HistoireAncienne),
+     * le soir, après les ventes des établissements d'origine : les ventes
+     * du Studio Lumière et de l'Atelier Brun, et la fermeture de l'Atelier
+     * à 22 h, le jour de la fin de l'avant-dernière année.
      */
-    private function fermer(string $magasin, MotifFermeture $motif, ?string $confirmation = null): void
+    public function auJourDeLHistoireAncienne(int $rang): void
+    {
+        $this->rouvrirLAtelierSiCEstLeJour($rang);
+        $this->vendreAuStudioEtALAtelier($rang);
+
+        if ($rang === $this->rangDeLaFermetureDeLAtelier()) {
+            $this->leSoir($rang, '22:00', fn () => $this->fermer('atelier', MotifFermeture::Temporaire, null, 'atelier'));
+        }
+    }
+
+    /**
+     * Les ventes du Studio Lumière et de l'Atelier Brun avant les soixante
+     * derniers jours, où l'histoire détaillée les fait vendre (voir
+     * vendre()) : un ticket du Studio tous les cinq jours à 20 h 45, depuis
+     * deux exercices avant l'exercice en cours (une séance de prise de vue,
+     * sans facture : celles du Studio sont celles que l'examen de son SIREN
+     * désigne), et un ticket de l'Atelier tous les trois jours à 21 h, les
+     * soixante-dix jours qui précèdent sa fermeture, puis depuis sa
+     * réouverture, jamais pendant les mois où il est fermé.
+     */
+    private function vendreAuStudioEtALAtelier(int $rang): void
+    {
+        if (SemisComplet::JOURS - $rang <= self::DEBUT_DES_AUTRES) {
+            return;
+        }
+
+        $premierJourDuStudio = SemisComplet::JOURS - self::DEBUT_DU_STUDIO;
+
+        if ($rang >= $premierJourDuStudio && ($rang - $premierJourDuStudio) % 5 === 0) {
+            $this->horloge->aller($rang, '20:45');
+            $studio = new GestesDuMagasin($this->semis->magasin('studio'));
+            $studio->vendreALaCaisse($this->semis->compte('Rémi Lacroix'), $studio->comptoir(), [$studio->ligne('Séance de prise de vue', 1)], ModePaiement::CarteBancaire);
+        }
+
+        $fermeture = $this->rangDeLaFermetureDeLAtelier();
+        $reouverture = $this->rangDeLaReouvertureDeLAtelier();
+        $jourDuCycle = match (true) {
+            $rang >= $fermeture - self::VENTES_DE_L_ATELIER_AVANT_SA_FERMETURE && $rang <= $fermeture => $fermeture - $rang,
+            $rang >= $reouverture => $rang - $reouverture,
+            default => null,
+        };
+
+        if ($jourDuCycle !== null && $jourDuCycle % 3 === 0) {
+            $this->horloge->aller($rang, '21:00');
+            $atelier = new GestesDuMagasin($this->semis->magasin('atelier'));
+            $atelier->vendreALaCaisse($this->semis->compte('Mathilde Brun (atelier)'), $atelier->comptoir(), [$atelier->ligne('Retouche de vêtement', 2)], ModePaiement::Especes);
+        }
+    }
+
+    /**
+     * L'année sans vente de l'Atelier Brun : celle qui précède l'année du
+     * jour d'un mois avant la fin de l'histoire, pour qu'une année entière,
+     * sans vente, sépare l'année de ses premières ventes de celle de sa
+     * réouverture, quelle que soit la date du semis.
+     */
+    private function anneeSansVenteDeLAtelier(): int
+    {
+        return (int) substr($this->horloge->jour(SemisComplet::JOURS - 32), 0, 4) - 1;
+    }
+
+    /**
+     * Le jour où le propriétaire de l'Atelier Brun ferme son magasin
+     * temporairement : le 20 décembre de l'année d'avant l'année sans vente.
+     */
+    private function rangDeLaFermetureDeLAtelier(): int
+    {
+        return $this->horloge->rangDuJour(($this->anneeSansVenteDeLAtelier() - 1).'-12-20');
+    }
+
+    /**
+     * Le jour où il le rouvre : le 5 janvier de l'année qui suit l'année sans
+     * vente.
+     */
+    private function rangDeLaReouvertureDeLAtelier(): int
+    {
+        return $this->horloge->rangDuJour(($this->anneeSansVenteDeLAtelier() + 1).'-01-05');
+    }
+
+    /**
+     * Le jour de sa réouverture, à 19 h 58 (avant les ventes du soir des
+     * sociétés des cas), le propriétaire de l'Atelier Brun rouvre son
+     * magasin, fermé depuis plus d'un an, en redonnant son mot de passe :
+     * l'établissement se contrôle de nouveau au répertoire Sirene, et la
+     * caisse reprend à son premier jour non clôturé.
+     */
+    private function rouvrirLAtelierSiCEstLeJour(int $rang): void
+    {
+        if ($rang !== $this->rangDeLaReouvertureDeLAtelier()) {
+            return;
+        }
+
+        $this->leSoir($rang, '19:58', function (): void {
+            $this->semis->horsDeToutContexte(fn (): Magasin => app(RouvrirMagasinAction::class)->handle($this->semis->proprietaire('atelier'), $this->semis->relireLeMagasin('atelier'), $this->semis->motDePasseDuProprietaire('atelier')));
+            $this->semis->relireLeMagasin('atelier');
+        });
+    }
+
+    /**
+     * Le propriétaire du Comptoir des Îles (ou de la société de ce nom) ferme
+     * ce magasin, pour ce motif, en redonnant son mot de passe (et en
+     * retapant le nom du magasin pour une cession).
+     */
+    private function fermer(string $magasin, MotifFermeture $motif, ?string $confirmation = null, string $societe = 'comptoir'): void
     {
         $this->semis->horsDeToutContexte(fn () => app(FermerMagasinAction::class)->handle(
-            $this->semis->proprietaire('comptoir'),
+            $this->semis->proprietaire($societe),
             $this->semis->relireLeMagasin($magasin),
             $motif,
-            $this->semis->motDePasseDuProprietaire('comptoir'),
+            $this->semis->motDePasseDuProprietaire($societe),
             $confirmation,
         ));
         $this->semis->relireLeMagasin($magasin);

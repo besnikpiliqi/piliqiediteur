@@ -432,7 +432,7 @@ jobs:
           if-no-files-found: ignore
 
   # Le semis complet (php artisan db:seed, plus de
-  # treize mois de données sur toutes les tables, puis la vérification de
+  # trois ans de données sur toutes les tables, puis la vérification de
   # l'isolation) et ses tests : SemisCompletTest et le parcours en
   # navigateur des comptes de la liste. Chaque semis prend plusieurs
   # minutes : le groupe « semis » est hors de la suite par défaut

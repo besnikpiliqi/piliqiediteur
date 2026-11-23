@@ -75,8 +75,8 @@ class QuiDemandeTest extends TestCase
      */
     public function test_la_carte_decrit_la_societe_modele_de_son_type(): void
     {
-        $this->assertStringContainsString('plusieurs magasins, toute l\'équipe, treize mois de ventes, d\'achats et de clôtures', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Commerce));
-        $this->assertStringContainsString('un magasin, toute l\'équipe, treize mois de ventes et de clôtures', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Services));
+        $this->assertStringContainsString('plusieurs magasins, toute l\'équipe, trois ans de ventes, d\'achats et de clôtures', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Commerce));
+        $this->assertStringContainsString('un magasin, toute l\'équipe, trois ans de ventes et de clôtures', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Services));
         $this->assertStringNotContainsString('plusieurs magasins', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Services));
         $this->assertStringNotContainsString('achats', CarteDeLaDemonstration::phraseACreer(TypeDActivite::Services));
 

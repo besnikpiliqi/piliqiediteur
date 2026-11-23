@@ -15,6 +15,7 @@ use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\TransportPar;
+use App\Domain\Tenancy\Enums\ExploitationEnGerance;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\Territoire;
 use App\Domain\Tenancy\Models\Magasin;
@@ -50,6 +51,16 @@ class ContenuSigneDeReferenceTest extends TestCase
     private const CLES_TIREES = ['uuid', 'caisse', 'cle_id', 'signature_precedente', 'id', 'cree_par'];
 
     /**
+     * Les versions qui changent le module fiscal sans changer la structure
+     * du contenu signé du site réel, avec la version dont elles gardent la
+     * structure : la 3.0 (lot DEMO-COPIE, D.7) change le vérificateur et
+     * n'ajoute la clé « demonstration » qu'aux en-têtes et aux émetteurs
+     * des copies du site de démonstration, jamais à ceux du site réel, que
+     * fixent les fichiers de référence.
+     */
+    private const MEME_STRUCTURE_QUE = ['3.0' => '2.1'];
+
+    /**
      * La structure du contenu signé que signe chaque version du module
      * fiscal : le SHA-256 des chemins de ses clés dans les fichiers de
      * référence (voir cheminsDesCles()), qui le fixent octet pour octet.
@@ -61,28 +72,18 @@ class ContenuSigneDeReferenceTest extends TestCase
      * gagne date_operation (début et fin), son bloc « livraison » perd sa
      * date. La 3.0 (lot DEMO-COPIE) garde la structure signée du site réel :
      * seul le vérificateur et les copies du site de démonstration changent.
-     * La 3.1 (lot IDENT) la garde aussi pour tout document dont la société
-     * ne déclare aucune mention facultative.
+     * La 3.1 (lot IDENT, décision P14.7) ajoute à l'émetteur d'un document
+     * dont la société déclare une mention facultative (liquidation,
+     * location-gérance, EIRL, assujetti unique) le bloc
+     * « mentions_facultatives », que fixe le fichier de référence
+     * mentions-facultatives.json ; celui d'une société qui n'en déclare
+     * aucune garde sa forme.
      */
-    /**
-     * Les versions qui changent le module fiscal sans changer la structure
-     * du contenu signé du site réel, avec la version dont elles gardent la
-     * structure : la 3.0 (lot DEMO-COPIE, D.7) change le vérificateur et
-     * n'ajoute la clé « demonstration » qu'aux en-têtes et aux émetteurs
-     * des copies du site de démonstration, jamais à ceux du site réel, que
-     * fixent les fichiers de référence ; la 3.1 (lot IDENT, décision P14.7)
-     * n'ajoute le bloc « mentions_facultatives » à l'émetteur d'un document
-     * que si sa société déclare une liquidation, une location-gérance, un
-     * EIRL ou un assujetti unique : les sociétés des fichiers de référence
-     * n'en déclarent aucune.
-     */
-    private const MEME_STRUCTURE_QUE = ['3.0' => '2.1', '3.1' => '2.1'];
-
     private const STRUCTURES_SIGNEES = [
         '2.0' => '8d3cf5148390ac0c2b822501bfa82522df919f3ec6a59ab74f84ccc6ee14b3a8',
         '2.1' => '5e7c5deb1b8ad9421220957cfac7f0609c36aaea4258c415157f086c976d70bd',
         '3.0' => '5e7c5deb1b8ad9421220957cfac7f0609c36aaea4258c415157f086c976d70bd',
-        '3.1' => '5e7c5deb1b8ad9421220957cfac7f0609c36aaea4258c415157f086c976d70bd',
+        '3.1' => 'fe71c8e0b6834fff51ac2f7c80f6ea94f0633726bd6356aa990c697a8a39024b',
     ];
 
     /**
@@ -181,6 +182,38 @@ class ContenuSigneDeReferenceTest extends TestCase
     }
 
     /**
+     * L'émetteur d'une société qui déclare des mentions facultatives
+     * (décision P14.7) signe le bloc « mentions_facultatives », que fixe le
+     * fichier de référence mentions-facultatives.json : celui d'un
+     * entrepreneur individuel à responsabilité limitée, locataire-gérant de
+     * son fonds et en liquidation, sur son ticket, sa facture à un
+     * professionnel et l'avoir qui la corrige. Les cinq clés du bloc, leur
+     * ordre et leur type y sont écrits en clair, dont l'appartenance à un
+     * assujetti unique, qu'aucun document ne peut porter à vrai (une telle
+     * société ne peut rien vendre).
+     */
+    public function test_le_contenu_signe_d_une_societe_qui_declare_des_mentions_facultatives_porte_leur_bloc_tel_que_le_fixe_la_reference(): void
+    {
+        $this->travelTo(self::enUtc('2026-10-09 08:00:00'));
+        $this->magasinDUnEntrepreneurEirl();
+        $reparation = Produit::factory()->create(['reference' => 'REP-001', 'nom' => 'Réparation de vélo', 'prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $particulier = Client::factory()->create(['nom' => 'Paul Martin', 'email' => 'paul.martin@exemple.fr', 'telephone' => '01 23 45 67 89']);
+        $atelier = Client::factory()->professionnel()->create(['nom' => 'Ateliers du Rhône', 'adresse' => '4 quai Perrache', 'code_postal' => '69002', 'ville' => 'Lyon', 'email' => 'achats@ateliers-du-rhone.example', 'telephone' => '04 72 00 00 02', 'delai_paiement_jours' => 30]);
+
+        $ticket = self::vendreAuComptant(self::auteur(), $particulier, [['produit_id' => $reparation->id, 'quantite' => 1]], ModePaiement::Especes);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $atelier, [['produit_id' => $reparation->id, 'quantite' => 3]]));
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $atelier, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+
+        $contenus = [
+            'ticket' => $this->contenuSigne($ticket, ChaineFiscale::Vente),
+            'facture' => $this->contenuSigne($facture, ChaineFiscale::Vente),
+            'avoir' => $this->contenuSigne($avoir, ChaineFiscale::Vente),
+        ];
+
+        $this->assertSame($this->contenuDeReference('mentions-facultatives'), $contenus);
+    }
+
+    /**
      * Une structure nouvelle du contenu signé (une clé ajoutée, retirée ou
      * déplacée dans les fichiers de référence) ne se signe jamais sous la
      * version d'une autre structure : la version du module fiscal est celle
@@ -263,6 +296,44 @@ class ContenuSigneDeReferenceTest extends TestCase
                 'adresse' => '12 rue Victor Hugo',
                 'email' => 'contact@'.strtolower($code).'.example',
                 'telephone' => '05 96 00 00 00',
+            ]);
+        app(TenantContext::class)->set($magasin);
+
+        return $magasin;
+    }
+
+    /**
+     * Le magasin LYON1 « Ma Boutique », à Lyon, d'un entrepreneur individuel
+     * à responsabilité limitée à l'identité écrite en clair, locataire-gérant
+     * de son fonds et en liquidation, magasin actif.
+     */
+    private function magasinDUnEntrepreneurEirl(): Magasin
+    {
+        $magasin = Magasin::factory()
+            ->avecLaSociete([
+                'siren' => '400000006',
+                'raison_sociale' => 'Pascal Bertrand',
+                'forme_juridique' => FormeJuridique::EntrepreneurIndividuel,
+                'capital_social' => null,
+                'immatriculation' => 'RM 69 400 000 006',
+                'numero_tva' => IdentifiantsInsee::numeroTvaPropose('400000006'),
+                'siege_adresse' => '8 rue Mercière',
+                'siege_code_postal' => '69002',
+                'siege_ville' => 'Lyon',
+                'en_liquidation' => true,
+                'exploitation_en_gerance' => ExploitationEnGerance::LocataireGerant,
+                'eirl' => true,
+                'eirl_objet' => 'Réparation et vente de vélos',
+            ])
+            ->create([
+                'code' => 'LYON1',
+                'nom' => 'Cycles Bertrand',
+                'siret' => '40000000600017',
+                'adresse' => '8 rue Mercière',
+                'code_postal' => '69002',
+                'ville' => 'Lyon',
+                'email' => 'contact@cycles-bertrand.example',
+                'telephone' => '04 72 00 00 01',
             ]);
         app(TenantContext::class)->set($magasin);
 

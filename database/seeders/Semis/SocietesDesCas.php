@@ -100,15 +100,17 @@ use LogicException;
  *   transmettre la propriété à son administratrice, qui n'a pas encore
  *   suivi le lien ;
  * - l'Atelier Brun, « Services, sans vente d'articles » en franchise en
- *   base, entrepreneur individuel à responsabilité limitée ; le Studio
- *   Lumière, « Services » qui a opté pour les débits, à capital variable
- *   sans capital saisi ;
- * - le Groupe Nord Distribution, membre d'un assujetti unique et
- *   gérant-mandataire ;
- * - la Boulangerie Duval, entrepreneur individuel en location-gérance,
- *   suspendue, et la Librairie des Quais, société en nom collectif sans
- *   capital saisi, en liquidation trente-deux jours avant la fin, résiliée
- *   après la transmission de sa propriété à son administrateur ;
+ *   base, entrepreneur individuel à responsabilité limitée, que le
+ *   répertoire nomme par son nom et son nom d'usage ; le Studio Lumière,
+ *   « Services » qui a opté pour les débits, à capital variable sans
+ *   capital saisi ;
+ * - le Groupe Nord Distribution, membre d'un assujetti unique ;
+ * - la Boulangerie Duval, entrepreneur individuel en location-gérance dont
+ *   le répertoire rectifie le nom trente-cinq jours avant la fin, suspendue,
+ *   et la Librairie des Quais, société en nom collectif sans capital saisi
+ *   au début, qui le saisit quarante-sept jours avant la fin, en
+ *   liquidation trente-deux jours avant la fin, résiliée après la
+ *   transmission de sa propriété à son administrateur ;
  * - une inscription close faute de code (son lien avec le cabinet Martin
  *   prend fin à la clôture), deux autres closes par l'éditeur
  *   (refus, type d'activité choisi par erreur), et une inscription qui
@@ -209,6 +211,16 @@ final class SocietesDesCas
      * n'impriment pas la mention, ceux d'après l'impriment (décision P14.7).
      */
     private const LIQUIDATION_DE_LA_LIBRAIRIE = 32;
+
+    /**
+     * La Librairie des Quais saisit son capital : ses tickets d'avant ne
+     * l'impriment pas, ceux d'après l'impriment, comme toute société en nom
+     * collectif ou en commandite simple qui le renseigne (décision P14.1).
+     */
+    private const CAPITAL_DE_LA_LIBRAIRIE = 47;
+
+    /** Le capital que la Librairie des Quais saisit, en euros. */
+    private const CAPITAL_SAISI_DE_LA_LIBRAIRIE = '8000.00';
 
     private const INVITATIONS_ET_DEMANDES = 6;
 
@@ -369,8 +381,9 @@ final class SocietesDesCas
         // Le répertoire dit de l'Atelier Brun et de la Boulangerie Duval qu'ils
         // sont des entrepreneurs individuels, dont le nom est contenu dans leur
         // dénomination (décision P14.4), et de la Librairie des Quais une
-        // société en nom collectif.
-        $sirene->entrepreneur(self::SIREN_ATELIER, 'BRUN');
+        // société en nom collectif. Mathilde Fontaine exerce sous son nom
+        // d'usage, Brun : sa dénomination ne contient que ce nom d'usage.
+        $sirene->entrepreneur(self::SIREN_ATELIER, 'FONTAINE', 'BRUN');
         $sirene->entrepreneur(self::SIREN_BOULANGERIE, 'DUVAL');
         $sirene->categoriser(self::SIREN_LIBRAIRIE, '5202');
 
@@ -501,12 +514,15 @@ final class SocietesDesCas
      * Ce que le propriétaire de chaque société des cas complète de son
      * identité légale, que le répertoire Sirene ne donne pas, par les
      * mentions de l'identité (décisions P14.1, P14.3, P14.4 et P14.7) :
-     * - le Comptoir des Îles, à capital variable, dit son capital ;
+     * - le Comptoir des Îles, à capital variable, dit son capital et exploite
+     *   ses magasins en gérance-mandat du fonds de commerce que leur
+     *   propriétaire lui confie ;
      * - le Studio Lumière, à capital variable, n'en dit aucun ;
-     * - la Librairie des Quais, société en nom collectif, n'en saisit pas ;
+     * - la Librairie des Quais, société en nom collectif, n'en saisit pas
+     *   d'abord (elle le fera ensuite, voir CAPITAL_DE_LA_LIBRAIRIE) ;
      * - le Groupe Nord Distribution, société par actions simplifiée à
-     *   capital fixe, dit le sien et exploite ses supermarchés en
-     *   gérance-mandat ;
+     *   capital fixe, dit le sien : membre d'un assujetti unique, elle ne
+     *   vend rien, et aucun document signé ne porte cette appartenance ;
      * - l'Atelier Brun est un entrepreneur individuel à responsabilité
      *   limitée, qui dit l'objet de son activité ;
      * - la Boulangerie Duval est un entrepreneur individuel
@@ -522,10 +538,10 @@ final class SocietesDesCas
         $metiers = fn (string $cle): string => 'RM 75 '.$siren($cle);
 
         return [
-            'comptoir' => ['capital_social' => '15000.00', 'capital_variable' => true, 'immatriculation' => $registre('comptoir')],
+            'comptoir' => ['capital_social' => '15000.00', 'capital_variable' => true, 'immatriculation' => $registre('comptoir'), 'exploitation_en_gerance' => ExploitationEnGerance::GerantMandataire->value],
             'atelier' => ['immatriculation' => $metiers('atelier'), 'eirl' => true, 'eirl_objet' => 'Retouche et confection de vêtements sur mesure'],
             'studio' => ['capital_variable' => true, 'immatriculation' => $registre('studio')],
-            'groupe' => ['capital_social' => '15000.00', 'immatriculation' => $registre('groupe'), 'exploitation_en_gerance' => ExploitationEnGerance::GerantMandataire->value],
+            'groupe' => ['capital_social' => '15000.00', 'immatriculation' => $registre('groupe')],
             'boulangerie' => ['immatriculation' => $metiers('boulangerie'), 'exploitation_en_gerance' => ExploitationEnGerance::LocataireGerant->value],
             'librairie' => ['immatriculation' => $registre('librairie')],
         ];
@@ -637,6 +653,7 @@ final class SocietesDesCas
             self::SUSPENSION_DE_LA_BOULANGERIE => $this->leSoir($rang, '21:30', fn () => $this->semis->societe('boulangerie')->forceFill(['statut' => StatutSociete::Suspendue])->save()),
             self::TRANSMISSION_DE_LA_LIBRAIRIE => $this->leSoir($rang, '21:30', fn () => $this->transmettreLaLibrairie()),
             self::RESILIATION_DE_LA_LIBRAIRIE => $this->leSoir($rang, '21:30', fn () => $this->semis->societe('librairie')->forceFill(['statut' => StatutSociete::Resiliee])->save()),
+            self::CAPITAL_DE_LA_LIBRAIRIE => $this->leSoir($rang, '21:30', fn () => $this->semis->completerLIdentite('librairie', ['capital_social' => self::CAPITAL_SAISI_DE_LA_LIBRAIRIE])),
             self::LIQUIDATION_DE_LA_LIBRAIRIE => $this->leSoir($rang, '21:30', fn () => $this->semis->completerLIdentite('librairie', ['en_liquidation' => true])),
             self::INVITATIONS_ET_DEMANDES => $this->leSoir($rang, '21:30', fn () => $this->inviter()),
             self::ECARTS_SIRENE => $this->leSoir($rang, '21:30', fn () => $this->fermerDesEtablissementsAuRepertoire()),
@@ -805,16 +822,22 @@ final class SocietesDesCas
 
     /**
      * Le répertoire Sirene dit fermés les établissements du Studio Lumière
-     * et du Groupe Nord : la revérification de toutes les sociétés, que le
-     * planificateur lance le premier du mois, relève un écart pour chacun,
-     * sans rien bloquer ; la propriétaire du Studio dira ensuite « C'est
-     * vérifié », l'autre écart reste à regarder.
+     * et du Groupe Nord, et rectifie le nom de l'entrepreneur de la
+     * Boulangerie Duval en DUVAL-MERCIER : la revérification de toutes les
+     * sociétés, que le planificateur lance le premier du mois, relève un
+     * écart pour chaque établissement, sans rien bloquer, et retient le
+     * nouveau nom au registre des vérifications de la Boulangerie, dont la
+     * raison sociale ne le contient plus (décision P14.4) : sa page
+     * « Identité » le dit, ses documents gardent leur dénomination. La
+     * propriétaire du Studio dira ensuite « C'est vérifié », l'autre écart
+     * reste à regarder.
      */
     private function fermerDesEtablissementsAuRepertoire(): void
     {
         $sirene = ValeursLues::instance(app(RepertoireSirene::class), FauxRepertoireSirene::class);
         $sirene->fermer(FauxRepertoireSirene::siretDuSiege(self::SIREN_STUDIO));
         $sirene->fermer(FauxRepertoireSirene::siretDuSiege(self::SIREN_GROUPE));
+        $sirene->entrepreneur(self::SIREN_BOULANGERIE, 'DUVAL-MERCIER');
 
         if (Artisan::call('app:reverifier-sirene', ['--toutes' => true]) !== 0) {
             throw new LogicException('La revérification au répertoire Sirene a échoué : '.trim(Artisan::output()));

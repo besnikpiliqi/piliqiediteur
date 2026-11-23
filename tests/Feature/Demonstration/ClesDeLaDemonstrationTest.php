@@ -83,7 +83,12 @@ class ClesDeLaDemonstrationTest extends DemonstrationTestCase
         $this->assertContains('cle', $anomalies, 'Signé par la clé de démonstration, le registre d\'une copie ne se vérifie avec aucune autre clé.');
     }
 
-    public function test_le_module_fiscal_est_en_version_3_0(): void
+    /**
+     * La version du module fiscal ne change que par un lot qui la monte
+     * exprès (voir ModuleFiscal et ContenuSigneDeReferenceTest) : ce test
+     * est mis à jour avec elle, son nom ne porte aucun numéro.
+     */
+    public function test_le_module_fiscal_est_dans_la_version_de_la_caisse(): void
     {
         $this->assertSame('3.1', ModuleFiscal::VERSION);
     }

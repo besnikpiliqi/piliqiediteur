@@ -1546,6 +1546,7 @@ return [
                 'tests/Feature/Facturation/EmetteurFigeTest.php::test_l_appartenance_a_un_assujetti_unique_s_imprime_et_se_signe',
                 'tests/Feature/Facturation/EmetteurFigeTest.php::test_le_contenu_signe_ne_porte_le_bloc_des_mentions_facultatives_que_si_la_societe_en_declare',
                 'tests/Feature/Calendrier/ContenuSigneDeReferenceTest.php::test_une_structure_nouvelle_du_contenu_signe_prend_une_nouvelle_version_du_module_fiscal',
+                'tests/Feature/Calendrier/ContenuSigneDeReferenceTest.php::test_le_contenu_signe_d_une_societe_qui_declare_des_mentions_facultatives_porte_leur_bloc_tel_que_le_fixe_la_reference',
                 'tests/Feature/Societe/MentionsDIdentiteTest.php::test_la_raison_sociale_d_un_entrepreneur_individuel_contient_son_nom_ou_son_nom_d_usage',
                 'tests/Feature/Societe/MentionsDIdentiteTest.php::test_l_ecran_refuse_la_raison_sociale_sans_le_nom_et_l_aide_le_rappelle',
                 'tests/Feature/Societe/MentionsDIdentiteTest.php::test_sans_nom_connu_aucun_controle_et_le_nom_d_une_autre_societe_ne_sert_jamais',

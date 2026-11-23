@@ -33,6 +33,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\ValeursLues;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use BackedEnum;
@@ -148,7 +149,7 @@ class SemisCompletTest extends TestCase
         'identifiants' => 68,
         'inventaires_ouverture' => 11,
         'invitations_cabinet' => 6,
-        'journal_audit' => 1815,
+        'journal_audit' => 1816,
         'liens_cabinet' => 15,
         'liens_des_devis' => 6,
         'lignes_achat' => 371,
@@ -1185,19 +1186,30 @@ class SemisCompletTest extends TestCase
 
     /**
      * Les mentions d'identité (décisions P14.1, P14.3, P14.4 et P14.7), de
-     * part et d'autre de chaque règle : le capital variable avec montant
-     * (le Comptoir des Îles, Conseil Vasseur) et sans (le Studio Lumière),
-     * fixe (Maison Ferrand) ; une SNC sans capital saisi (la Librairie des
-     * Quais) ; des entrepreneurs individuels dont la raison sociale contient
-     * le nom que le répertoire donne, « EI » pour la Boulangerie Duval et
-     * l'Épicerie Lemoine, « EIRL » et l'objet de son activité pour l'Atelier
-     * Brun ; la location-gérance (la Boulangerie Duval), la gérance-mandat
-     * et l'assujetti unique (le Groupe Nord Distribution) ; la liquidation
-     * que la Librairie des Quais se déclare en cours d'histoire : ses
-     * tickets d'avant n'en disent rien, ceux d'après l'impriment. Chaque
-     * société qui n'a aucune de ces mentions (Maison Ferrand) n'en imprime
-     * aucune, et le contenu signé de ses documents n'a pas de bloc
-     * « mentions_facultatives ».
+     * part et d'autre de chaque règle, lues sur l'émetteur de chaque société
+     * aujourd'hui et sur les documents signés qu'elle a émis :
+     * - le capital variable avec montant (le Comptoir des Îles, Conseil
+     *   Vasseur) et sans (le Studio Lumière), le capital fixe (Maison
+     *   Ferrand) ; la société en nom collectif sans capital saisi, puis avec
+     *   (la Librairie des Quais, qui le saisit en cours d'histoire : ses
+     *   tickets d'avant ne l'impriment pas, ceux d'après l'impriment) ;
+     * - des entrepreneurs individuels dont la raison sociale contient le nom
+     *   que le répertoire donne (la Boulangerie Duval, l'Épicerie Lemoine),
+     *   ou seulement son nom d'usage (l'Atelier Brun, dont le nom de
+     *   naissance, Fontaine, n'y est pas) ; la Boulangerie Duval, dont le
+     *   répertoire rectifie ensuite le nom en DUVAL-MERCIER, n'a plus une
+     *   raison sociale qui le contient : sa page « Identité » le dit ; « EI »
+     *   pour la Boulangerie Duval et l'Épicerie Lemoine, « EIRL » et l'objet
+     *   de son activité pour l'Atelier Brun ;
+     * - la location-gérance (la Boulangerie Duval) et la gérance-mandat (le
+     *   Comptoir des Îles) sur leurs documents signés, la liquidation que la
+     *   Librairie des Quais se déclare à son tour ;
+     * - l'appartenance à un assujetti unique (le Groupe Nord Distribution),
+     *   lue sur son émetteur seulement : une société qui en est membre ne
+     *   vend rien, et aucun document signé ne peut la porter ;
+     * - chaque société qui n'a aucune de ces mentions (Maison Ferrand) n'en
+     *   imprime aucune, et le contenu signé de ses documents n'a pas de bloc
+     *   « mentions_facultatives ».
      */
     private function assertLesMentionsDIdentite(): void
     {
@@ -1213,20 +1225,48 @@ class SemisCompletTest extends TestCase
         $this->assertSame([
             'MAISON FERRAND' => ['MAISON FERRAND SAS au capital de 20 000,00 €'],
             'CONSEIL VASSEUR' => ['CONSEIL VASSEUR SAS à capital variable, au capital de 5 000,00 €'],
-            'COMPTOIR DES ILES' => ['COMPTOIR DES ILES SAS à capital variable, au capital de 15 000,00 €'],
+            'COMPTOIR DES ILES' => ['COMPTOIR DES ILES SAS à capital variable, au capital de 15 000,00 €', 'Gérant-mandataire'],
             'STUDIO LUMIERE' => ['STUDIO LUMIERE SAS à capital variable'],
-            'LIBRAIRIE DES QUAIS' => ['LIBRAIRIE DES QUAIS SNC société en liquidation'],
+            'LIBRAIRIE DES QUAIS' => ['LIBRAIRIE DES QUAIS SNC société en liquidation, au capital de 8 000,00 €'],
             'ATELIER BRUN' => ['ATELIER BRUN EIRL', 'Objet de l\'activité à laquelle le patrimoine est affecté : Retouche et confection de vêtements sur mesure'],
             'BOULANGERIE DUVAL' => ['BOULANGERIE DUVAL EI', 'Locataire-gérant'],
-            'GROUPE NORD DISTRIBUTION' => ['GROUPE NORD DISTRIBUTION SAS au capital de 15 000,00 €', 'Gérant-mandataire', 'Membre d\'un assujetti unique'],
+            'GROUPE NORD DISTRIBUTION' => ['GROUPE NORD DISTRIBUTION SAS au capital de 15 000,00 €', 'Membre d\'un assujetti unique'],
             'EPICERIE LEMOINE' => ['EPICERIE LEMOINE EI'],
-        ], $lignes);
+        ], $lignes, 'Les mentions que l\'émetteur de chaque société imprime aujourd\'hui.');
+
+        $signees = [];
+
+        foreach (['MAISON FERRAND', 'CONSEIL VASSEUR', 'COMPTOIR DES ILES', 'STUDIO LUMIERE', 'LIBRAIRIE DES QUAIS', 'ATELIER BRUN', 'BOULANGERIE DUVAL', 'GROUPE NORD DISTRIBUTION'] as $nom) {
+            $signees[$nom] = $this->lignesDIdentiteSigneesDe($nom);
+        }
+
+        $this->assertSame([
+            'MAISON FERRAND' => [['MAISON FERRAND SAS au capital de 20 000,00 €']],
+            'CONSEIL VASSEUR' => [['CONSEIL VASSEUR SAS à capital variable, au capital de 5 000,00 €']],
+            'COMPTOIR DES ILES' => [['COMPTOIR DES ILES SAS à capital variable, au capital de 15 000,00 €', 'Gérant-mandataire']],
+            'STUDIO LUMIERE' => [['STUDIO LUMIERE SAS à capital variable']],
+            'LIBRAIRIE DES QUAIS' => [
+                ['LIBRAIRIE DES QUAIS SNC'],
+                ['LIBRAIRIE DES QUAIS SNC au capital de 8 000,00 €'],
+                ['LIBRAIRIE DES QUAIS SNC société en liquidation, au capital de 8 000,00 €'],
+            ],
+            'ATELIER BRUN' => [['ATELIER BRUN EIRL', 'Objet de l\'activité à laquelle le patrimoine est affecté : Retouche et confection de vêtements sur mesure']],
+            'BOULANGERIE DUVAL' => [['BOULANGERIE DUVAL EI', 'Locataire-gérant']],
+            'GROUPE NORD DISTRIBUTION' => [],
+        ], $signees, 'Ce que leurs tickets et leurs factures signés ont imprimé, dans l\'ordre où cela a changé : la Librairie des Quais d\'abord sans capital, puis avec, puis en liquidation ; le Groupe Nord Distribution, membre d\'un assujetti unique, n\'a rien vendu.');
 
         $this->assertSame(
-            [['ATELIER BRUN', 'BRUN'], ['BOULANGERIE DUVAL', 'DUVAL'], ['EPICERIE LEMOINE', 'LEMOINE']],
-            $this->lignes("select societes.raison_sociale, verifications_societe.details->>'nom' from verifications_societe join societes on societes.id = verifications_societe.societe_id where verifications_societe.type = 'sirene_unite' and verifications_societe.resultat = 'concluante' and verifications_societe.details->>'nom' is not null group by 1, 2 order by 1"),
-            'Le répertoire donne son nom à chaque entrepreneur individuel : la raison sociale qui ne le contient pas est refusée.',
+            [
+                ['ATELIER BRUN', 'FONTAINE', 'BRUN'],
+                ['BOULANGERIE DUVAL', 'DUVAL', null],
+                ['BOULANGERIE DUVAL', 'DUVAL-MERCIER', null],
+                ['EPICERIE LEMOINE', 'LEMOINE', null],
+            ],
+            $this->lignes("select societes.raison_sociale, verifications_societe.details->>'nom' as nom, verifications_societe.details->>'nom_d_usage' as nom_d_usage from verifications_societe join societes on societes.id = verifications_societe.societe_id where verifications_societe.type = 'sirene_unite' and verifications_societe.resultat = 'concluante' and verifications_societe.details->>'nom' is not null group by 1, 2, 3 order by 1, 2, 3"),
+            'Le répertoire donne son nom, et son nom d\'usage quand il en a un, à chaque entrepreneur individuel, et rectifie celui de la Boulangerie Duval.',
         );
+
+        $this->assertLaDenominationDesEntrepreneurs();
 
         $tickets = fn (string $societe, string $motif): int => DB::table('enregistrements_fiscaux')
             ->join('magasins', 'magasins.id', '=', 'enregistrements_fiscaux.magasin_id')
@@ -1243,6 +1283,72 @@ class SemisCompletTest extends TestCase
         $this->assertSame(0, $tickets('MAISON FERRAND', '%"mentions_facultatives"%'), 'Maison Ferrand, sans mention facultative, garde le contenu signé sans bloc.');
         $this->assertGreaterThan(0, $tickets('BOULANGERIE DUVAL', '%"exploitation_en_gerance":"locataire_gerant"%'), 'La Boulangerie Duval signe sa location-gérance.');
         $this->assertSame($tickets('BOULANGERIE DUVAL', '%'), $tickets('BOULANGERIE DUVAL', '%"exploitation_en_gerance":"locataire_gerant"%'), 'Chaque ticket de la Boulangerie Duval la porte.');
+        $this->assertGreaterThan(0, $tickets('COMPTOIR DES ILES', '%"exploitation_en_gerance":"gerant_mandataire"%'), 'Le Comptoir des Îles signe sa gérance-mandat.');
+        $this->assertSame($tickets('COMPTOIR DES ILES', '%'), $tickets('COMPTOIR DES ILES', '%"exploitation_en_gerance":"gerant_mandataire"%'), 'Chaque ticket du Comptoir des Îles la porte.');
+        $this->assertGreaterThan(0, $tickets('ATELIER BRUN', '%"eirl":true%'), 'L\'Atelier Brun signe sa mention d\'EIRL.');
+        $this->assertSame($tickets('ATELIER BRUN', '%'), $tickets('ATELIER BRUN', '%"objet_de_l_eirl":"Retouche et confection de vêtements sur mesure"%'), 'Chaque ticket de l\'Atelier Brun porte l\'objet de son activité.');
+        $this->assertSame(0, $tickets('GROUPE NORD DISTRIBUTION', '%'), 'Le Groupe Nord Distribution, membre d\'un assujetti unique, ne vend rien : aucun document signé ne porte son appartenance.');
+    }
+
+    /**
+     * La règle de la dénomination d'un entrepreneur individuel (décision
+     * P14.4), de part et d'autre : la raison sociale qui contient le nom que
+     * le répertoire donne n'a rien qui manque (l'Épicerie Lemoine), ni celle
+     * qui ne contient que son nom d'usage (l'Atelier Brun : Fontaine, son
+     * nom, n'y est pas) ; celle que le dernier contrôle du répertoire ne
+     * contient plus (la Boulangerie Duval) manque, et l'avis « Identité
+     * incomplète » de sa page « Identité » le dit.
+     */
+    private function assertLaDenominationDesEntrepreneurs(): void
+    {
+        $lire = function (string $nom): array {
+            $societe = Societe::query()->where('raison_sociale', $nom)->sole();
+
+            return app(TenantContext::class)->runAsSociete($societe, fn (): array => [
+                $societe->mentionsLegalesManquantes(),
+                $societe->avisDIdentiteIncomplete(),
+                $societe->nomsDeLEntrepreneur(),
+            ]);
+        };
+        $item = 'nom de l\'entrepreneur dans la raison sociale';
+
+        [$manquantes, , $noms] = $lire('EPICERIE LEMOINE');
+        $this->assertSame(['LEMOINE'], $noms);
+        $this->assertNotContains($item, $manquantes, 'La raison sociale de l\'Épicerie Lemoine contient son nom.');
+
+        [$manquantes, , $noms] = $lire('ATELIER BRUN');
+        $this->assertSame(['FONTAINE', 'BRUN'], $noms);
+        $this->assertNotContains($item, $manquantes, 'La raison sociale de l\'Atelier Brun contient son nom d\'usage, sans son nom de naissance.');
+
+        [$manquantes, $avis, $noms] = $lire('BOULANGERIE DUVAL');
+        $this->assertSame(['DUVAL-MERCIER'], $noms);
+        $this->assertContains($item, $manquantes, 'La raison sociale de la Boulangerie Duval ne contient plus le nom que le répertoire donne.');
+        $this->assertStringContainsString($item, (string) $avis);
+    }
+
+    /**
+     * Les lignes d'identité que les tickets et les factures signés de cette
+     * société ont imprimées (la première ligne de son pied, puis ses
+     * mentions facultatives), lues sur l'émetteur de leur contenu signé,
+     * chaque état une fois, dans l'ordre où il est apparu ; aucune pour une
+     * société qui n'a rien signé.
+     *
+     * @return list<list<string>>
+     */
+    private function lignesDIdentiteSigneesDe(string $raisonSociale): array
+    {
+        $etats = [];
+
+        foreach (DB::select("select enregistrements_fiscaux.contenu::jsonb #>> '{donnees,contexte,emetteur}' as emetteur from enregistrements_fiscaux join magasins on magasins.id = enregistrements_fiscaux.magasin_id join societes on societes.id = magasins.societe_id where societes.raison_sociale = ? and enregistrements_fiscaux.chaine = 'vente' and enregistrements_fiscaux.type in ('ticket', 'facture') group by 1 order by min(enregistrements_fiscaux.id)", [$raisonSociale]) as $ligne) {
+            $emetteur = Emetteur::duContenuSigne(ValeursLues::tableau(json_decode((string) $ligne->emetteur, true, flags: JSON_THROW_ON_ERROR)));
+            $imprimees = [$emetteur->lignesDeLaSociete()[0], ...$emetteur->mentionsFacultatives->lignes()];
+
+            if (! in_array($imprimees, $etats, true)) {
+                $etats[] = $imprimees;
+            }
+        }
+
+        return $etats;
     }
 
     /**

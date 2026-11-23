@@ -6833,3 +6833,13 @@ je sais pas si t as mis dans piliq ca " Régime particulier – Biens d’occasi
 
 il ce genre de tva il faut laisser les options dans la facture d achat quand on ajoute des produits, donc il faut avoir un menu deroulant qui parle de quelle tva entre produit et donc il doit etre choisi par defaut tva normal de 20% et donne l occasion de changer et donc le calcule de tva se fera aussi pour ce genre de tva à l achat et à la vente.
 
+## 620. 2026-11-23 23:00 UTC
+
+<!-- attach -->
+
+> B : le prix de la dernière entrée encore en stock, objet par objet. C'est plus exact, mais il faut suivre chaque lot dans le stock, donc le lot est plus lourd.
+
+
+
+ben la tu va calculer apres le tva sur benefe, non? si oui alors normalement il faut toujours le dernier prix! mais si je choisi A alors comment tu va calcule la tva exacte pour declarer et compter ?
+

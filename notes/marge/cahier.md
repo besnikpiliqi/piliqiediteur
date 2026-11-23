@@ -20,3 +20,9 @@ Quel prix d'achat prendre pour calculer la marge d'un produit acheté plusieurs 
 - Option A (conseillée) : le coût moyen du produit, comme pour toute la gestion du stock (simple, déjà tenu par le grand livre) ; l'écart avec la marge réelle objet par objet est connu et dit sur l'écran.
 - Option B : le prix de la dernière entrée encore en stock, objet par objet (plus exact, demande un suivi par lot dans le grand livre du stock : lot plus lourd).
 Sans réponse de l'éditeur, le lot ne s'engage pas sur ce point.
+
+## Suite de la question ouverte (23/11/2026, réponse de l'éditeur : il penche pour le dernier prix, et demande comment A donnerait la TVA exacte)
+Claude a corrigé son conseil : **B (prix d'achat de l'objet vendu, objet par objet) devient le conseil**, A (coût moyen) est déconseillé.
+- La TVA de la marge = (prix de vente TTC − prix d'achat de l'objet) × taux ÷ (1 + taux), centimes entiers, un arrondi, enregistrée à la vente et jamais recalculée. Exemple : acheté 100 €, vendu 150 € TTC : marge 50 €, TVA 8,33 €.
+- Avec A, la marge d'un objet vendu avec perte (0 € de TVA, T60.2, jamais compensée) se mêle à celle des autres : exemple deux chaises achetées 40 € et 80 €, coût moyen 60 €, vendues 70 € chacune ; A donne 2 × 1,67 = 3,34 € de TVA, B donne 5,00 € (chaise à 40 € : marge 30 € ; chaise à 80 € : marge −10 €, donc 0 €). A déclare donc moins que la règle, au risque de la société : A n'est pas « exacte ».
+- « Toujours le dernier prix » n'est exact que pour un objet unique (une pièce d'occasion = un produit à une unité) ; pour des objets identiques achetés à des prix différents, le dernier prix fausse les objets du lot précédent. Convention proposée pour des objets identiques : le lot le plus ancien encore en stock part le premier (premier entré, premier sorti), par lot d'achat tenu au grand livre du stock ; à confirmer par l'éditeur.

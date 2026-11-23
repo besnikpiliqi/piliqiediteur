@@ -6829,3 +6829,7 @@ tu arret tout ce que t es en train de faire et tu sauvegarde tout  pour recommen
 
 je sais pas si t as mis dans piliq ca " Régime particulier – Biens d’occasion – Article 297 A du CGI » " car je t avais dit pour les produit acheté chez le fournisseur qui vend des produit tva sur mage mais meme aux particulier ca devrais fonctioner?
 
+## 619. 2026-11-23 22:55 UTC
+
+il ce genre de tva il faut laisser les options dans la facture d achat quand on ajoute des produits, donc il faut avoir un menu deroulant qui parle de quelle tva entre produit et donc il doit etre choisi par defaut tva normal de 20% et donne l occasion de changer et donc le calcule de tva se fera aussi pour ce genre de tva à l achat et à la vente.
+

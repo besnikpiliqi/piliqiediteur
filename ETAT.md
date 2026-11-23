@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 23/11/2026 à 22:51 UTC par pilotage-sync.sh : « Notes de reprise : question sur la TVA sur la marge (297 A), rien n'est codé [skip ci] ».
+Mis à jour le 23/11/2026 à 22:56 UTC par pilotage-sync.sh : « Cahier du lot de la marge : menu de TVA par ligne d'achat, décision de l'éditeur du 23/11 [skip ci] ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

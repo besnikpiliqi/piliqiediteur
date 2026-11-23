@@ -6861,3 +6861,7 @@ B mais est ce qu il faut enregister les produit tva sur marge en unique meme s i
 
 oui c est bon mais il faut marque dans facture d achat quand on ajoute le produit "TVA sur marge" ou choisir qqch meilleur dont peut etre la loi. dit moi comment apparaitre l option pour choisir et tout le reste. peut avec maquet sera mieux de voir comment apparait partout tous les regime ?
 
+## 624. 2026-11-23 23:25 UTC
+
+tu utilise fable pour cette maquette
+

@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 23/11/2026 à 23:35 UTC par pilotage-sync.sh : « Cahier de la marge : achat d'un lot à prix global, conseil sur la globalisation retiré [skip ci] ».
+Mis à jour le 28/11/2026 à 10:37 UTC par pilotage-sync.sh : « Cahier de la marge : pièces détachées et coefficient (message du 28/11) [skip ci] ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

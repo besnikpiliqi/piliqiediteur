@@ -7161,3 +7161,3876 @@ Ce qu'il faut retenir en une phrase
 
 mais quand la societe achet un lot, qui ont des produits, alors comment gere ca dans piliqi ?
 
+## 627. 2026-11-24 22:11 UTC
+
+TVA27 laisse choisir le trimestriel en 2026 avec le seul seuil de 1 100 000 €, et son aide dit que le régime simplifié « n'existe plus depuis le 1er janvier 2027 ». Faut-il ajouter, pour 2026, la règle des 4 000 € de TVA par an ?Mon conseil : oui, jusqu'au 31/12/2026, et écrire l'aide au futur jusqu'à cette date. mais moi je dit non car le logiciel sera en production que en 2027 mais tu vois mieux que moi
+
+## 628. 2026-11-24 22:21 UTC
+
+et pour le demande de remboursement de credit de tva à l etat! alors si par ex: l etat refuse de lui donne la tva alors tu doit laisser l option d annuler la demande et de retourner la tva pour calculer sur piliqi car peut etre cette tva sera deja utiliser comme credit du mois pour reduire la tva. donc tu regarde si on peut laisser cette option ou pas selon les lois ou regles, et si les regles ne parle pas alors moi je pense que c est mieux de pouvoir retourner le credit sur piliqi pour recalculer avec la tva du mois. donc si on permet d annuler la demande alors peut sera mieux pour la societe et le comptable.
+
+## 629. 2026-11-25 23:22 UTC
+
+peut etre il faut creer un menu "Les frais" donc les frais de la societe  comme ( Tenue comptable + Bilan + TVA,Fiches de paie (si vous vous rémunérez), Déclaration sociale annuelle du dirigeant,Option versement de dividendes (AG annuelle) ) ou (Frais de fonctionnement dont, Cotisations sociales sur rémunération, Rémunération nette versée, Bénéfice imposable (avant IS), Dividendes bruts distribués, Cotisations sociales TNS sur dividendes,Impôt sur le revenu sur dividendes,Flat Tax (31,4 % en 2026) ) ou un autre menu " Tresorie" de la societe. ou peut etre les frais entre dans les charges ou peut etre qu'une partie une entre dans les frais? je te laisse toi voir tres serieux et attentivement. tu vois la tresorie de la societe pour voir et calculer tout son argent avec ses depenses dans l'année en cours ou par moi ou par année, donc pareille pour les frais si tu decide de laisser à part mais malgre tout je crois que les charges entre dans les frais et la tresorie car les chareges dimunue la treasorie de la societe. donc tu cherche les info exacte sur internet et aplique comme par exemple : 15% sur 42500€ et 25% au dela. 1. Les frais de structure et obligations (Incompressibles)
+Ce sont les frais obligatoires pour faire tourner la société :
+
+* L'expert-comptable : Entre 1 200 € et 2 500 € HT par an (en ligne ou en cabinet physique). C'est quasi indispensable pour le bilan annuel et les fiches de paie.
+* La banque professionnelle : Environ 10 € à 30 € HT par mois (soit 120 € à 360 €/an).
+* Les assurances professionnelles : La Responsabilité Civile Professionnelle (RC Pro) et éventuellement la mutuelle/prévoyance du dirigeant (environ 300 € à 1 000 €/an selon le métier).
+* La domiciliation : Si vous passez par une société de domiciliation pour ne pas mettre votre adresse personnelle sur les documents publics (environ 300 € à 600 €/an).
+
+2. Le matériel, les fournitures et les logiciels
+
+* Matériel informatique et bureautique : Ordinateur, téléphone portable, écrans, clavier, imprimante, mobilier de bureau (fauteuil ergonomique, bureau). Note : Au-dessus de 500 € HT, le matériel est « amorti » (déduit sur plusieurs années, généralement 3 ans pour un ordinateur).
+* Logiciels et abonnements numériques : Suite Microsoft/Google, logiciels métiers (Adobe, CRM, outils IA), hébergement web, nom de domaine.
+* Télécom : Votre forfait mobile et votre abonnement internet (à 100 % si ligne pro dédiée, ou au prorata de l'usage pro si ligne mixte).
+
+3. Les déplacements et le véhicule
+Vous avez deux façons de déduire vos déplacements professionnels (rendez-vous clients, déplacements sur chantier, salons) :
+
+* Les Indemnités Kilométriques (IK) : Vous utilisez votre voiture personnelle. La société vous rembourse chaque kilomètre professionnel selon un barème officiel de l'État (en fonction de la puissance fiscale du véhicule et de la distance). Cet argent vous est versé sans impôt ni charges sociales, et est déduit des bénéfices 
+* Les frais réels de transport : Billets de train, d'avion, tickets de métro, péages, parkings, et frais d'hôtel lors de déplacements professionnels. (Attention : les trajets domicile-bureau ne sont généralement pas déductibles, sauf exceptions).
+
+4. Les repas et réceptions
+
+* Repas pris seul lors d'un déplacement pro : Si vous ne pouvez pas rentrer chez vous le midi à cause de l'éloignement de votre lieu de travail, vous pouvez déduire la différence entre le prix du restaurant (plafonné autour de 21 € en 2026) et le coût d'un repas à domicile (évalué forfaitairement autour de 5,50 €). Soit environ 15 € déductibles par repas.
+* Repas d'affaires (avec un client, prospect ou partenaire) : Déductibles à 100 % sans plafond strict (tant que cela reste raisonnable). Il faut impérativement noter au dos du ticket de caisse le nom et l'entreprise de vos invités pour le justifier en cas de contrôle fiscal.
+
+5. Le bureau à domicile (Loyer et charges)
+Si vous travaillez depuis chez vous et que vous n'avez pas de local commercial :
+
+* Vous pouvez facturer un loyer à votre SASU,sarl etc correspondant à la surface occupée par votre bureau (ex : si votre bureau fait 10 m² dans un appartement de 50 m², la societe peut payer 20 % de votre loyer, de votre électricité, de votre chauffage et de votre assurance habitation).
+* Attention : Les loyers que vous percevez personnellement devront être déclarés dans vos revenus fonciers personnels.
+
+6. La formation, le conseil et la prospection
+
+* Formations professionnelles liées à votre activité, livres techniques, abonnements à la presse spécialisée.
+* Publicité et marketing : Création de site internet, cartes de visite, publicités en ligne (Google Ads, LinkedIn), cadeaux d'affaires offerts aux clients (avec un plafond autour de 73 € TTC par an et par client pour récupérer la TVA).
+* Frais juridiques ou de recrutement : Avocats, sous-traitants, freelances qui travaillent pour vous.
+
+Les 3 règles d'or pour qu'un frais soit accepté par le fisc
+
+1. L'intérêt de l'entreprise : La dépense doit servir à faire gagner de l'argent à la societe. Tout achat personnel (vêtements du quotidien, courses alimentaires personnelles, vacances) est strictement interdit et constitue un abus de biens sociaux (lourdement sanctionné).
+2. Une facture conforme : Un simple ticket de carte bleue ne suffit pas. Il faut une facture libellée au nom de la societe (et non nom personnel), faisant apparaître le montant HT, le taux de TVA et le montant TTC.
+3. La proportionnalité : Les frais doivent rester cohérents avec votre chiffre d'affaires. Déclarer 40 000 € de restaurants pour 90 000 € de CA déclenchera immédiatement un contrôle fiscal.
+
+Exemple concret de répartition des 10 000 € de frais annuels
+Pour un indépendant (consultant, développeur, prestataire) qui fait 90 000 € de CA, 10 000 € de frais annuels correspond typiquement à :
+
+* Expert-comptable + banque + assurances : 2 500 €
+* Téléphone + Internet + Logiciels/Abonnements : 1 500 €
+* Amortissement d'un ordinateur + matériel bureau : 1 200 €
+* Indemnités kilométriques / Transports / Repas d'affaires : 3 000 €
+* Quote-part loyer/électricité bureau à domicile : 1 800 €
+* Total = 10 000 € HT (qui sortent du compte de la société sans impôt).
+
+## 630. 2026-11-27 22:31 UTC
+
+la TVA sur les prestations de services est généralement exigible à l'encaissement, sauf option pour les débits, tandis que la TVA sur les livraisons de biens est généralement exigible lors de la livraison. De plus, la déduction de TVA obéit à ses propres conditions et à des dates d'exigibilité précises.  ==  L’article 206 de l'annexe II du CGI fixe la part exacte de TVA qu'une entreprise peut récupérer sur un achat (le coefficient de déduction) [Fin de la mise en surbrillance] . LegifranceDans la majorité des cas, ce coefficient vaut 1 (100 % de TVA récupérable). Lorsqu'une entreprise exerce des activités mixtes ou achète certains biens réglementés, ce coefficient est inférieur à 1 et se calcule en multipliant trois facteurs compris entre 0 et 1. Assistance-juridique.fr +11. Les 3 composantes du coefficient de déductionCoefficientCe qu'il mesureValeurs possibles1. Assujettissement (BOI-TVA-DED-20-10-10)Utilisation professionnelle imposable. Proportion dans laquelle le bien ou service sert à réaliser des opérations situées dans le champ d'application de la TVA (par opposition à un usage privé ou hors champ TVA, comme certaines subventions ou dividendes).1 : 100 % dans le champ de la TVA0 : 100 % hors champEntre 0 et 1 : usage mixte (ex. : surface en m² ou temps d'utilisation)2. Taxation (BOI-TVA-DED-20-10-20)Droit effectif à déduction. Parmi les opérations dans le champ de la TVA, proportion de celles qui sont effectivement taxées (et non exonérées sans droit à déduction, comme l'activité médicale, l'enseignement ou certaines opérations bancaires).1 : affecté uniquement à des opérations ouvrant droit à déduction0 : affecté uniquement à des opérations exonéréesEntre 0 et 1 : usage mixte (calculé selon le rapport du chiffre d'affaires annuel HT taxé sur le CA total)3. Admission (BOI-TVA-DED-20-10-30)Restrictions légales sur le bien. Limite fixée par la loi fiscale selon la nature de la dépense, indépendamment de l'activité de l'entreprise.1 : aucune exclusion légale (cas général)0 : exclusion totale (véhicules de tourisme, cadeaux > 73 € TTC, logements gratuits hors gardiennage)0,80 : cas particulier de l'essence et du gazole pour véhicules de tourisme (80 % déductibles)2. Règle de calcul et d'arrondiLa formule officielle prévue au I et au V de l'article 206 est la suivante : \[\text{Coefficient\ de\ déduction}=\text{Assujettissement}\times \text{Taxation}\times \text{Admission}\]Règle d'arrondi obligatoire : Chacun des trois coefficients, ainsi que le produit final, doit être arrondi par excès à la deuxième décimale (au centième supérieur). Par exemple, 0,384 devient 0,39. impots.gouv.frCaractère provisoire puis définitif : En cours d'année, l'entreprise utilise des coefficients provisoires basés sur l'année précédente. Elle doit arrêter les coefficients définitifs avant le 25 avril de l'année suivante et régulariser l'écart éventuel. Revue Fiduciaire +13. Exemple concret chiffréPrenons une société qui achète du carburant (gazole) pour un véhicule de tourisme utilisé à la fois pour ses activités professionnelles et pour une activité hors champ de la TVA. La facture comporte 200 € de TVA. Université Côte d'Azur +1Coefficient d'assujettissement : Le véhicule sert à 80 % pour l'activité économique dans le champ de la TVA et 20 % hors champ \[\rightarrow \]⁠ 0,80.Coefficient de taxation : L'entreprise réalise 60 000 € de CA soumis à TVA et 40 000 € de CA exonéré (soit 100 000 € au total). Le rapport est de \(60\,000 / 100\,000\) \[\rightarrow \]⁠ 0,60.Coefficient d'admission : Pour du gazole utilisé dans un véhicule de tourisme, la loi limite la déduction à 80 % \[\rightarrow \]⁠ 0,80. Université Côte d'Azur +1sn._setImageSrc('[jeton retiré]','data:image\/png;base64,[jeton retiré]\/\/\/+UraU1jrL\/36\/\/2qHE0s2pvbeuwLrFz8ayxL7\[jeton retiré]\/Hwz5SMtLqIvNLC3ejKzLqqxMa3zMz\/+fHCxa\/\/9eVZnrb\/zoT\/58KBrrn\/1ZZ9lmNJAAAAgklEQVQImX3NywKCIBSE4TmiZpBKF5XoKoFRvf\/7BeiqRbP7NvNDbGo0bSaz7Y7l2FNx6GQ\/SKmOOkh0JwDnQdEFJV1viLsrGqOaJBhaBZkZEEmPRdWP1n8VeovGpGqGdUGK3JTEXPh8kvM24KVjQb4d5\[jeton retiré]\x3d\x3d')Calcul final : Produit brut : \(0,80 \times 0,60 \times 0,80 = 0,384\)Arrondi au centième supérieur : 0,39TVA déductible : \(200\text{ €} \times 0,39 =\) 78 € (les 122 € restants constituent une charge non récupérable). impots.gouv.frsn._setImageSrc('[jeton retiré]','data:image\/png;base64,[jeton retiré]\/\/\/\[jeton retiré]\[jeton retiré]\[jeton retiré]\/Zb055ZIBT8tr00HLATEy7vQLoNm2VOrhjRwAcB0q7DTC9FzPrEQFDVruuV11hxjgcMlH4YGPOHofBxEeBtkZ7F5nBTB2jz084zVSOWYeAXe0RIEUBq1GC4dUjvPXA9CSDzBjTX4NsQjIYR00Inq5iSw5528ivPK2NIR1rdnl5qDaIodA3TGzpmHCeNAfSw3iESQ\/1vjQVQGJEbQ\[jeton retiré]\/9CMeV1o\/s6i38JXMkfEBoTtlkZHKsAAAAASUVORK5CYII\x3d')Si vous souhaitez appliquer ce texte à votre situation, indiquez-moi :La nature de la dépense concernée (véhicule, carburant, matériel informatique, local, etc.)La répartition de votre chiffre d'affaires (activité taxée, exonérée ou hors champ TVA). == Voici un autre cas concret : l'achat d'un serveur informatique (5 000 € HT, soit 1 000 € de TVA à 20 %) par une entreprise ayant une activité mixte et un usage partiellement privé/hors champ. 1. Détermination des 3 coefficientsComposanteSituation de l'entrepriseCalcul et valeur retenue1. Coefficient d'assujettissementLe serveur héberge à 70 % les outils des activités économiques de la société (dans le champ de la TVA) et à 30 % la gestion d'une activité patrimoniale hors champ TVA (perceptions de dividendes).0,702. Coefficient de taxationParmi les activités dans le champ de la TVA, l'entreprise réalise 150 000 € HT de prestations de conseil (soumises à TVA) et 50 000 € de formations professionnelles exonérées sans droit à déduction (soit 200 000 € au total).\(\frac{150\,000}{200\,000} =\) 0,753. Coefficient d'admissionLe matériel informatique ne fait l'objet d'aucune restriction légale particulière d'exclusion.1,002. Calcul de la TVA récupérableProduit brut : 0,70 × 0,75 × 1,00 = 0,525Coefficient de déduction (arrondi au centième supérieur) : 0,53TVA déductible : 1 000 € × 0,53 = 530 €TVA non déductible : 1 000 € - 530 € = 470 € (ce montant est intégré au coût d'acquisition comptable du serveur et amorti avec lui). == Voici un troisième exemple illustrant à la fois l'impact d'un coefficient d'admission nul (0) sur un véhicule de tourisme et le mécanisme de régularisation annuelle sur un bien d'équipement. Cas A : Achat d'un véhicule de tourisme (Coefficient d'admission = 0)Une société de conseil (100 % soumise à la TVA) achète un véhicule de tourisme à 30 000 € HT, soit 6 000 € de TVA (20 %). ComposanteSituation de l'entrepriseValeur retenue1. Coefficient d'assujettissementLe véhicule est utilisé exclusivement pour les besoins de l'activité professionnelle dans le champ de la TVA.1,002. Coefficient de taxationL'entreprise ne réalise que des opérations soumises à la TVA.1,003. Coefficient d'admissionLa loi exclut totalement du droit à déduction les véhicules conçus pour le transport de personnes (sauf exceptions : taxis, auto-écoles, loueurs, etc.).0Calcul : 1,00 × 1,00 × 0 = 0TVA déductible : 0 € (même si l'entreprise est 100 % assujettie et taxée, la loi bloque toute récupération ; le véhicule est comptabilisé pour son montant TTC de 36 000 €). Cas B : Régularisation annuelle d'une immobilisation (Année N+1)Reprenons l'exemple précédent du serveur informatique (1 000 € de TVA) acheté en année N, pour lequel l'entreprise avait déduit 530 € sur la base d'un coefficient provisoire de 0,53. Avant le 25 avril de l'année N+1, l'entreprise calcule ses chiffres d'affaires définitifs pour l'année N : Coefficient d'assujettissement définitif : inchangé à 0,70.Coefficient de taxation définitif : l'activité soumise à TVA a été plus élevée que prévu (170 000 € HT sur 200 000 €), soit \(\frac{170\,000}{200\,000} =\) 0,85.Coefficient d'admission : 1,00. Calcul de la régularisation : Nouveau coefficient définitif : 0,70 × 0,85 × 1,00 = 0,595, arrondi par excès à 0,60.TVA réellement déductible : 1 000 € × 0,60 = 600 €.Complément de déduction : 600 € - 530 € = 70 € que l'entreprise peut récupérer en plus sur sa déclaration de TVA. == Pour un magasin de téléphonie ayant cette activité mixte, le coefficient de déduction global est de 1 (100 %), mais avec une interdiction spécifique de déduire la TVA sur les téléphones revendus sous le régime de la marge (article 297 D du CGI). En effet, la vente sous le régime de la TVA sur la marge n'est pas une opération exonérée ni hors champ : c'est une opération imposable qui ouvre droit à déduction. Elle ne pénalise donc pas vos autres dépenses (loyer, électricité, outillage, pièces détachées). 1. Calcul du coefficient de déduction du magasinActivité / DépenseAssujettissementTaxationAdmissionCoefficient finalConséquence pratiqueRéparation & vente de pièces (TVA normale)1111,00Vous récupérez 100 % de la TVA sur les pièces, écrans, batteries et outils.Frais généraux du magasin (loyer, caisse, électricité, pub)1111,00Vous récupérez 100 % de la TVA. La TVA sur marge ne réduit pas le coefficient de taxation.Achat d'un téléphone destiné à être revendu sur marge110 (règle spéciale art. 297 D)0Vous ne pouvez pas déduire la TVA qui aurait éventuellement grevé l'achat de ce téléphone (en pratique, vous l'achetez généralement à un particulier sans TVA).2. Exemple chiffré sur un mois d'activitéSupposons que votre magasin réalise les opérations suivantes sur un mois : A. Vos achats (TVA déductible) Pièces détachées neuves (écrans, batteries) : 2 000 € HT + 400 € de TVA → Coefficient 1 → 400 € déductibles.Frais généraux (loyer, logiciel, électricité) : 1 500 € HT + 300 € de TVA → Coefficient 1 → 300 € déductibles.Rachat de 5 smartphones d'occasion à des particuliers : 1 000 € TTC (pas de TVA facturée par le particulier, et aucune TVA déductible).Total TVA déductible : 400 + 300 = 700 €. B. Vos ventes (TVA collectée à reverser) Réparations et vente de pièces : 6 000 € HT → TVA à 20 % = 1 200 €. Revente des 5 smartphones d'occasion (TVA sur marge) : Vendus 1 600 € TTC au total.Marge TTC : 1 600 € - 1 000 € = 600 €.Marge HT : 600 / 1,20 = 500 €.TVA collectée sur la marge : 500 € × 20% = 100 € (sur la facture client, vous ne faites pas apparaître de TVA et indiquez « Régime particulier - Biens d'occasion »). Total TVA collectée : 1 200 + 100 = 1 300 €. C. Résultat à payer à l'État \[\text{TVA à payer}=1\,300\text{ € (collectée)}-700\text{ € (déductible)}=\mathbf{600}\text{ €}\]Point de vigilance : pièces détachées utilisées sur un téléphone d'occasionSi vous utilisez une pièce neuve (sur laquelle vous avez récupéré la TVA à 100 %) pour réparer un téléphone d'occasion avant de le revendre sur marge, vous conservez le droit de déduire la TVA sur la pièce détachée. En revanche, le coût de cette pièce ne peut pas être ajouté au prix d'achat du téléphone pour diminuer votre marge imposable.  == expliqué en detailRéponse du Mode IA pour En revanche, le coût de cette pièce ne peut pas être ajouté au prix d'achat du téléphone pour diminuer votre marge imposable. et tu m explique en detailEn régime de TVA sur la marge,  [Début de la mise en surbrillance] la marge imposable se calcule uniquement par différence entre le prix de vente du téléphone et son prix d'achat initial auprès du fournisseur ou particulier [Fin de la mise en surbrillance]  (article 297 A du CGI). Vous ne pouvez donc pas intégrer les frais de remise en état (pièces détachées, main-d'œuvre) dans le coût d'achat pour réduire l'assiette de la TVA, mais vous récupérez en contrepartie 100 % de la TVA sur ces pièces. Cette règle fiscale évite que vous ne bénéficiez d'un double avantage (déduire la TVA sur la pièce et réduire la TVA due sur la vente du téléphone). 1. Exemple chiffré : revente d'un iPhone reconditionnéSupposons l'opération suivante : Rachat d'un téléphone cassé à un particulier : 200 € (sans TVA).Achat d'un écran neuf chez votre fournisseur : 50 € HT + 10 € de TVA (soit 60 € TTC).Revente du téléphone réparé à un client : 380 € TTC. Étape A : Ce que vous faites sur la pièce détachée (Écran) Vous récupérez normalement les 10 € de TVA sur votre déclaration de TVA (coefficient de déduction = 1).Le coût réel de l'écran pour votre comptabilité est donc de 50 € HT. Étape B : Comment calculer la TVA sur la marge lors de la revente ÉlémentCalcul conforme à la loiErreur fréquente (interdite)Prix de vente TTC380 €380 €Prix d'achat retenu200 € (uniquement le rachat du téléphone)250 € (200 € + 50 € d'écran)Marge TTC imposable380 € - 200 € = 180 €380 € - 250 € = 130 €Marge HT180 € / 1,20 = 150 €130 € / 1,20 = 108,33 €TVA à reverser (20 %)150 € × 20 % = 30 €108,33 € × 20 % = 21,67 €2. Bilan global de l'opération pour votre magasinEn appliquant la règle légale : TVA collectée sur la vente : 30 €TVA déduite sur l'écran : - 10 €TVA nette payée à l'État : 20 € Pourquoi est-ce logique fiscalement ?La valeur ajoutée réelle créée par votre magasin (votre marge commerciale nette avant impôt) est de :\[\text{Vente\ (380 € TTC)}-\text{Achat\ téléphone (200 €)}-\text{Écran HT (50 €)}=\mathbf{130}\text{ € TTC}\]Si l'on décompose ces 130 € TTC de marge économique réelle, ils correspondent à 110 € de bénéfice HT et 20 € de TVA (soit exactement les 30 € collectés moins les 10 € récupérés sur la pièce). Si vous aviez ajouté l'écran au prix d'achat du téléphone, vous auriez déduit deux fois l'impact de cet écran. 3. Règle comptable et facturation à respecterSur la facture client : Vous indiquez uniquement le prix total (380 €) sans faire ressortir la TVA, avec la mention obligatoire : « Régime particulier – Biens d'occasion – Article 297 A du CGI ». Suivi du stock : Vous devez tenir un registre (livre de police / suivi lot par lot) justifiant le prix d'achat exact de chaque téléphone (200 €) afin de prouver le calcul de la marge en cas de contrôle fiscal. === ce que je t ai donné est ce que tu as deja appliquer ces regles ou pas?? ou c est le comptable qui aplique dans les charge le coeficient pour la charge? alors est ce que tu as mis l'option pour appliquer le coef?
+
+## 631. 2026-11-27 23:26 UTC
+
+# CAHIER DES CHARGES — ÉVOLUTION FINANCIÈRE ET COMPTABLE DE PILIQI 
+
+## Objectif général
+
+Je souhaite faire évoluer PILIQI pour en faire un véritable logiciel de gestion financière et comptable destiné aux commerçants, dirigeants et experts-comptables.
+
+PILIQI doit permettre à une entreprise de gérer son activité commerciale, ses dépenses, sa trésorerie, ses obligations fiscales et sa comptabilité au même endroit.
+
+Je souhaite également que les cabinets comptables puissent travailler directement dans PILIQI pour leurs différentes sociétés clientes, consulter leurs opérations, effectuer les contrôles et réaliser le travail comptable.
+
+Cette évolution doit respecter entièrement l'architecture existante de PILIQI, notamment le fonctionnement multi-sociétés, multi-magasins, les permissions et l'isolation des données.
+
+**IMPORTANT : avant toute modification du code, regarde le code existant. Ne pas créer de doublons et ne pas casser les fonctionnalités déjà développées et testées.**
+
+---
+
+# PARTIE 1 — ORGANISATION DES MENUS
+
+## 1.1. Organisation générale
+
+Je souhaite organiser les fonctionnalités financières dans une section « Finances de la société ».
+
+Les menus à prévoir sont :
+
+1. Trésorerie.
+2. Charges,(mais les charge tu laisse comme tu as laisser mtn, donc le menu separement car c'est besion de voir separement, mais aux endroit ou doit se calculer alors tu calcule comme demandé et si besoin tu ajoute des fonctionalité mtn car j'ai mtn bcp de nouveaux fonctionalié, et tu fais pareille pour le menu TVA).
+3. Fiscalité et déclarations.
+4. Rémunérations et cotisations sociales.
+5. Associés et dividendes.
+
+Le menu existant « Tableau de bord de la société » doit être conservé et enrichi avec les nouveaux indicateurs financiers.
+
+**Ne pas créer un deuxième tableau de bord appelé « Vue financière ».**
+
+Le tableau de bord actuel doit rester le point central permettant au dirigeant et aux personnes autorisées de visualiser la situation générale de la société.
+
+## 1.2. Un seul menu « Charges de la société »
+
+Je ne souhaite pas créer deux menus séparés « Charges » et « Frais ».
+
+Toutes les dépenses professionnelles de la société doivent être regroupées dans un seul menu : **Charges de la société**.
+
+Cela comprend :
+
+- Les factures adressées directement à la société.
+- Les dépenses de fonctionnement.
+- Les dépenses professionnelles payées directement par la société.
+- Les dépenses professionnelles avancées personnellement par le dirigeant.
+- Les dépenses professionnelles avancées personnellement par les collaborateurs et salariés.
+
+Les notes de frais constituent donc un type particulier de dépense à l'intérieur du même module. Ne pas créer un deuxième module indépendant.
+
+Prévoir des filtres permettant de distinguer :
+- Factures fournisseurs de charges.
+- Dépenses avancées personnellement.
+- Charges payées.
+- Charges partiellement payées.
+- Charges à payer.
+- Charges à contrôler.
+- Charges comptabilisées.
+
+Il faut conserver une présentation simple pour les commerçants et suffisamment complète pour les comptables.
+
+---
+
+# PARTIE 2 — MODULE « CHARGES DE LA SOCIÉTÉ »
+
+## 2.1. Réutiliser la page existante
+
+Une page HTML intitulée « Charges et TVA réelle » a déjà été préparée.
+
+Je souhaite conserver sa logique générale :
+
+- Tableau des types de charges par mois.
+- Liste détaillée des pièces enregistrées.
+- Bouton « Ajouter une charge ».
+- Formulaire de dépôt de justificatifs.
+- Montants HT, TVA et TTC.
+- Contrôle par le comptable.
+- Détection des doublons.
+- Historique des opérations.
+
+Ne pas recommencer cette page inutilement. Auditer le prototype et l'intégrer proprement dans PILIQI.
+
+## 2.2. Catégories de charges
+
+Prévoir une liste initiale de catégories, configurable par société.
+
+### A. Frais de structure et fonctionnement
+
+- Expert-comptable.
+- Tenue comptable.
+- Bilan annuel.
+- Conseils comptables.
+- Frais bancaires.
+- Assurances professionnelles.
+- Responsabilité civile professionnelle.
+- Domiciliation.
+- Loyers et charges locatives.
+- Électricité.
+- Gaz.
+- Eau.
+- Téléphone.
+- Internet.
+
+### B. Matériel et fournitures
+
+- Matériel informatique.
+- Ordinateurs.
+- Téléphones utilisés par l'entreprise.
+- Écrans.
+- Imprimantes.
+- Mobilier.
+- Fournitures de bureau.
+- Matériel professionnel.
+- Entretien et réparations.
+
+Prévoir une distinction entre charge directement déductible et immobilisation amortissable selon les règles applicables.
+
+### C. Logiciels et services numériques
+
+- Logiciels.
+- Abonnements numériques.
+- Hébergement web.
+- Noms de domaine.
+- Outils de gestion.
+- Services IA.
+- CRM.
+- Services informatiques.
+
+### D. Déplacements professionnels
+
+- Indemnités kilométriques.
+- Frais de carburant.
+- Train.
+- Avion.
+- Péages.
+- Stationnement.
+- Parking.
+- Hôtel.
+- Transport professionnel.
+
+Distinguer véhicule personnel et véhicule de société.
+
+### E. Repas et réceptions
+
+- Repas professionnels.
+- Repas avec clients.
+- Repas avec fournisseurs.
+- Réceptions professionnelles.
+- Invitations professionnelles.
+
+Prévoir le motif professionnel, les personnes invitées et les justificatifs.
+
+### F. Bureau et travail à domicile
+
+- Quote-part professionnelle du loyer.
+- Électricité.
+- Chauffage.
+- Internet.
+- Assurance.
+- Autres dépenses réellement professionnelles.
+
+Ne pas calculer automatiquement une déduction sur la seule base de la surface occupée. Le traitement doit être justifié et validé selon la situation juridique et fiscale.
+
+### G. Formation et développement commercial
+
+- Formation professionnelle.
+- Conseil.
+- Avocats.
+- Prestations externes.
+- Sous-traitance.
+- Publicité.
+- Marketing.
+- Site Internet.
+- Communication.
+- Prospection.
+- Cadeaux professionnels.
+
+### H. Dépenses avancées personnellement (notes de frais)
+
+Ces dépenses restent dans le même module.
+
+Exemples :
+- Un dirigeant paie un repas professionnel avec son argent personnel.
+- Un salarié utilise sa voiture personnelle pour se déplacer chez un client.
+- Un collaborateur paie un billet de train.
+- Un dirigeant achète personnellement des fournitures nécessaires à l'entreprise.
+
+PILIQI doit enregistrer la dépense, identifier la personne ayant avancé l'argent, conserver le justificatif et suivre le remboursement éventuel.
+
+Une fois la dépense acceptée, elle peut générer une dette de remboursement envers la personne concernée. Lors du remboursement, le mouvement correspondant est enregistré dans la trésorerie.
+
+Ne pas confondre cette situation avec une dépense payée directement par le compte bancaire de la société.
+
+## 2.3. Formulaire « Ajouter une charge »
+
+Conserver le formulaire existant et le compléter.
+
+Informations à prévoir :
+
+- Justificatif PDF, JPEG ou PNG.
+- Type de charge.
+- Catégorie.
+- Fournisseur.
+- Numéro de facture.
+- Date de facture.
+- Date d'échéance.
+- Période concernée.
+- Période fiscale ou TVA applicable.
+- Société concernée.
+- Magasin concerné, facultatif.
+- Personne ayant effectué l'avance, si applicable.
+- Mode de paiement.
+- Compte comptable.
+- Montant HT.
+- Taux de TVA.
+- Montant de TVA facturée.
+- Montant de TVA déductible.
+- Montant TTC.
+- Montant payé.
+- Montant restant à payer.
+- Justificatif et observations.
+
+Autoriser plusieurs taux de TVA sur une même facture.
+
+Les calculs automatiques doivent être contrôlables et modifiables selon les montants réellement mentionnés sur la pièce.
+
+Prévoir la possibilité d'ajouter des catégories personnalisées.
+
+## 2.4. Présentation par mois
+
+Conserver le principe du tableau des charges par type et par mois.
+
+Cependant, corriger une limite du prototype actuel : plusieurs factures peuvent exister pour une même catégorie au cours du même mois.
+
+Il ne faut pas qu'une nouvelle facture écrase une précédente.
+
+Chaque cellule de la matrice doit pouvoir afficher par exemple :
+
+- 3 pièces enregistrées.
+- 2 pièces payées.
+- 1 pièce à payer.
+- Montant total du mois.
+
+En cliquant sur une cellule, l'utilisateur accède à toutes les pièces concernées.
+
+La détection des doublons doit examiner le fournisseur, le numéro de facture, la date, le montant et les identifiants disponibles. Une catégorie déjà utilisée pendant un mois ne signifie pas qu'une autre facture est un doublon.
+
+## 2.5. Deux statuts obligatoirement indépendants
+
+C'est une décision importante.
+
+Dans mon prototype, le statut vert « Validée » était destiné à indiquer qu'une charge était payée.
+
+Pour éviter toute ambiguïté avec le travail du comptable, je souhaite désormais deux informations distinctes.
+
+**A. Statut du paiement**
+
+- À payer.
+- Partiellement payée.
+- Payée.
+- Remboursement en attente.
+- Remboursée, pour les dépenses avancées personnellement.
+
+**B. Statut du traitement comptable**
+
+- Pièce déposée.
+- Informations à compléter.
+- À vérifier par le comptable.
+- Renvoyée au client.
+- Contrôlée.
+- Comptabilisée.
+- Corrigée par une nouvelle écriture, avec conservation de l'historique.
+
+La couleur verte « Payée » concerne uniquement le paiement.
+
+Une facture payée n'est pas nécessairement comptabilisée.
+
+Une facture comptabilisée n'est pas nécessairement payée.
+
+Ne jamais utiliser un seul statut pour ces deux notions.
+
+## 2.6. Circuit de traitement des charges
+
+Prévoir plusieurs situations :
+
+1. Le client dépose la pièce et renseigne les montants.
+2. Le client dépose uniquement la pièce.
+3. Le comptable renseigne les montants et effectue le contrôle.
+4. Le comptable ajoute directement une charge pour son client.
+5. Le comptable renvoie une pièce au client avec un motif.
+6. Le comptable contrôle et comptabilise la dépense.
+
+Les permissions déterminent qui peut effectuer chaque opération.
+
+Après validation et comptabilisation, une pièce et son historique ne doivent pas pouvoir être modifiés ou supprimés silencieusement.
+
+Toute correction doit être tracée.
+
+## 2.7. Sécurité des justificatifs
+
+Réutiliser les mécanismes de sécurité existants pour les documents :
+
+- Contrôle du type réel de fichier.
+- Antivirus.
+- Validation des fichiers.
+- Protection des données.
+- Isolation par société.
+- Vérification des droits à chaque téléchargement.
+- Journal d'audit.
+- Conservation de l'original.
+- Historique des versions.
+
+Prévoir ultérieurement l'intégration des factures électroniques reçues par la plateforme agréée utilisée par PILIQI, avec rapprochement des pièces déjà reçues pour éviter les doublons.
+
+---
+
+# PARTIE 3 — MODULE « TRÉSORERIE DE LA SOCIÉTÉ »
+
+## 3.1. Objectif
+
+Créer un véritable module de trésorerie permettant au dirigeant et au comptable de connaître la situation financière réelle de l'entreprise.
+
+Il doit permettre de consulter les entrées et sorties d'argent et de suivre les soldes sur une période.
+
+Filtres :
+- Aujourd'hui.
+- Cette semaine.
+- Ce mois.
+- Mois précédent.
+- Année en cours.
+- Année précédente.
+- Exercice comptable.
+- Période personnalisée.
+
+## 3.2. Situation de trésorerie
+
+Afficher :
+
+- Solde de chaque compte bancaire.
+- Argent disponible en caisse.
+- Total bancaire.
+- Total en espèces.
+- Total des disponibilités.
+- Factures clients non réglées.
+- Factures fournisseurs à payer.
+- Dépenses à rembourser.
+- Échéances fiscales et sociales.
+
+Séparer clairement les disponibilités réelles, les créances et les dettes.
+
+Ne pas ajouter les factures clients impayées au solde bancaire disponible.
+
+## 3.3. Entrées d'argent
+
+- Ventes encaissées.
+- Règlements de factures clients.
+- Versements CB.
+- Dépôts d'espèces.
+- Virements reçus.
+- Apports des associés.
+- Emprunts reçus.
+- Autres recettes.
+
+## 3.4. Sorties d'argent
+
+- Paiement des fournisseurs.
+- Paiement des charges de fonctionnement.
+- Remboursements de notes de frais.
+- Salaires.
+- Cotisations sociales.
+- TVA.
+- Impôts.
+- Loyers.
+- Investissements.
+- Remboursements de crédits.
+- Dividendes versés.
+- Autres décaissements.
+
+Ne pas confondre sortie de trésorerie et charge comptable.
+
+Exemples :
+- Le remboursement du capital d'un emprunt est une sortie de trésorerie, mais pas une charge.
+- Les intérêts constituent généralement une charge financière.
+- Les dividendes ne sont pas une charge d'exploitation.
+- Un transfert entre deux comptes de la même société n'est ni une recette ni une dépense.
+
+## 3.5. Liaison automatique avec les charges
+
+C'est une règle fondamentale.
+
+Lorsqu'une charge est payée :
+
+1. Le paiement est enregistré sur la facture concernée.
+2. Le montant payé est mis à jour.
+3. Le solde restant à payer est recalculé.
+4. Le mouvement correspondant apparaît dans la trésorerie.
+5. Le règlement reste lié à la facture originale.
+6. L'écriture comptable correspondante est générée selon les règles applicables.
+
+Ne jamais enregistrer deux fois le même décaissement.
+
+Prévoir les paiements partiels, les paiements complets, les échéances et les remboursements.
+
+## 3.6. Prévisions de trésorerie
+
+Créer une vue prévisionnelle à partir :
+
+- Des factures fournisseurs à payer.
+- Des factures clients à encaisser.
+- Des charges récurrentes.
+- Des salaires.
+- Des impôts et cotisations.
+- Des échéances bancaires.
+- Des paiements planifiés.
+
+Afficher le solde prévisionnel par jour, semaine et mois.
+
+Signaler les risques de manque de trésorerie.
+
+Distinguer visuellement les mouvements constatés des opérations prévisionnelles.
+
+Ne jamais présenter une prévision comme un solde bancaire réel.
+
+---
+
+# PARTIE 4 — MODULE « FISCALITÉ ET DÉCLARATIONS »
+
+## 4.1. TVA
+
+Conserver la page actuelle « TVA de la société ».
+
+Ne pas créer une seconde page TVA.
+
+L'intégrer dans le nouveau menu « Fiscalité et déclarations ».
+
+Elle doit permettre de consulter :
+
+- TVA collectée.
+- TVA déductible sur achats de marchandises.
+- TVA déductible sur charges.
+- Crédit de TVA antérieur.
+- Crédit de TVA à reporter.
+- TVA nette à payer.
+- TVA déjà réglée.
+- Déclarations et échéances.
+
+La TVA des charges doit provenir des pièces et des règles comptables et fiscales applicables.
+
+Distinguer :
+
+A. TVA estimée : calcul provisoire, incluant éventuellement les pièces à vérifier.
+
+B. TVA comptable calculée : résultat issu des écritures et des règles d'exigibilité et de déduction.
+
+C. TVA déclarée : montant effectivement validé et déclaré.
+
+La TVA sur les services peut être exigible à l'encaissement, sauf option pour les débits, tandis que les livraisons de biens suivent leurs règles propres.
+
+Ne pas se contenter du mois de facture pour déterminer automatiquement la période de TVA.
+
+Le comptable doit pouvoir contrôler la période de rattachement et la TVA réellement déductible.
+
+Le traitement des taux différents, exonérations, autoliquidations, avoirs et régularisations doit être prévu.
+
+## 4.2. Impôt sur les sociétés
+
+Prévoir le calcul et le suivi de l'IS.
+
+Le logiciel doit distinguer :
+
+- Résultat comptable.
+- Réintégrations fiscales.
+- Déductions fiscales.
+- Résultat fiscal imposable.
+- IS estimé.
+- Acomptes.
+- Solde à payer.
+- IS effectivement réglé.
+
+Prévoir les règles de taux normal et de taux réduit.
+
+À titre de référence pour le régime français en 2026, le taux normal est de 25 % et certaines PME peuvent bénéficier d'un taux réduit de 15 % sur la première tranche de 42 500 €, sous conditions légales.
+
+Le système doit vérifier l'éligibilité : chiffre d'affaires, capital libéré, détention du capital et autres conditions applicables.
+
+Ne jamais appliquer automatiquement le taux réduit à toutes les entreprises.
+
+Les taux, seuils et conditions doivent être versionnés par année fiscale et validés à partir des sources officielles en vigueur au moment de leur utilisation.
+
+## 4.3. Autres obligations fiscales
+
+Prévoir :
+
+- CFE.
+- Autres taxes applicables.
+- Échéances fiscales.
+- Déclarations.
+- Historique des paiements.
+- Justificatifs.
+- Alertes avant échéance.
+
+Ne pas transformer toutes les taxes en charges d'exploitation. Leur traitement comptable doit être déterminé selon leur nature.
+
+---
+
+# PARTIE 5 — MODULE « RÉMUNÉRATIONS ET COTISATIONS SOCIALES »
+
+Prévoir un espace spécifique pour :
+
+- Salaires bruts.
+- Salaires nets.
+- Fiches de paie.
+- Cotisations salariales.
+- Cotisations patronales.
+- Rémunération du dirigeant.
+- Cotisations sociales TNS.
+- Paiements Urssaf.
+- Déclarations sociales.
+- Régularisations.
+- Échéances sociales.
+- Historique des paiements.
+
+Le calcul doit dépendre de la forme juridique, du statut du dirigeant et des règles applicables à la période.
+
+Distinguer notamment :
+
+- Président de SAS/SASU.
+- Gérant majoritaire de SARL.
+- Gérant minoritaire ou égalitaire de SARL.
+- Autres situations applicables.
+
+Ne jamais appliquer un pourcentage social unique à tous les dirigeants.
+
+Prévoir un suivi des coûts de rémunération pour la société, avec distinction entre rémunérations nettes, cotisations et paiements réellement effectués.
+
+---
+
+# PARTIE 6 — MODULE « ASSOCIÉS ET DIVIDENDES »
+
+Créer un espace permettant de suivre :
+
+- Bénéfice de l'exercice.
+- Réserves.
+- Report à nouveau.
+- Résultat distribuable.
+- Décisions d'assemblée générale.
+- Dividendes bruts distribués.
+- Répartition entre associés.
+- Prélèvements fiscaux.
+- Prélèvements sociaux.
+- Dividendes nets versés.
+- Dates de paiement.
+
+Attention : les dividendes ne sont pas des charges de fonctionnement de la société.
+
+Ils sont distribués selon les règles juridiques et comptables après détermination du résultat et décision valable des associés.
+
+La fiscalité des dividendes doit tenir compte de la forme juridique et du statut du bénéficiaire.
+
+Prévoir des paramètres fiscaux et sociaux versionnés, sans coder définitivement un taux dans Laravel.
+
+---
+
+# PARTIE 7 — MOTEUR COMPTABLE DE PILIQI
+
+Cette partie est fondamentale.
+
+PILIQI doit disposer d'un véritable moteur comptable en partie double.
+
+Il ne doit pas être simplement un système qui calcule les dépenses et la TVA.
+
+## 7.1. Séparation entre activité commerciale et comptabilité
+
+Le système commercial existant conserve les données originales :
+
+- Ventes.
+- Factures.
+- Avoirs.
+- Achats.
+- Fournisseurs.
+- Clients.
+- Paiements.
+- Caisses.
+- Clôtures.
+- Stocks.
+- Remboursements.
+
+Le moteur comptable récupère ces opérations et les transforme en écritures selon les règles comptables applicables.
+
+Ne pas mélanger directement les tables opérationnelles existantes avec les tables comptables.
+
+Prévoir une relation traçable entre chaque opération commerciale et ses écritures.
+
+## 7.2. Plan comptable
+
+Prévoir un plan comptable général français de référence, initialisé selon le PCG officiel applicable à l'exercice.
+
+Quelques comptes de référence :
+
+| Compte | Signification |
+|---|---|
+| 401 | Fournisseurs |
+| 411 | Clients |
+| 512 | Banques |
+| 53 | Caisse |
+| 607 | Achats de marchandises |
+| 707 | Ventes de marchandises |
+| 44566 | TVA déductible sur autres biens et services |
+| 44571 | TVA collectée |
+
+Ce n'est pas une liste exhaustive.
+
+Le système doit également gérer les comptes de stocks, immobilisations, amortissements, salaires, cotisations sociales, charges, produits, emprunts et impôts.
+
+Le compte 53 est la racine comptable de la caisse. Les subdivisions seront définies dans le plan utilisé.
+
+Prévoir des subdivisions configurables.
+
+Exemples :
+- 401100 : fournisseur A.
+- 401200 : fournisseur B.
+- 707100 : ventes de téléphones.
+- 707200 : ventes d'accessoires.
+
+Ces subdivisions sont des exemples de paramétrage, pas des numéros obligatoires.
+
+Le plan comptable doit être :
+
+- Configurable par société.
+- Versionné.
+- Associé à l'exercice comptable.
+- Adaptable par le comptable dans les limites du plan applicable.
+- Historisé.
+
+Ne jamais coder définitivement les numéros de comptes dans les fonctions Laravel.
+
+## 7.3. Journaux comptables
+
+Prévoir une configuration initiale avec les journaux suivants :
+
+| Code | Journal | Utilisation |
+|---|---|---|
+| VE | Ventes | Factures et opérations de vente |
+| AC | Achats | Factures fournisseurs |
+| BQ | Banque | Transactions bancaires |
+| CA | Caisse | Opérations de caisse |
+| OD | Opérations diverses | Régularisations et écritures diverses |
+| AN | À nouveaux | Soldes d'ouverture |
+
+Ces codes sont des valeurs initiales configurables.
+
+Chaque société peut adapter ses journaux selon ses besoins.
+
+Prévoir une numérotation contrôlée par journal et par exercice.
+
+## 7.4. Exemples de comptabilisation
+
+Claude doit comprendre et implémenter les situations suivantes.
+
+### A. Vente de 120 € TTC à crédit
+
+Hypothèse : vente de marchandises avec TVA à 20 %.
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| 411 Clients | 120 € | |
+| 707 Ventes | | 100 € |
+| 44571 TVA collectée | | 20 € |
+| Total | 120 € | 120 € |
+
+Le client doit encore payer 120 €.
+
+### B. Vente de 120 € TTC payée immédiatement en espèces
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| 53 Caisse | 120 € | |
+| 707 Ventes | | 100 € |
+| 44571 TVA collectée | | 20 € |
+
+### C. Vente de 120 € TTC payée par carte bancaire
+
+Prévoir un compte de transition configurable pour les sommes encaissées par carte mais pas encore versées sur le compte bancaire.
+
+Exemple de principe :
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| Compte de cartes à encaisser configuré | 120 € | |
+| 707 Ventes | | 100 € |
+| 44571 TVA collectée | | 20 € |
+
+Le compte de transition doit être défini dans le plan comptable de la société.
+
+Un compte de subdivision tel que 5115 peut être étudié comme exemple de paramétrage, mais ne doit pas être imposé comme compte officiel obligatoire.
+
+Lors du versement par le prestataire de paiement, prévoir le rapprochement entre le montant brut encaissé, les frais du prestataire et le montant net reçu en banque.
+
+### D. Facture fournisseur de marchandises de 120 € TTC
+
+Hypothèse : achat de marchandises avec TVA à 20 %.
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| 607 Achats de marchandises | 100 € | |
+| 44566 TVA déductible | 20 € | |
+| 401 Fournisseurs | | 120 € |
+
+### E. Paiement de cette facture
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| 401 Fournisseurs | 120 € | |
+| 512 Banque | | 120 € |
+
+Ces exemples sont illustratifs. Le moteur doit appliquer les règles correspondant à la nature de l'opération, à son régime de TVA, au moyen de paiement et aux paramètres comptables de la société.
+
+## 7.5. Comptabilisation des charges
+
+Une facture d'électricité doit pouvoir générer les écritures adaptées.
+
+Une dépense payée personnellement par le dirigeant ou un salarié doit pouvoir générer une dette envers cette personne, avec le compte comptable approprié selon la situation.
+
+Lors du remboursement, cette dette est soldée et le paiement apparaît dans la trésorerie.
+
+Ne pas utiliser systématiquement le même compte pour tous les types de remboursements.
+
+## 7.6. Tables comptables à étudier
+
+Prévoir notamment :
+
+- Exercices comptables.
+- Plan comptable.
+- Comptes comptables.
+- Journaux comptables.
+- Écritures.
+- Lignes d'écritures.
+- Codes de TVA.
+- Comptes auxiliaires.
+- Axes analytiques.
+- Affectations analytiques.
+- Règles de génération comptable.
+- Liens avec les documents sources.
+- Périodes verrouillées.
+- Historiques des corrections.
+
+Les noms de tables proposés devront être adaptés à la convention de nommage déjà utilisée dans PILIQI.
+
+Toutes les tables doivent respecter l'isolation par société.
+
+## 7.7. Équilibre et intégrité des écritures
+
+Règles obligatoires :
+
+- Total débit égal au total crédit.
+- Montants enregistrés avec une précision monétaire contrôlée.
+- Numérotation cohérente.
+- Aucune double comptabilisation.
+- Idempotence des événements sources.
+- Écritures liées aux pièces justificatives.
+- Contrôle des périodes ouvertes.
+- Traçabilité de l'auteur et de la date.
+- Historique des modifications.
+
+Une écriture définitivement comptabilisée ne doit pas être supprimée ou modifiée silencieusement.
+
+Les corrections doivent utiliser des contrepassations et de nouvelles écritures reliées aux originales.
+
+Prévoir les écritures brouillon, à contrôler, validées et contrepassées.
+
+## 7.8. Comptabilité analytique par magasin
+
+Une société peut avoir plusieurs magasins.
+
+Il faut pouvoir consulter la comptabilité de la société et analyser les opérations par magasin.
+
+Prévoir des axes analytiques indépendants du plan comptable.
+
+Exemple :
+- Magasin Lyon.
+- Magasin Villeurbanne.
+- Magasin Vénissieux.
+
+Ne pas créer automatiquement une comptabilité juridique indépendante pour chaque magasin appartenant à la même société.
+
+Les sociétés juridiquement distinctes doivent conserver chacune leur propre comptabilité.
+
+---
+
+# PARTIE 8 — JOURNAL, GRAND LIVRE, BALANCE ET FEC
+
+L'expert-comptable doit pouvoir travailler directement dans PILIQI.
+
+Prévoir les fonctionnalités suivantes :
+
+## 8.1. Journaux
+
+Consulter, rechercher, filtrer, saisir et contrôler les écritures par journal et par période.
+
+## 8.2. Grand livre
+
+Afficher les écritures compte par compte, avec :
+- Date.
+- Journal.
+- Numéro de pièce.
+- Libellé.
+- Débit.
+- Crédit.
+- Solde.
+- Lien vers le justificatif.
+- Lien vers la facture ou opération d'origine.
+
+## 8.3. Balance générale
+
+Afficher les comptes et leurs totaux débit, crédit et solde.
+
+Permettre les comparaisons entre périodes et exercices.
+
+## 8.4. Comptabilité analytique
+
+Permettre les analyses par magasin, activité ou axe défini par la société.
+
+## 8.5. FEC
+
+Prévoir un véritable export Fichier des Écritures Comptables conforme aux exigences françaises applicables.
+
+Le FEC doit être produit à partir de la comptabilité complète, pas simplement à partir des factures ou des ventes.
+
+Il faudra gérer :
+- Écritures d'ouverture.
+- Ventes.
+- Achats.
+- Banque.
+- Caisse.
+- Règlements.
+- Écritures d'inventaire.
+- Amortissements.
+- Stocks.
+- Régularisations.
+- Autres écritures nécessaires.
+
+Le format, les champs obligatoires, les séquences et les contrôles doivent être vérifiés selon les textes fiscaux applicables.
+
+Ne jamais présenter un export comme FEC conforme avant d'avoir vérifié son contenu et sa conformité.
+
+---
+
+# PARTIE 9 — TABLEAU DE BORD ET GRAPHIQUES EXISTANTS
+
+Un deuxième fichier HTML existe déjà : « Graphiques du tableau de bord ».
+
+Je souhaite conserver cette organisation avec ses graphiques personnalisables.
+
+Ne pas créer un nouveau tableau de bord financier indépendant.
+
+Enrichir le tableau de bord existant avec les nouvelles informations.
+
+Prévoir notamment :
+
+- Chiffre d'affaires HT.
+- Achats HT.
+- Charges professionnelles HT.
+- Comparaison ventes et achats.
+- Évolution des charges mensuelles.
+- Répartition des charges par catégorie.
+- Charges payées et restant à payer.
+- Trésorerie disponible.
+- Entrées et sorties d'argent.
+- Prévisions de trésorerie.
+- TVA estimée et TVA comptable.
+- Impôts à payer.
+- Factures clients impayées.
+- Factures fournisseurs à payer.
+- Rémunérations et cotisations.
+- Résultat comptable, lorsque disponible.
+
+Permettre les filtres par :
+- Mois.
+- Année.
+- Exercice comptable.
+- Période personnalisée.
+- Magasin.
+- Ensemble des magasins.
+
+Conserver le système de sélection et de personnalisation des graphiques.
+
+Les données doivent provenir des véritables enregistrements de PILIQI.
+
+Ne pas conserver les données fictives ou les formules de démonstration du HTML dans le logiciel de production.
+
+Respecter les permissions de chaque utilisateur : un utilisateur ne doit pas voir un graphique basé sur des données auxquelles il n'a pas accès.
+
+---
+
+# PARTIE 10 — ESPACE CABINET COMPTABLE
+
+Cette évolution doit être compatible avec l'architecture Cabinet comptable déjà décidée pour PILIQI.
+
+Je confirme mon choix : OPTION C.
+
+Les cabinets doivent pouvoir consulter, contrôler et effectuer directement le travail comptable sur les dossiers autorisés.
+
+Prévoir :
+
+- Un espace indépendant pour chaque cabinet.
+- Des collaborateurs.
+- Des rôles.
+- Des affectations de dossiers.
+- Des mandats.
+- Des permissions par société.
+- Des permissions éventuellement limitées par magasin.
+- Un tableau de bord multi-clients.
+- L'accès aux factures.
+- L'accès aux charges.
+- L'accès aux justificatifs.
+- La gestion comptable.
+- La saisie et validation des écritures.
+- Les rapprochements.
+- Le grand livre.
+- La balance.
+- Les exports FEC.
+
+Le propriétaire de chaque société doit autoriser son cabinet et choisir les accès accordés.
+
+Un cabinet ne devient jamais propriétaire des données de ses clients.
+
+Le cabinet ne doit pas pouvoir modifier les factures commerciales originales déjà validées. Il peut effectuer des corrections comptables sans altérer la source opérationnelle.
+
+Conserver la distinction entre :
+- Comptabilité et gestion commerciale.
+- Cabinet et société cliente.
+- Collaborateur du cabinet et salarié du magasin.
+
+---
+
+# PARTIE 11 — SÉCURITÉ ET ISOLATION
+
+La sécurité est une priorité absolue.
+
+Ne pas affaiblir les protections déjà mises en place dans PILIQI v2.2.
+
+Conserver le principe :
+
+- Un compte utilisateur possède une identité globale unique.
+- Une société possède son propre espace de données.
+- Les magasins sont rattachés à leur société.
+- Un cabinet peut accéder à plusieurs sociétés uniquement par délégation.
+- Un collaborateur du cabinet n'accède qu'aux dossiers qui lui sont affectés.
+
+Conserver et renforcer TenantContext.
+
+Distinguer :
+- UserContext : utilisateur connecté.
+- CabinetContext : cabinet actif.
+- TenantContext : société active.
+- AuthorizationContext : permissions effectives.
+
+Chaque requête, téléchargement, export, traitement asynchrone et opération comptable doit vérifier le bon contexte et les droits.
+
+Prévoir des journaux d'audit pour :
+- Ajout de documents.
+- Modification de brouillons.
+- Validation.
+- Comptabilisation.
+- Contrepassation.
+- Paiement.
+- Remboursement.
+- Révocation d'un mandat.
+- Changement de permissions.
+- Export de données.
+
+Prévoir une authentification multifacteur recommandée pour les comptes de cabinet.
+
+---
+
+# PARTIE 12 — CONFORMITÉ FISCALE ET PARAMÈTRES RÉGLEMENTAIRES
+
+Il ne faut pas coder définitivement les taux fiscaux, sociaux, plafonds et barèmes dans les fonctions Laravel.
+
+Créer une architecture de paramètres réglementaires versionnés avec :
+
+- Valeur.
+- Année ou période d'application.
+- Date de début.
+- Date de fin éventuelle.
+- Référence officielle.
+- Conditions d'application.
+- Régime juridique concerné.
+- Type de société concerné.
+
+Les exemples de référence doivent être vérifiés à partir des sources officielles à la date de développement.
+
+Prévoir également les contrôles nécessaires à la conformité du logiciel de caisse : inaltérabilité, sécurisation, conservation, archivage et restitution des données lorsque les règles applicables l'exigent.
+
+La conformité caisse, la conformité comptable et la conformité FEC sont des sujets distincts.
+
+Ne pas déclarer PILIQI conforme, certifié ou attesté sans avoir réalisé les vérifications et démarches nécessaires.
+
+---
+
+# PARTIE 13 — BASE DE DONNÉES ET ARCHITECTURE LARAVEL
+
+Avant de créer de nouvelles tables, examiner :
+
+- Les tables existantes.
+- Les modèles Eloquent.
+- Les migrations.
+- Les Services.
+- Les Actions.
+- Les Policies.
+- Les middleware.
+- Les permissions.
+- Le TenantContext.
+- Les mécanismes de paiement.
+- Les factures et achats.
+- Les caisses et clôtures.
+- Les documents.
+- Les journaux d'audit.
+- Les tests existants.
+
+Identifier les données déjà disponibles et les réutiliser.
+
+Ne pas créer deux sources de vérité pour le même document, paiement, règlement ou montant.
+
+Toutes les migrations doivent être compatibles avec la base de production PostgreSQL.
+
+Ne pas compter uniquement sur les contrôles de l'interface : les protections doivent être réalisées dans Laravel et au niveau de la base de données lorsque cela est nécessaire.
+
+Prévoir les transactions SQL, les contraintes d'unicité et les mécanismes de verrouillage adaptés aux opérations financières concurrentes.
+
+La base de développement SQLite peut rester utilisée pour certains tests rapides, mais les validations critiques doivent être réalisées sur PostgreSQL.
+
+---
+
+# PARTIE 14 — TESTS OBLIGATOIRES
+
+Créer une suite de tests indépendante pour les nouveaux modules.
+
+## 14.1. Tests multi-sociétés et cabinets
+
+- Un cabinet ne voit pas un autre cabinet.
+- Un cabinet ne voit pas les sociétés non autorisées.
+- Un collaborateur ne voit pas les clients auxquels il n'est pas affecté.
+- La révocation du mandat supprime immédiatement l'accès.
+- Un changement d'identifiant ou d'URL ne permet pas de contourner les permissions.
+- Les documents restent isolés.
+- Les exports restent isolés.
+- Les traitements en arrière-plan conservent le bon contexte.
+
+## 14.2. Tests des charges
+
+- Plusieurs factures de même catégorie pendant un même mois.
+- Détection des véritables doublons.
+- Facture sans justificatif.
+- Facture avec plusieurs taux de TVA.
+- Charge payée directement par la société.
+- Charge avancée personnellement.
+- Remboursement partiel.
+- Remboursement complet.
+- Facture partiellement payée.
+- Facture payée avant le contrôle comptable.
+- Facture comptabilisée mais non payée.
+- Correction avec historique.
+
+## 14.3. Tests de trésorerie
+
+- Chaque paiement apparaît une seule fois.
+- Aucun double décaissement.
+- Les paiements partiels sont correctement calculés.
+- Les virements internes ne modifient pas le total global des disponibilités.
+- Le remboursement du capital d'un crédit est distinct des intérêts.
+- Les prévisions sont distinctes des mouvements constatés.
+- Les soldes concordent avec les mouvements enregistrés.
+
+## 14.4. Tests comptables
+
+- Débit égal crédit.
+- Absence de doubles écritures.
+- Numérotation cohérente.
+- Calcul correct de la TVA.
+- Gestion des arrondis.
+- Gestion des avoirs.
+- Gestion des remboursements.
+- Gestion des comptes auxiliaires.
+- Rapprochements bancaires.
+- Concordance journaux/grand livre/balance.
+- Gestion des exercices.
+- Verrouillage des périodes.
+- Corrections par contrepassation.
+
+## 14.5. Tests FEC
+
+- Présence de tous les champs obligatoires.
+- Respect du format réglementaire.
+- Séquences cohérentes.
+- Absence d'écritures manquantes.
+- Équilibre des écritures.
+- Exhaustivité de la période.
+- Présence des écritures d'ouverture et d'inventaire requises.
+- Restitution fidèle de la comptabilité.
+
+## 14.6. Tests de charge et concurrence
+
+Tester plusieurs sociétés et plusieurs cabinets travaillant simultanément.
+
+Vérifier notamment que les opérations de vente, paiement, validation comptable, rapprochement et génération des écritures ne créent aucun doublon, aucune perte de données et aucune fuite inter-tenant.
+
+Les tests critiques doivent être exécutés sur PostgreSQL.
+
+---
+
+# PARTIE 15 — MÉTHODE DE DÉVELOPPEMENT DEMANDÉE
+
+Je ne souhaite pas que tu commences immédiatement à créer toutes les fonctionnalités.
+
+Je demande la démarche suivante.
+
+### Étape 1 — Audit complet
+
+Examiner le PILIQI v2.2 existant.
+
+Étudier particulièrement :
+- Charges et TVA.
+- Achats.
+- Ventes.
+- Facturation.
+- Caisse.
+- Paiements.
+- Trésorerie éventuellement existante.
+- Graphiques.
+- Permissions.
+- Espace cabinet.
+- TenantContext.
+- Base de données.
+
+### Étape 2 — Rapport d'écarts
+
+Présenter clairement :
+
+- Ce qui existe déjà.
+- Ce qui fonctionne déjà.
+- Ce qui doit être conservé.
+- Ce qui doit être amélioré.
+- Ce qui manque.
+- Ce qui risque de faire doublon.
+- Les risques techniques.
+- Les conséquences sur les migrations et les données existantes.
+
+Ne pas supposer qu'une fonction n'existe pas sans avoir inspecté le code.
+
+### Étape 3 — Architecture détaillée
+
+Produire :
+
+1. Architecture fonctionnelle complète.
+2. Schéma de base de données.
+3. Relations entre les sociétés, magasins, cabinets et utilisateurs.
+4. Architecture du moteur comptable.
+5. Plan comptable et versionnement.
+6. Configuration des journaux.
+7. Matrice des permissions.
+8. Circuit des factures et charges.
+9. Circuit des paiements et remboursements.
+10. Circuit de génération des écritures.
+11. Architecture de trésorerie.
+12. Architecture fiscale.
+13. Plan de tests complet.
+
+### Étape 4 — Validation de la conception
+
+Présenter les décisions techniques et les conséquences de chaque choix avant de modifier les fondations existantes.
+
+Ne pas poser de nouveau des questions dont les réponses existent déjà dans les décisions du projet.
+
+Lorsque des détails techniques manquent, proposer la solution la plus cohérente et expliquer les hypothèses.
+
+### Étape 5 — Développement progressif
+
+Développer par lots indépendants.
+
+Chaque lot doit comporter :
+- Migrations.
+- Modèles.
+- Services.
+- Actions.
+- Policies.
+- Interfaces.
+- Tests.
+- Vérifications de sécurité.
+- Vérifications PostgreSQL.
+
+Ne pas modifier inutilement les modules déjà validés.
+
+### Étape 6 — Audit indépendant
+
+Faire vérifier les nouvelles fonctionnalités par des tests indépendants.
+
+Contrôler l'isolation des données, l'intégrité de la comptabilité, les paiements, les écritures, les exports et la concurrence.
+
+Ne pas considérer un lot comme terminé simplement parce que les pages affichent correctement les informations.
+
+---
+
+# RÉSULTAT FINAL ATTENDU
+
+Je souhaite que PILIQI devienne un véritable environnement de gestion commerciale, financière et comptable.
+
+Un commerçant utilise PILIQI pour :
+- Gérer ses magasins.
+- Effectuer ses ventes.
+- Gérer ses achats.
+- Enregistrer ses charges.
+- Suivre sa trésorerie.
+- Suivre ses impôts.
+- Connaître sa situation financière.
+
+Son expert-comptable utilise le même PILIQI pour :
+- Consulter les opérations.
+- Contrôler les justificatifs.
+- Contrôler les paiements.
+- Comptabiliser les opérations.
+- Gérer les journaux.
+- Effectuer les rapprochements.
+- Consulter le grand livre.
+- Consulter les balances.
+- Analyser les résultats.
+- Produire le FEC.
+
+Toutes les informations doivent circuler correctement entre les modules, sans double saisie et sans double comptabilisation.
+
+**Principe fondamental : une opération est saisie une seule fois, conservée dans sa source d'origine, puis réutilisée par les différents modules selon les règles comptables, fiscales et financières applicables.**
+
+La sécurité, l'isolation des sociétés, l'intégrité des factures, de la caisse et de la comptabilité restent prioritaires sur toute nouvelle fonctionnalité.  MAIS comme d'habitude tu me montre les modèles afin que je puisse voir comment ressemble et que tu construis selon le modele choisi par moi.
+
+## 632. 2026-11-27 23:29 UTC
+
+normalement le credit du tva doit se calculer comme tresorie, non?
+
+## 633. 2026-11-28 10:08 UTC
+
+ecoute, je vais te donner des nouveaux chose à faire, et toi tu fait avec opus 5.5 effort extra en ultracode maiiiiss si toi tu vois que c 'est mieux avec effort max alors fait comme tu veux mais si c'est la meme chose avec effort extrat comme max alors tu fait effort extra. La 1ere: "TVA27 laisse choisir le trimestriel en 2026 avec le seul seuil de 1 100 000 €, et son aide dit que le régime simplifié « n'existe plus depuis le 1er janvier 2027 ». Faut-il ajouter, pour 2026, la règle des 4 000 € de TVA par an ?Mon conseil : oui, jusqu'au 31/12/2026, et écrire l'aide au futur jusqu'à cette date. mais moi je dit non car le logiciel sera en production que en 2027 mais tu vois mieux que moi". La 2eme: "et pour le demande de remboursement de credit de tva à l etat! alors si par ex: l etat refuse de lui donne la tva alors tu doit laisser l option d annuler la demande et de retourner la tva pour calculer sur piliqi car peut etre cette tva sera deja utiliser comme credit du mois pour reduire la tva. donc tu regarde si on peut laisser cette option ou pas selon les lois ou regles, et si les regles ne parle pas alors moi je pense que c est mieux de pouvoir retourner le credit sur piliqi pour recalculer avec la tva du mois. donc si on permet d annuler la demande alors peut sera mieux pour la societe et le comptable.". La 3eme: "peut etre il faut creer un menu "Les frais" donc les frais de la societe comme ( Tenue comptable + Bilan + TVA,Fiches de paie (si vous vous rémunérez), Déclaration sociale annuelle du dirigeant,Option versement de dividendes (AG annuelle) ) ou (Frais de fonctionnement dont, Cotisations sociales sur rémunération, Rémunération nette versée, Bénéfice imposable (avant IS), Dividendes bruts distribués, Cotisations sociales TNS sur dividendes,Impôt sur le revenu sur dividendes,Flat Tax (31,4 % en 2026) ) ou un autre menu " Tresorie" de la societe. ou peut etre les frais entre dans les charges ou peut etre qu'une partie une entre dans les frais? je te laisse toi voir tres serieux et attentivement. tu vois la tresorie de la societe pour voir et calculer tout son argent avec ses depenses dans l'année en cours ou par moi ou par année, donc pareille pour les frais si tu decide de laisser à part mais malgre tout je crois que les charges entre dans les frais et la tresorie car les chareges dimunue la treasorie de la societe. donc tu cherche les info exacte sur internet et aplique comme par exemple : 15% sur 42500€ et 25% au dela. 1. Les frais de structure et obligations (Incompressibles)
+Ce sont les frais obligatoires pour faire tourner la société :
+
+* L'expert-comptable : Entre 1 200 € et 2 500 € HT par an (en ligne ou en cabinet physique). C'est quasi indispensable pour le bilan annuel et les fiches de paie.
+* La banque professionnelle : Environ 10 € à 30 € HT par mois (soit 120 € à 360 €/an).
+* Les assurances professionnelles : La Responsabilité Civile Professionnelle (RC Pro) et éventuellement la mutuelle/prévoyance du dirigeant (environ 300 € à 1 000 €/an selon le métier).
+* La domiciliation : Si vous passez par une société de domiciliation pour ne pas mettre votre adresse personnelle sur les documents publics (environ 300 € à 600 €/an).
+
+2. Le matériel, les fournitures et les logiciels
+
+* Matériel informatique et bureautique : Ordinateur, téléphone portable, écrans, clavier, imprimante, mobilier de bureau (fauteuil ergonomique, bureau). Note : Au-dessus de 500 € HT, le matériel est « amorti » (déduit sur plusieurs années, généralement 3 ans pour un ordinateur).
+* Logiciels et abonnements numériques : Suite Microsoft/Google, logiciels métiers (Adobe, CRM, outils IA), hébergement web, nom de domaine.
+* Télécom : Votre forfait mobile et votre abonnement internet (à 100 % si ligne pro dédiée, ou au prorata de l'usage pro si ligne mixte).
+
+3. Les déplacements et le véhicule
+Vous avez deux façons de déduire vos déplacements professionnels (rendez-vous clients, déplacements sur chantier, salons) :
+
+* Les Indemnités Kilométriques (IK) : Vous utilisez votre voiture personnelle. La société vous rembourse chaque kilomètre professionnel selon un barème officiel de l'État (en fonction de la puissance fiscale du véhicule et de la distance). Cet argent vous est versé sans impôt ni charges sociales, et est déduit des bénéfices
+* Les frais réels de transport : Billets de train, d'avion, tickets de métro, péages, parkings, et frais d'hôtel lors de déplacements professionnels. (Attention : les trajets domicile-bureau ne sont généralement pas déductibles, sauf exceptions).
+
+4. Les repas et réceptions
+
+* Repas pris seul lors d'un déplacement pro : Si vous ne pouvez pas rentrer chez vous le midi à cause de l'éloignement de votre lieu de travail, vous pouvez déduire la différence entre le prix du restaurant (plafonné autour de 21 € en 2026) et le coût d'un repas à domicile (évalué forfaitairement autour de 5,50 €). Soit environ 15 € déductibles par repas.
+* Repas d'affaires (avec un client, prospect ou partenaire) : Déductibles à 100 % sans plafond strict (tant que cela reste raisonnable). Il faut impérativement noter au dos du ticket de caisse le nom et l'entreprise de vos invités pour le justifier en cas de contrôle fiscal.
+
+5. Le bureau à domicile (Loyer et charges)
+Si vous travaillez depuis chez vous et que vous n'avez pas de local commercial :
+
+* Vous pouvez facturer un loyer à votre SASU,sarl etc correspondant à la surface occupée par votre bureau (ex : si votre bureau fait 10 m² dans un appartement de 50 m², la societe peut payer 20 % de votre loyer, de votre électricité, de votre chauffage et de votre assurance habitation).
+* Attention : Les loyers que vous percevez personnellement devront être déclarés dans vos revenus fonciers personnels.
+
+6. La formation, le conseil et la prospection
+
+* Formations professionnelles liées à votre activité, livres techniques, abonnements à la presse spécialisée.
+* Publicité et marketing : Création de site internet, cartes de visite, publicités en ligne (Google Ads, LinkedIn), cadeaux d'affaires offerts aux clients (avec un plafond autour de 73 € TTC par an et par client pour récupérer la TVA).
+* Frais juridiques ou de recrutement : Avocats, sous-traitants, freelances qui travaillent pour vous.
+
+Les 3 règles d'or pour qu'un frais soit accepté par le fisc
+
+1. L'intérêt de l'entreprise : La dépense doit servir à faire gagner de l'argent à la societe. Tout achat personnel (vêtements du quotidien, courses alimentaires personnelles, vacances) est strictement interdit et constitue un abus de biens sociaux (lourdement sanctionné).
+2. Une facture conforme : Un simple ticket de carte bleue ne suffit pas. Il faut une facture libellée au nom de la societe (et non nom personnel), faisant apparaître le montant HT, le taux de TVA et le montant TTC.
+3. La proportionnalité : Les frais doivent rester cohérents avec votre chiffre d'affaires. Déclarer 40 000 € de restaurants pour 90 000 € de CA déclenchera immédiatement un contrôle fiscal.
+
+Exemple concret de répartition des 10 000 € de frais annuels
+Pour un indépendant (consultant, développeur, prestataire) qui fait 90 000 € de CA, 10 000 € de frais annuels correspond typiquement à :
+
+* Expert-comptable + banque + assurances : 2 500 €
+* Téléphone + Internet + Logiciels/Abonnements : 1 500 €
+* Amortissement d'un ordinateur + matériel bureau : 1 200 €
+* Indemnités kilométriques / Transports / Repas d'affaires : 3 000 €
+* Quote-part loyer/électricité bureau à domicile : 1 800 €
+* Total = 10 000 € HT (qui sortent du compte de la société sans impôt)." mais tu compare avec la 5eme ce que je te dis pour la 3em. La 4eme: "la TVA sur les prestations de services est généralement exigible à l'encaissement, sauf option pour les débits, tandis que la TVA sur les livraisons de biens est généralement exigible lors de la livraison. De plus, la déduction de TVA obéit à ses propres conditions et à des dates d'exigibilité précises.  ==  L’article 206 de l'annexe II du CGI fixe la part exacte de TVA qu'une entreprise peut récupérer sur un achat (le coefficient de déduction) [Fin de la mise en surbrillance] . LegifranceDans la majorité des cas, ce coefficient vaut 1 (100 % de TVA récupérable). Lorsqu'une entreprise exerce des activités mixtes ou achète certains biens réglementés, ce coefficient est inférieur à 1 et se calcule en multipliant trois facteurs compris entre 0 et 1. Assistance-juridique.fr +11. Les 3 composantes du coefficient de déductionCoefficientCe qu'il mesureValeurs possibles1. Assujettissement (BOI-TVA-DED-20-10-10)Utilisation professionnelle imposable. Proportion dans laquelle le bien ou service sert à réaliser des opérations situées dans le champ d'application de la TVA (par opposition à un usage privé ou hors champ TVA, comme certaines subventions ou dividendes).1 : 100 % dans le champ de la TVA0 : 100 % hors champEntre 0 et 1 : usage mixte (ex. : surface en m² ou temps d'utilisation)2. Taxation (BOI-TVA-DED-20-10-20)Droit effectif à déduction. Parmi les opérations dans le champ de la TVA, proportion de celles qui sont effectivement taxées (et non exonérées sans droit à déduction, comme l'activité médicale, l'enseignement ou certaines opérations bancaires).1 : affecté uniquement à des opérations ouvrant droit à déduction0 : affecté uniquement à des opérations exonéréesEntre 0 et 1 : usage mixte (calculé selon le rapport du chiffre d'affaires annuel HT taxé sur le CA total)3. Admission (BOI-TVA-DED-20-10-30)Restrictions légales sur le bien. Limite fixée par la loi fiscale selon la nature de la dépense, indépendamment de l'activité de l'entreprise.1 : aucune exclusion légale (cas général)0 : exclusion totale (véhicules de tourisme, cadeaux > 73 € TTC, logements gratuits hors gardiennage)0,80 : cas particulier de l'essence et du gazole pour véhicules de tourisme (80 % déductibles)2. Règle de calcul et d'arrondiLa formule officielle prévue au I et au V de l'article 206 est la suivante : \[\text{Coefficient\ de\ déduction}=\text{Assujettissement}\times \text{Taxation}\times \text{Admission}\]Règle d'arrondi obligatoire : Chacun des trois coefficients, ainsi que le produit final, doit être arrondi par excès à la deuxième décimale (au centième supérieur). Par exemple, 0,384 devient 0,39. impots.gouv.frCaractère provisoire puis définitif : En cours d'année, l'entreprise utilise des coefficients provisoires basés sur l'année précédente. Elle doit arrêter les coefficients définitifs avant le 25 avril de l'année suivante et régulariser l'écart éventuel. Revue Fiduciaire +13. Exemple concret chiffréPrenons une société qui achète du carburant (gazole) pour un véhicule de tourisme utilisé à la fois pour ses activités professionnelles et pour une activité hors champ de la TVA. La facture comporte 200 € de TVA. Université Côte d'Azur +1Coefficient d'assujettissement : Le véhicule sert à 80 % pour l'activité économique dans le champ de la TVA et 20 % hors champ \[\rightarrow \]⁠ 0,80.Coefficient de taxation : L'entreprise réalise 60 000 € de CA soumis à TVA et 40 000 € de CA exonéré (soit 100 000 € au total). Le rapport est de \(60\,000 / 100\,000\) \[\rightarrow \]⁠ 0,60.Coefficient d'admission : Pour du gazole utilisé dans un véhicule de tourisme, la loi limite la déduction à 80 % \[\rightarrow \]⁠ 0,80. Université Côte d'Azur +1sn._setImageSrc('[jeton retiré]','data:image\/png;base64,[jeton retiré]\/\/\/+UraU1jrL\/36\/\/2qHE0s2pvbeuwLrFz8ayxL7\[jeton retiré]\/Hwz5SMtLqIvNLC3ejKzLqqxMa3zMz\/+fHCxa\/\/9eVZnrb\/zoT\/58KBrrn\/1ZZ9lmNJAAAAgklEQVQImX3NywKCIBSE4TmiZpBKF5XoKoFRvf\/7BeiqRbP7NvNDbGo0bSaz7Y7l2FNx6GQ\/SKmOOkh0JwDnQdEFJV1viLsrGqOaJBhaBZkZEEmPRdWP1n8VeovGpGqGdUGK3JTEXPh8kvM24KVjQb4d5\[jeton retiré]\x3d\x3d')Calcul final : Produit brut : \(0,80 \times 0,60 \times 0,80 = 0,384\)Arrondi au centième supérieur : 0,39TVA déductible : \(200\text{ €} \times 0,39 =\) 78 € (les 122 € restants constituent une charge non récupérable). impots.gouv.frsn._setImageSrc('[jeton retiré]','data:image\/png;base64,[jeton retiré]\/\/\/\[jeton retiré]\[jeton retiré]\[jeton retiré]\/Zb055ZIBT8tr00HLATEy7vQLoNm2VOrhjRwAcB0q7DTC9FzPrEQFDVruuV11hxjgcMlH4YGPOHofBxEeBtkZ7F5nBTB2jz084zVSOWYeAXe0RIEUBq1GC4dUjvPXA9CSDzBjTX4NsQjIYR00Inq5iSw5528ivPK2NIR1rdnl5qDaIodA3TGzpmHCeNAfSw3iESQ\/1vjQVQGJEbQ\[jeton retiré]\/9CMeV1o\/s6i38JXMkfEBoTtlkZHKsAAAAASUVORK5CYII\x3d')Si vous souhaitez appliquer ce texte à votre situation, indiquez-moi :La nature de la dépense concernée (véhicule, carburant, matériel informatique, local, etc.)La répartition de votre chiffre d'affaires (activité taxée, exonérée ou hors champ TVA). == Voici un autre cas concret : l'achat d'un serveur informatique (5 000 € HT, soit 1 000 € de TVA à 20 %) par une entreprise ayant une activité mixte et un usage partiellement privé/hors champ. 1. Détermination des 3 coefficientsComposanteSituation de l'entrepriseCalcul et valeur retenue1. Coefficient d'assujettissementLe serveur héberge à 70 % les outils des activités économiques de la société (dans le champ de la TVA) et à 30 % la gestion d'une activité patrimoniale hors champ TVA (perceptions de dividendes).0,702. Coefficient de taxationParmi les activités dans le champ de la TVA, l'entreprise réalise 150 000 € HT de prestations de conseil (soumises à TVA) et 50 000 € de formations professionnelles exonérées sans droit à déduction (soit 200 000 € au total).\(\frac{150\,000}{200\,000} =\) 0,753. Coefficient d'admissionLe matériel informatique ne fait l'objet d'aucune restriction légale particulière d'exclusion.1,002. Calcul de la TVA récupérableProduit brut : 0,70 × 0,75 × 1,00 = 0,525Coefficient de déduction (arrondi au centième supérieur) : 0,53TVA déductible : 1 000 € × 0,53 = 530 €TVA non déductible : 1 000 € - 530 € = 470 € (ce montant est intégré au coût d'acquisition comptable du serveur et amorti avec lui). == Voici un troisième exemple illustrant à la fois l'impact d'un coefficient d'admission nul (0) sur un véhicule de tourisme et le mécanisme de régularisation annuelle sur un bien d'équipement. Cas A : Achat d'un véhicule de tourisme (Coefficient d'admission = 0)Une société de conseil (100 % soumise à la TVA) achète un véhicule de tourisme à 30 000 € HT, soit 6 000 € de TVA (20 %). ComposanteSituation de l'entrepriseValeur retenue1. Coefficient d'assujettissementLe véhicule est utilisé exclusivement pour les besoins de l'activité professionnelle dans le champ de la TVA.1,002. Coefficient de taxationL'entreprise ne réalise que des opérations soumises à la TVA.1,003. Coefficient d'admissionLa loi exclut totalement du droit à déduction les véhicules conçus pour le transport de personnes (sauf exceptions : taxis, auto-écoles, loueurs, etc.).0Calcul : 1,00 × 1,00 × 0 = 0TVA déductible : 0 € (même si l'entreprise est 100 % assujettie et taxée, la loi bloque toute récupération ; le véhicule est comptabilisé pour son montant TTC de 36 000 €). Cas B : Régularisation annuelle d'une immobilisation (Année N+1)Reprenons l'exemple précédent du serveur informatique (1 000 € de TVA) acheté en année N, pour lequel l'entreprise avait déduit 530 € sur la base d'un coefficient provisoire de 0,53. Avant le 25 avril de l'année N+1, l'entreprise calcule ses chiffres d'affaires définitifs pour l'année N : Coefficient d'assujettissement définitif : inchangé à 0,70.Coefficient de taxation définitif : l'activité soumise à TVA a été plus élevée que prévu (170 000 € HT sur 200 000 €), soit \(\frac{170\,000}{200\,000} =\) 0,85.Coefficient d'admission : 1,00. Calcul de la régularisation : Nouveau coefficient définitif : 0,70 × 0,85 × 1,00 = 0,595, arrondi par excès à 0,60.TVA réellement déductible : 1 000 € × 0,60 = 600 €.Complément de déduction : 600 € - 530 € = 70 € que l'entreprise peut récupérer en plus sur sa déclaration de TVA. == Pour un magasin de téléphonie ayant cette activité mixte, le coefficient de déduction global est de 1 (100 %), mais avec une interdiction spécifique de déduire la TVA sur les téléphones revendus sous le régime de la marge (article 297 D du CGI). En effet, la vente sous le régime de la TVA sur la marge n'est pas une opération exonérée ni hors champ : c'est une opération imposable qui ouvre droit à déduction. Elle ne pénalise donc pas vos autres dépenses (loyer, électricité, outillage, pièces détachées). 1. Calcul du coefficient de déduction du magasinActivité / DépenseAssujettissementTaxationAdmissionCoefficient finalConséquence pratiqueRéparation & vente de pièces (TVA normale)1111,00Vous récupérez 100 % de la TVA sur les pièces, écrans, batteries et outils.Frais généraux du magasin (loyer, caisse, électricité, pub)1111,00Vous récupérez 100 % de la TVA. La TVA sur marge ne réduit pas le coefficient de taxation.Achat d'un téléphone destiné à être revendu sur marge110 (règle spéciale art. 297 D)0Vous ne pouvez pas déduire la TVA qui aurait éventuellement grevé l'achat de ce téléphone (en pratique, vous l'achetez généralement à un particulier sans TVA).2. Exemple chiffré sur un mois d'activitéSupposons que votre magasin réalise les opérations suivantes sur un mois : A. Vos achats (TVA déductible) Pièces détachées neuves (écrans, batteries) : 2 000 € HT + 400 € de TVA → Coefficient 1 → 400 € déductibles.Frais généraux (loyer, logiciel, électricité) : 1 500 € HT + 300 € de TVA → Coefficient 1 → 300 € déductibles.Rachat de 5 smartphones d'occasion à des particuliers : 1 000 € TTC (pas de TVA facturée par le particulier, et aucune TVA déductible).Total TVA déductible : 400 + 300 = 700 €. B. Vos ventes (TVA collectée à reverser) Réparations et vente de pièces : 6 000 € HT → TVA à 20 % = 1 200 €. Revente des 5 smartphones d'occasion (TVA sur marge) : Vendus 1 600 € TTC au total.Marge TTC : 1 600 € - 1 000 € = 600 €.Marge HT : 600 / 1,20 = 500 €.TVA collectée sur la marge : 500 € × 20% = 100 € (sur la facture client, vous ne faites pas apparaître de TVA et indiquez « Régime particulier - Biens d'occasion »). Total TVA collectée : 1 200 + 100 = 1 300 €. C. Résultat à payer à l'État \[\text{TVA à payer}=1\,300\text{ € (collectée)}-700\text{ € (déductible)}=\mathbf{600}\text{ €}\]Point de vigilance : pièces détachées utilisées sur un téléphone d'occasionSi vous utilisez une pièce neuve (sur laquelle vous avez récupéré la TVA à 100 %) pour réparer un téléphone d'occasion avant de le revendre sur marge, vous conservez le droit de déduire la TVA sur la pièce détachée. En revanche, le coût de cette pièce ne peut pas être ajouté au prix d'achat du téléphone pour diminuer votre marge imposable.  == expliqué en detailRéponse du Mode IA pour En revanche, le coût de cette pièce ne peut pas être ajouté au prix d'achat du téléphone pour diminuer votre marge imposable. et tu m explique en detailEn régime de TVA sur la marge,  [Début de la mise en surbrillance] la marge imposable se calcule uniquement par différence entre le prix de vente du téléphone et son prix d'achat initial auprès du fournisseur ou particulier [Fin de la mise en surbrillance]  (article 297 A du CGI). Vous ne pouvez donc pas intégrer les frais de remise en état (pièces détachées, main-d'œuvre) dans le coût d'achat pour réduire l'assiette de la TVA, mais vous récupérez en contrepartie 100 % de la TVA sur ces pièces. Cette règle fiscale évite que vous ne bénéficiez d'un double avantage (déduire la TVA sur la pièce et réduire la TVA due sur la vente du téléphone). 1. Exemple chiffré : revente d'un iPhone reconditionnéSupposons l'opération suivante : Rachat d'un téléphone cassé à un particulier : 200 € (sans TVA).Achat d'un écran neuf chez votre fournisseur : 50 € HT + 10 € de TVA (soit 60 € TTC).Revente du téléphone réparé à un client : 380 € TTC. Étape A : Ce que vous faites sur la pièce détachée (Écran) Vous récupérez normalement les 10 € de TVA sur votre déclaration de TVA (coefficient de déduction = 1).Le coût réel de l'écran pour votre comptabilité est donc de 50 € HT. Étape B : Comment calculer la TVA sur la marge lors de la revente ÉlémentCalcul conforme à la loiErreur fréquente (interdite)Prix de vente TTC380 €380 €Prix d'achat retenu200 € (uniquement le rachat du téléphone)250 € (200 € + 50 € d'écran)Marge TTC imposable380 € - 200 € = 180 €380 € - 250 € = 130 €Marge HT180 € / 1,20 = 150 €130 € / 1,20 = 108,33 €TVA à reverser (20 %)150 € × 20 % = 30 €108,33 € × 20 % = 21,67 €2. Bilan global de l'opération pour votre magasinEn appliquant la règle légale : TVA collectée sur la vente : 30 €TVA déduite sur l'écran : - 10 €TVA nette payée à l'État : 20 € Pourquoi est-ce logique fiscalement ?La valeur ajoutée réelle créée par votre magasin (votre marge commerciale nette avant impôt) est de :\[\text{Vente\ (380 € TTC)}-\text{Achat\ téléphone (200 €)}-\text{Écran HT (50 €)}=\mathbf{130}\text{ € TTC}\]Si l'on décompose ces 130 € TTC de marge économique réelle, ils correspondent à 110 € de bénéfice HT et 20 € de TVA (soit exactement les 30 € collectés moins les 10 € récupérés sur la pièce). Si vous aviez ajouté l'écran au prix d'achat du téléphone, vous auriez déduit deux fois l'impact de cet écran. 3. Règle comptable et facturation à respecterSur la facture client : Vous indiquez uniquement le prix total (380 €) sans faire ressortir la TVA, avec la mention obligatoire : « Régime particulier – Biens d'occasion – Article 297 A du CGI ». Suivi du stock : Vous devez tenir un registre (livre de police / suivi lot par lot) justifiant le prix d'achat exact de chaque téléphone (200 €) afin de prouver le calcul de la marge en cas de contrôle fiscal. === ce que je t ai donné est ce que tu as deja appliquer ces regles ou pas?? ou c est le comptable qui aplique dans les charge le coeficient pour la charge? alors est ce que tu as mis l'option pour appliquer le coef?". La 5eme: "# CAHIER DES CHARGES — ÉVOLUTION FINANCIÈRE ET COMPTABLE DE PILIQI 
+
+## Objectif général
+
+Je souhaite faire évoluer PILIQI pour en faire un véritable logiciel de gestion financière et comptable destiné aux commerçants, dirigeants et experts-comptables.
+
+PILIQI doit permettre à une entreprise de gérer son activité commerciale, ses dépenses, sa trésorerie, ses obligations fiscales et sa comptabilité au même endroit.
+
+Je souhaite également que les cabinets comptables puissent travailler directement dans PILIQI pour leurs différentes sociétés clientes, consulter leurs opérations, effectuer les contrôles et réaliser le travail comptable.
+
+Cette évolution doit respecter entièrement l'architecture existante de PILIQI, notamment le fonctionnement multi-sociétés, multi-magasins, les permissions et l'isolation des données.
+
+**IMPORTANT : avant toute modification du code, regarde le code existant. Ne pas créer de doublons et ne pas casser les fonctionnalités déjà développées et testées.**
+
+---
+
+# PARTIE 1 — ORGANISATION DES MENUS
+
+## 1.1. Organisation générale
+
+Je souhaite organiser les fonctionnalités financières dans une section « Finances de la société ».
+
+Les menus à prévoir sont :
+
+1. Trésorerie.
+2. Charges,(mais les charge tu laisse comme tu as laisser mtn, donc le menu separement car c'est besion de voir separement, mais aux endroit ou doit se calculer alors tu calcule comme demandé et si besoin tu ajoute des fonctionalité mtn car j'ai mtn bcp de nouveaux fonctionalié, et tu fais pareille pour le menu TVA).
+3. Fiscalité et déclarations.
+4. Rémunérations et cotisations sociales.
+5. Associés et dividendes.
+
+Le menu existant « Tableau de bord de la société » doit être conservé et enrichi avec les nouveaux indicateurs financiers.
+
+**Ne pas créer un deuxième tableau de bord appelé « Vue financière ».**
+
+Le tableau de bord actuel doit rester le point central permettant au dirigeant et aux personnes autorisées de visualiser la situation générale de la société.
+
+## 1.2. Un seul menu « Charges de la société »
+
+Je ne souhaite pas créer deux menus séparés « Charges » et « Frais ».
+
+Toutes les dépenses professionnelles de la société doivent être regroupées dans un seul menu : **Charges de la société**.
+
+Cela comprend :
+
+- Les factures adressées directement à la société.
+- Les dépenses de fonctionnement.
+- Les dépenses professionnelles payées directement par la société.
+- Les dépenses professionnelles avancées personnellement par le dirigeant.
+- Les dépenses professionnelles avancées personnellement par les collaborateurs et salariés.
+
+Les notes de frais constituent donc un type particulier de dépense à l'intérieur du même module. Ne pas créer un deuxième module indépendant.
+
+Prévoir des filtres permettant de distinguer :
+- Factures fournisseurs de charges.
+- Dépenses avancées personnellement.
+- Charges payées.
+- Charges partiellement payées.
+- Charges à payer.
+- Charges à contrôler.
+- Charges comptabilisées.
+
+Il faut conserver une présentation simple pour les commerçants et suffisamment complète pour les comptables.
+
+---
+
+# PARTIE 2 — MODULE « CHARGES DE LA SOCIÉTÉ »
+
+## 2.1. Réutiliser la page existante
+
+Une page HTML intitulée « Charges et TVA réelle » a déjà été préparée.
+
+Je souhaite conserver sa logique générale :
+
+- Tableau des types de charges par mois.
+- Liste détaillée des pièces enregistrées.
+- Bouton « Ajouter une charge ».
+- Formulaire de dépôt de justificatifs.
+- Montants HT, TVA et TTC.
+- Contrôle par le comptable.
+- Détection des doublons.
+- Historique des opérations.
+
+Ne pas recommencer cette page inutilement. Auditer le prototype et l'intégrer proprement dans PILIQI.
+
+## 2.2. Catégories de charges
+
+Prévoir une liste initiale de catégories, configurable par société.
+
+### A. Frais de structure et fonctionnement
+
+- Expert-comptable.
+- Tenue comptable.
+- Bilan annuel.
+- Conseils comptables.
+- Frais bancaires.
+- Assurances professionnelles.
+- Responsabilité civile professionnelle.
+- Domiciliation.
+- Loyers et charges locatives.
+- Électricité.
+- Gaz.
+- Eau.
+- Téléphone.
+- Internet.
+
+### B. Matériel et fournitures
+
+- Matériel informatique.
+- Ordinateurs.
+- Téléphones utilisés par l'entreprise.
+- Écrans.
+- Imprimantes.
+- Mobilier.
+- Fournitures de bureau.
+- Matériel professionnel.
+- Entretien et réparations.
+
+Prévoir une distinction entre charge directement déductible et immobilisation amortissable selon les règles applicables.
+
+### C. Logiciels et services numériques
+
+- Logiciels.
+- Abonnements numériques.
+- Hébergement web.
+- Noms de domaine.
+- Outils de gestion.
+- Services IA.
+- CRM.
+- Services informatiques.
+
+### D. Déplacements professionnels
+
+- Indemnités kilométriques.
+- Frais de carburant.
+- Train.
+- Avion.
+- Péages.
+- Stationnement.
+- Parking.
+- Hôtel.
+- Transport professionnel.
+
+Distinguer véhicule personnel et véhicule de société.
+
+### E. Repas et réceptions
+
+- Repas professionnels.
+- Repas avec clients.
+- Repas avec fournisseurs.
+- Réceptions professionnelles.
+- Invitations professionnelles.
+
+Prévoir le motif professionnel, les personnes invitées et les justificatifs.
+
+### F. Bureau et travail à domicile
+
+- Quote-part professionnelle du loyer.
+- Électricité.
+- Chauffage.
+- Internet.
+- Assurance.
+- Autres dépenses réellement professionnelles.
+
+Ne pas calculer automatiquement une déduction sur la seule base de la surface occupée. Le traitement doit être justifié et validé selon la situation juridique et fiscale.
+
+### G. Formation et développement commercial
+
+- Formation professionnelle.
+- Conseil.
+- Avocats.
+- Prestations externes.
+- Sous-traitance.
+- Publicité.
+- Marketing.
+- Site Internet.
+- Communication.
+- Prospection.
+- Cadeaux professionnels.
+
+### H. Dépenses avancées personnellement (notes de frais)
+
+Ces dépenses restent dans le même module.
+
+Exemples :
+- Un dirigeant paie un repas professionnel avec son argent personnel.
+- Un salarié utilise sa voiture personnelle pour se déplacer chez un client.
+- Un collaborateur paie un billet de train.
+- Un dirigeant achète personnellement des fournitures nécessaires à l'entreprise.
+
+PILIQI doit enregistrer la dépense, identifier la personne ayant avancé l'argent, conserver le justificatif et suivre le remboursement éventuel.
+
+Une fois la dépense acceptée, elle peut générer une dette de remboursement envers la personne concernée. Lors du remboursement, le mouvement correspondant est enregistré dans la trésorerie.
+
+Ne pas confondre cette situation avec une dépense payée directement par le compte bancaire de la société.
+
+## 2.3. Formulaire « Ajouter une charge »
+
+Conserver le formulaire existant et le compléter.
+
+Informations à prévoir :
+
+- Justificatif PDF, JPEG ou PNG.
+- Type de charge.
+- Catégorie.
+- Fournisseur.
+- Numéro de facture.
+- Date de facture.
+- Date d'échéance.
+- Période concernée.
+- Période fiscale ou TVA applicable.
+- Société concernée.
+- Magasin concerné, facultatif.
+- Personne ayant effectué l'avance, si applicable.
+- Mode de paiement.
+- Compte comptable.
+- Montant HT.
+- Taux de TVA.
+- Montant de TVA facturée.
+- Montant de TVA déductible.
+- Montant TTC.
+- Montant payé.
+- Montant restant à payer.
+- Justificatif et observations.
+
+Autoriser plusieurs taux de TVA sur une même facture.
+
+Les calculs automatiques doivent être contrôlables et modifiables selon les montants réellement mentionnés sur la pièce.
+
+Prévoir la possibilité d'ajouter des catégories personnalisées.
+
+## 2.4. Présentation par mois
+
+Conserver le principe du tableau des charges par type et par mois.
+
+Cependant, corriger une limite du prototype actuel : plusieurs factures peuvent exister pour une même catégorie au cours du même mois.
+
+Il ne faut pas qu'une nouvelle facture écrase une précédente.
+
+Chaque cellule de la matrice doit pouvoir afficher par exemple :
+
+- 3 pièces enregistrées.
+- 2 pièces payées.
+- 1 pièce à payer.
+- Montant total du mois.
+
+En cliquant sur une cellule, l'utilisateur accède à toutes les pièces concernées.
+
+La détection des doublons doit examiner le fournisseur, le numéro de facture, la date, le montant et les identifiants disponibles. Une catégorie déjà utilisée pendant un mois ne signifie pas qu'une autre facture est un doublon.
+
+## 2.5. Deux statuts obligatoirement indépendants
+
+C'est une décision importante.
+
+Dans mon prototype, le statut vert « Validée » était destiné à indiquer qu'une charge était payée.
+
+Pour éviter toute ambiguïté avec le travail du comptable, je souhaite désormais deux informations distinctes.
+
+**A. Statut du paiement**
+
+- À payer.
+- Partiellement payée.
+- Payée.
+- Remboursement en attente.
+- Remboursée, pour les dépenses avancées personnellement.
+
+**B. Statut du traitement comptable**
+
+- Pièce déposée.
+- Informations à compléter.
+- À vérifier par le comptable.
+- Renvoyée au client.
+- Contrôlée.
+- Comptabilisée.
+- Corrigée par une nouvelle écriture, avec conservation de l'historique.
+
+La couleur verte « Payée » concerne uniquement le paiement.
+
+Une facture payée n'est pas nécessairement comptabilisée.
+
+Une facture comptabilisée n'est pas nécessairement payée.
+
+Ne jamais utiliser un seul statut pour ces deux notions.
+
+## 2.6. Circuit de traitement des charges
+
+Prévoir plusieurs situations :
+
+1. Le client dépose la pièce et renseigne les montants.
+2. Le client dépose uniquement la pièce.
+3. Le comptable renseigne les montants et effectue le contrôle.
+4. Le comptable ajoute directement une charge pour son client.
+5. Le comptable renvoie une pièce au client avec un motif.
+6. Le comptable contrôle et comptabilise la dépense.
+
+Les permissions déterminent qui peut effectuer chaque opération.
+
+Après validation et comptabilisation, une pièce et son historique ne doivent pas pouvoir être modifiés ou supprimés silencieusement.
+
+Toute correction doit être tracée.
+
+## 2.7. Sécurité des justificatifs
+
+Réutiliser les mécanismes de sécurité existants pour les documents :
+
+- Contrôle du type réel de fichier.
+- Antivirus.
+- Validation des fichiers.
+- Protection des données.
+- Isolation par société.
+- Vérification des droits à chaque téléchargement.
+- Journal d'audit.
+- Conservation de l'original.
+- Historique des versions.
+
+Prévoir ultérieurement l'intégration des factures électroniques reçues par la plateforme agréée utilisée par PILIQI, avec rapprochement des pièces déjà reçues pour éviter les doublons.
+
+---
+
+# PARTIE 3 — MODULE « TRÉSORERIE DE LA SOCIÉTÉ »
+
+## 3.1. Objectif
+
+Créer un véritable module de trésorerie permettant au dirigeant et au comptable de connaître la situation financière réelle de l'entreprise.
+
+Il doit permettre de consulter les entrées et sorties d'argent et de suivre les soldes sur une période.
+
+Filtres :
+- Aujourd'hui.
+- Cette semaine.
+- Ce mois.
+- Mois précédent.
+- Année en cours.
+- Année précédente.
+- Exercice comptable.
+- Période personnalisée.
+
+## 3.2. Situation de trésorerie
+
+Afficher :
+
+- Solde de chaque compte bancaire.
+- Argent disponible en caisse.
+- Total bancaire.
+- Total en espèces.
+- Total des disponibilités.
+- Factures clients non réglées.
+- Factures fournisseurs à payer.
+- Dépenses à rembourser.
+- Échéances fiscales et sociales.
+
+Séparer clairement les disponibilités réelles, les créances et les dettes.
+
+Ne pas ajouter les factures clients impayées au solde bancaire disponible.
+
+## 3.3. Entrées d'argent
+
+- Ventes encaissées.
+- Règlements de factures clients.
+- Versements CB.
+- Dépôts d'espèces.
+- Virements reçus.
+- Apports des associés.
+- Emprunts reçus.
+- Autres recettes.
+
+## 3.4. Sorties d'argent
+
+- Paiement des fournisseurs.
+- Paiement des charges de fonctionnement.
+- Remboursements de notes de frais.
+- Salaires.
+- Cotisations sociales.
+- TVA.
+- Impôts.
+- Loyers.
+- Investissements.
+- Remboursements de crédits.
+- Dividendes versés.
+- Autres décaissements.
+
+Ne pas confondre sortie de trésorerie et charge comptable.
+
+Exemples :
+- Le remboursement du capital d'un emprunt est une sortie de trésorerie, mais pas une charge.
+- Les intérêts constituent généralement une charge financière.
+- Les dividendes ne sont pas une charge d'exploitation.
+- Un transfert entre deux comptes de la même société n'est ni une recette ni une dépense.
+
+## 3.5. Liaison automatique avec les charges
+
+C'est une règle fondamentale.
+
+Lorsqu'une charge est payée :
+
+1. Le paiement est enregistré sur la facture concernée.
+2. Le montant payé est mis à jour.
+3. Le solde restant à payer est recalculé.
+4. Le mouvement correspondant apparaît dans la trésorerie.
+5. Le règlement reste lié à la facture originale.
+6. L'écriture comptable correspondante est générée selon les règles applicables.
+
+Ne jamais enregistrer deux fois le même décaissement.
+
+Prévoir les paiements partiels, les paiements complets, les échéances et les remboursements.
+
+## 3.6. Prévisions de trésorerie
+
+Créer une vue prévisionnelle à partir :
+
+- Des factures fournisseurs à payer.
+- Des factures clients à encaisser.
+- Des charges récurrentes.
+- Des salaires.
+- Des impôts et cotisations.
+- Des échéances bancaires.
+- Des paiements planifiés.
+
+Afficher le solde prévisionnel par jour, semaine et mois.
+
+Signaler les risques de manque de trésorerie.
+
+Distinguer visuellement les mouvements constatés des opérations prévisionnelles.
+
+Ne jamais présenter une prévision comme un solde bancaire réel.
+
+---
+
+# PARTIE 4 — MODULE « FISCALITÉ ET DÉCLARATIONS »
+
+## 4.1. TVA
+
+Conserver la page actuelle « TVA de la société ».
+
+Ne pas créer une seconde page TVA.
+
+L'intégrer dans le nouveau menu « Fiscalité et déclarations ».
+
+Elle doit permettre de consulter :
+
+- TVA collectée.
+- TVA déductible sur achats de marchandises.
+- TVA déductible sur charges.
+- Crédit de TVA antérieur.
+- Crédit de TVA à reporter.
+- TVA nette à payer.
+- TVA déjà réglée.
+- Déclarations et échéances.
+
+La TVA des charges doit provenir des pièces et des règles comptables et fiscales applicables.
+
+Distinguer :
+
+A. TVA estimée : calcul provisoire, incluant éventuellement les pièces à vérifier.
+
+B. TVA comptable calculée : résultat issu des écritures et des règles d'exigibilité et de déduction.
+
+C. TVA déclarée : montant effectivement validé et déclaré.
+
+La TVA sur les services peut être exigible à l'encaissement, sauf option pour les débits, tandis que les livraisons de biens suivent leurs règles propres.
+
+Ne pas se contenter du mois de facture pour déterminer automatiquement la période de TVA.
+
+Le comptable doit pouvoir contrôler la période de rattachement et la TVA réellement déductible.
+
+Le traitement des taux différents, exonérations, autoliquidations, avoirs et régularisations doit être prévu.
+
+## 4.2. Impôt sur les sociétés
+
+Prévoir le calcul et le suivi de l'IS.
+
+Le logiciel doit distinguer :
+
+- Résultat comptable.
+- Réintégrations fiscales.
+- Déductions fiscales.
+- Résultat fiscal imposable.
+- IS estimé.
+- Acomptes.
+- Solde à payer.
+- IS effectivement réglé.
+
+Prévoir les règles de taux normal et de taux réduit.
+
+À titre de référence pour le régime français en 2026, le taux normal est de 25 % et certaines PME peuvent bénéficier d'un taux réduit de 15 % sur la première tranche de 42 500 €, sous conditions légales.
+
+Le système doit vérifier l'éligibilité : chiffre d'affaires, capital libéré, détention du capital et autres conditions applicables.
+
+Ne jamais appliquer automatiquement le taux réduit à toutes les entreprises.
+
+Les taux, seuils et conditions doivent être versionnés par année fiscale et validés à partir des sources officielles en vigueur au moment de leur utilisation.
+
+## 4.3. Autres obligations fiscales
+
+Prévoir :
+
+- CFE.
+- Autres taxes applicables.
+- Échéances fiscales.
+- Déclarations.
+- Historique des paiements.
+- Justificatifs.
+- Alertes avant échéance.
+
+Ne pas transformer toutes les taxes en charges d'exploitation. Leur traitement comptable doit être déterminé selon leur nature.
+
+---
+
+# PARTIE 5 — MODULE « RÉMUNÉRATIONS ET COTISATIONS SOCIALES »
+
+Prévoir un espace spécifique pour :
+
+- Salaires bruts.
+- Salaires nets.
+- Fiches de paie.
+- Cotisations salariales.
+- Cotisations patronales.
+- Rémunération du dirigeant.
+- Cotisations sociales TNS.
+- Paiements Urssaf.
+- Déclarations sociales.
+- Régularisations.
+- Échéances sociales.
+- Historique des paiements.
+
+Le calcul doit dépendre de la forme juridique, du statut du dirigeant et des règles applicables à la période.
+
+Distinguer notamment :
+
+- Président de SAS/SASU.
+- Gérant majoritaire de SARL.
+- Gérant minoritaire ou égalitaire de SARL.
+- Autres situations applicables.
+
+Ne jamais appliquer un pourcentage social unique à tous les dirigeants.
+
+Prévoir un suivi des coûts de rémunération pour la société, avec distinction entre rémunérations nettes, cotisations et paiements réellement effectués.
+
+---
+
+# PARTIE 6 — MODULE « ASSOCIÉS ET DIVIDENDES »
+
+Créer un espace permettant de suivre :
+
+- Bénéfice de l'exercice.
+- Réserves.
+- Report à nouveau.
+- Résultat distribuable.
+- Décisions d'assemblée générale.
+- Dividendes bruts distribués.
+- Répartition entre associés.
+- Prélèvements fiscaux.
+- Prélèvements sociaux.
+- Dividendes nets versés.
+- Dates de paiement.
+
+Attention : les dividendes ne sont pas des charges de fonctionnement de la société.
+
+Ils sont distribués selon les règles juridiques et comptables après détermination du résultat et décision valable des associés.
+
+La fiscalité des dividendes doit tenir compte de la forme juridique et du statut du bénéficiaire.
+
+Prévoir des paramètres fiscaux et sociaux versionnés, sans coder définitivement un taux dans Laravel.
+
+---
+
+# PARTIE 7 — MOTEUR COMPTABLE DE PILIQI
+
+Cette partie est fondamentale.
+
+PILIQI doit disposer d'un véritable moteur comptable en partie double.
+
+Il ne doit pas être simplement un système qui calcule les dépenses et la TVA.
+
+## 7.1. Séparation entre activité commerciale et comptabilité
+
+Le système commercial existant conserve les données originales :
+
+- Ventes.
+- Factures.
+- Avoirs.
+- Achats.
+- Fournisseurs.
+- Clients.
+- Paiements.
+- Caisses.
+- Clôtures.
+- Stocks.
+- Remboursements.
+
+Le moteur comptable récupère ces opérations et les transforme en écritures selon les règles comptables applicables.
+
+Ne pas mélanger directement les tables opérationnelles existantes avec les tables comptables.
+
+Prévoir une relation traçable entre chaque opération commerciale et ses écritures.
+
+## 7.2. Plan comptable
+
+Prévoir un plan comptable général français de référence, initialisé selon le PCG officiel applicable à l'exercice.
+
+Quelques comptes de référence :
+
+| Compte | Signification |
+|---|---|
+| 401 | Fournisseurs |
+| 411 | Clients |
+| 512 | Banques |
+| 53 | Caisse |
+| 607 | Achats de marchandises |
+| 707 | Ventes de marchandises |
+| 44566 | TVA déductible sur autres biens et services |
+| 44571 | TVA collectée |
+
+Ce n'est pas une liste exhaustive.
+
+Le système doit également gérer les comptes de stocks, immobilisations, amortissements, salaires, cotisations sociales, charges, produits, emprunts et impôts.
+
+Le compte 53 est la racine comptable de la caisse. Les subdivisions seront définies dans le plan utilisé.
+
+Prévoir des subdivisions configurables.
+
+Exemples :
+- 401100 : fournisseur A.
+- 401200 : fournisseur B.
+- 707100 : ventes de téléphones.
+- 707200 : ventes d'accessoires.
+
+Ces subdivisions sont des exemples de paramétrage, pas des numéros obligatoires.
+
+Le plan comptable doit être :
+
+- Configurable par société.
+- Versionné.
+- Associé à l'exercice comptable.
+- Adaptable par le comptable dans les limites du plan applicable.
+- Historisé.
+
+Ne jamais coder définitivement les numéros de comptes dans les fonctions Laravel.
+
+## 7.3. Journaux comptables
+
+Prévoir une configuration initiale avec les journaux suivants :
+
+| Code | Journal | Utilisation |
+|---|---|---|
+| VE | Ventes | Factures et opérations de vente |
+| AC | Achats | Factures fournisseurs |
+| BQ | Banque | Transactions bancaires |
+| CA | Caisse | Opérations de caisse |
+| OD | Opérations diverses | Régularisations et écritures diverses |
+| AN | À nouveaux | Soldes d'ouverture |
+
+Ces codes sont des valeurs initiales configurables.
+
+Chaque société peut adapter ses journaux selon ses besoins.
+
+Prévoir une numérotation contrôlée par journal et par exercice.
+
+## 7.4. Exemples de comptabilisation
+
+Claude doit comprendre et implémenter les situations suivantes.
+
+### A. Vente de 120 € TTC à crédit
+
+Hypothèse : vente de marchandises avec TVA à 20 %.
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| 411 Clients | 120 € | |
+| 707 Ventes | | 100 € |
+| 44571 TVA collectée | | 20 € |
+| Total | 120 € | 120 € |
+
+Le client doit encore payer 120 €.
+
+### B. Vente de 120 € TTC payée immédiatement en espèces
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| 53 Caisse | 120 € | |
+| 707 Ventes | | 100 € |
+| 44571 TVA collectée | | 20 € |
+
+### C. Vente de 120 € TTC payée par carte bancaire
+
+Prévoir un compte de transition configurable pour les sommes encaissées par carte mais pas encore versées sur le compte bancaire.
+
+Exemple de principe :
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| Compte de cartes à encaisser configuré | 120 € | |
+| 707 Ventes | | 100 € |
+| 44571 TVA collectée | | 20 € |
+
+Le compte de transition doit être défini dans le plan comptable de la société.
+
+Un compte de subdivision tel que 5115 peut être étudié comme exemple de paramétrage, mais ne doit pas être imposé comme compte officiel obligatoire.
+
+Lors du versement par le prestataire de paiement, prévoir le rapprochement entre le montant brut encaissé, les frais du prestataire et le montant net reçu en banque.
+
+### D. Facture fournisseur de marchandises de 120 € TTC
+
+Hypothèse : achat de marchandises avec TVA à 20 %.
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| 607 Achats de marchandises | 100 € | |
+| 44566 TVA déductible | 20 € | |
+| 401 Fournisseurs | | 120 € |
+
+### E. Paiement de cette facture
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| 401 Fournisseurs | 120 € | |
+| 512 Banque | | 120 € |
+
+Ces exemples sont illustratifs. Le moteur doit appliquer les règles correspondant à la nature de l'opération, à son régime de TVA, au moyen de paiement et aux paramètres comptables de la société.
+
+## 7.5. Comptabilisation des charges
+
+Une facture d'électricité doit pouvoir générer les écritures adaptées.
+
+Une dépense payée personnellement par le dirigeant ou un salarié doit pouvoir générer une dette envers cette personne, avec le compte comptable approprié selon la situation.
+
+Lors du remboursement, cette dette est soldée et le paiement apparaît dans la trésorerie.
+
+Ne pas utiliser systématiquement le même compte pour tous les types de remboursements.
+
+## 7.6. Tables comptables à étudier
+
+Prévoir notamment :
+
+- Exercices comptables.
+- Plan comptable.
+- Comptes comptables.
+- Journaux comptables.
+- Écritures.
+- Lignes d'écritures.
+- Codes de TVA.
+- Comptes auxiliaires.
+- Axes analytiques.
+- Affectations analytiques.
+- Règles de génération comptable.
+- Liens avec les documents sources.
+- Périodes verrouillées.
+- Historiques des corrections.
+
+Les noms de tables proposés devront être adaptés à la convention de nommage déjà utilisée dans PILIQI.
+
+Toutes les tables doivent respecter l'isolation par société.
+
+## 7.7. Équilibre et intégrité des écritures
+
+Règles obligatoires :
+
+- Total débit égal au total crédit.
+- Montants enregistrés avec une précision monétaire contrôlée.
+- Numérotation cohérente.
+- Aucune double comptabilisation.
+- Idempotence des événements sources.
+- Écritures liées aux pièces justificatives.
+- Contrôle des périodes ouvertes.
+- Traçabilité de l'auteur et de la date.
+- Historique des modifications.
+
+Une écriture définitivement comptabilisée ne doit pas être supprimée ou modifiée silencieusement.
+
+Les corrections doivent utiliser des contrepassations et de nouvelles écritures reliées aux originales.
+
+Prévoir les écritures brouillon, à contrôler, validées et contrepassées.
+
+## 7.8. Comptabilité analytique par magasin
+
+Une société peut avoir plusieurs magasins.
+
+Il faut pouvoir consulter la comptabilité de la société et analyser les opérations par magasin.
+
+Prévoir des axes analytiques indépendants du plan comptable.
+
+Exemple :
+- Magasin Lyon.
+- Magasin Villeurbanne.
+- Magasin Vénissieux.
+
+Ne pas créer automatiquement une comptabilité juridique indépendante pour chaque magasin appartenant à la même société.
+
+Les sociétés juridiquement distinctes doivent conserver chacune leur propre comptabilité.
+
+---
+
+# PARTIE 8 — JOURNAL, GRAND LIVRE, BALANCE ET FEC
+
+L'expert-comptable doit pouvoir travailler directement dans PILIQI.
+
+Prévoir les fonctionnalités suivantes :
+
+## 8.1. Journaux
+
+Consulter, rechercher, filtrer, saisir et contrôler les écritures par journal et par période.
+
+## 8.2. Grand livre
+
+Afficher les écritures compte par compte, avec :
+- Date.
+- Journal.
+- Numéro de pièce.
+- Libellé.
+- Débit.
+- Crédit.
+- Solde.
+- Lien vers le justificatif.
+- Lien vers la facture ou opération d'origine.
+
+## 8.3. Balance générale
+
+Afficher les comptes et leurs totaux débit, crédit et solde.
+
+Permettre les comparaisons entre périodes et exercices.
+
+## 8.4. Comptabilité analytique
+
+Permettre les analyses par magasin, activité ou axe défini par la société.
+
+## 8.5. FEC
+
+Prévoir un véritable export Fichier des Écritures Comptables conforme aux exigences françaises applicables.
+
+Le FEC doit être produit à partir de la comptabilité complète, pas simplement à partir des factures ou des ventes.
+
+Il faudra gérer :
+- Écritures d'ouverture.
+- Ventes.
+- Achats.
+- Banque.
+- Caisse.
+- Règlements.
+- Écritures d'inventaire.
+- Amortissements.
+- Stocks.
+- Régularisations.
+- Autres écritures nécessaires.
+
+Le format, les champs obligatoires, les séquences et les contrôles doivent être vérifiés selon les textes fiscaux applicables.
+
+Ne jamais présenter un export comme FEC conforme avant d'avoir vérifié son contenu et sa conformité.
+
+---
+
+# PARTIE 9 — TABLEAU DE BORD ET GRAPHIQUES EXISTANTS
+
+Un deuxième fichier HTML existe déjà : « Graphiques du tableau de bord ».
+
+Je souhaite conserver cette organisation avec ses graphiques personnalisables.
+
+Ne pas créer un nouveau tableau de bord financier indépendant.
+
+Enrichir le tableau de bord existant avec les nouvelles informations.
+
+Prévoir notamment :
+
+- Chiffre d'affaires HT.
+- Achats HT.
+- Charges professionnelles HT.
+- Comparaison ventes et achats.
+- Évolution des charges mensuelles.
+- Répartition des charges par catégorie.
+- Charges payées et restant à payer.
+- Trésorerie disponible.
+- Entrées et sorties d'argent.
+- Prévisions de trésorerie.
+- TVA estimée et TVA comptable.
+- Impôts à payer.
+- Factures clients impayées.
+- Factures fournisseurs à payer.
+- Rémunérations et cotisations.
+- Résultat comptable, lorsque disponible.
+
+Permettre les filtres par :
+- Mois.
+- Année.
+- Exercice comptable.
+- Période personnalisée.
+- Magasin.
+- Ensemble des magasins.
+
+Conserver le système de sélection et de personnalisation des graphiques.
+
+Les données doivent provenir des véritables enregistrements de PILIQI.
+
+Ne pas conserver les données fictives ou les formules de démonstration du HTML dans le logiciel de production.
+
+Respecter les permissions de chaque utilisateur : un utilisateur ne doit pas voir un graphique basé sur des données auxquelles il n'a pas accès.
+
+---
+
+# PARTIE 10 — ESPACE CABINET COMPTABLE
+
+Cette évolution doit être compatible avec l'architecture Cabinet comptable déjà décidée pour PILIQI.
+
+Je confirme mon choix : OPTION C.
+
+Les cabinets doivent pouvoir consulter, contrôler et effectuer directement le travail comptable sur les dossiers autorisés.
+
+Prévoir :
+
+- Un espace indépendant pour chaque cabinet.
+- Des collaborateurs.
+- Des rôles.
+- Des affectations de dossiers.
+- Des mandats.
+- Des permissions par société.
+- Des permissions éventuellement limitées par magasin.
+- Un tableau de bord multi-clients.
+- L'accès aux factures.
+- L'accès aux charges.
+- L'accès aux justificatifs.
+- La gestion comptable.
+- La saisie et validation des écritures.
+- Les rapprochements.
+- Le grand livre.
+- La balance.
+- Les exports FEC.
+
+Le propriétaire de chaque société doit autoriser son cabinet et choisir les accès accordés.
+
+Un cabinet ne devient jamais propriétaire des données de ses clients.
+
+Le cabinet ne doit pas pouvoir modifier les factures commerciales originales déjà validées. Il peut effectuer des corrections comptables sans altérer la source opérationnelle.
+
+Conserver la distinction entre :
+- Comptabilité et gestion commerciale.
+- Cabinet et société cliente.
+- Collaborateur du cabinet et salarié du magasin.
+
+---
+
+# PARTIE 11 — SÉCURITÉ ET ISOLATION
+
+La sécurité est une priorité absolue.
+
+Ne pas affaiblir les protections déjà mises en place dans PILIQI v2.2.
+
+Conserver le principe :
+
+- Un compte utilisateur possède une identité globale unique.
+- Une société possède son propre espace de données.
+- Les magasins sont rattachés à leur société.
+- Un cabinet peut accéder à plusieurs sociétés uniquement par délégation.
+- Un collaborateur du cabinet n'accède qu'aux dossiers qui lui sont affectés.
+
+Conserver et renforcer TenantContext.
+
+Distinguer :
+- UserContext : utilisateur connecté.
+- CabinetContext : cabinet actif.
+- TenantContext : société active.
+- AuthorizationContext : permissions effectives.
+
+Chaque requête, téléchargement, export, traitement asynchrone et opération comptable doit vérifier le bon contexte et les droits.
+
+Prévoir des journaux d'audit pour :
+- Ajout de documents.
+- Modification de brouillons.
+- Validation.
+- Comptabilisation.
+- Contrepassation.
+- Paiement.
+- Remboursement.
+- Révocation d'un mandat.
+- Changement de permissions.
+- Export de données.
+
+Prévoir une authentification multifacteur recommandée pour les comptes de cabinet.
+
+---
+
+# PARTIE 12 — CONFORMITÉ FISCALE ET PARAMÈTRES RÉGLEMENTAIRES
+
+Il ne faut pas coder définitivement les taux fiscaux, sociaux, plafonds et barèmes dans les fonctions Laravel.
+
+Créer une architecture de paramètres réglementaires versionnés avec :
+
+- Valeur.
+- Année ou période d'application.
+- Date de début.
+- Date de fin éventuelle.
+- Référence officielle.
+- Conditions d'application.
+- Régime juridique concerné.
+- Type de société concerné.
+
+Les exemples de référence doivent être vérifiés à partir des sources officielles à la date de développement.
+
+Prévoir également les contrôles nécessaires à la conformité du logiciel de caisse : inaltérabilité, sécurisation, conservation, archivage et restitution des données lorsque les règles applicables l'exigent.
+
+La conformité caisse, la conformité comptable et la conformité FEC sont des sujets distincts.
+
+Ne pas déclarer PILIQI conforme, certifié ou attesté sans avoir réalisé les vérifications et démarches nécessaires.
+
+---
+
+# PARTIE 13 — BASE DE DONNÉES ET ARCHITECTURE LARAVEL
+
+Avant de créer de nouvelles tables, examiner :
+
+- Les tables existantes.
+- Les modèles Eloquent.
+- Les migrations.
+- Les Services.
+- Les Actions.
+- Les Policies.
+- Les middleware.
+- Les permissions.
+- Le TenantContext.
+- Les mécanismes de paiement.
+- Les factures et achats.
+- Les caisses et clôtures.
+- Les documents.
+- Les journaux d'audit.
+- Les tests existants.
+
+Identifier les données déjà disponibles et les réutiliser.
+
+Ne pas créer deux sources de vérité pour le même document, paiement, règlement ou montant.
+
+Toutes les migrations doivent être compatibles avec la base de production PostgreSQL.
+
+Ne pas compter uniquement sur les contrôles de l'interface : les protections doivent être réalisées dans Laravel et au niveau de la base de données lorsque cela est nécessaire.
+
+Prévoir les transactions SQL, les contraintes d'unicité et les mécanismes de verrouillage adaptés aux opérations financières concurrentes.
+
+La base de développement SQLite peut rester utilisée pour certains tests rapides, mais les validations critiques doivent être réalisées sur PostgreSQL.
+
+---
+
+# PARTIE 14 — TESTS OBLIGATOIRES
+
+Créer une suite de tests indépendante pour les nouveaux modules.
+
+## 14.1. Tests multi-sociétés et cabinets
+
+- Un cabinet ne voit pas un autre cabinet.
+- Un cabinet ne voit pas les sociétés non autorisées.
+- Un collaborateur ne voit pas les clients auxquels il n'est pas affecté.
+- La révocation du mandat supprime immédiatement l'accès.
+- Un changement d'identifiant ou d'URL ne permet pas de contourner les permissions.
+- Les documents restent isolés.
+- Les exports restent isolés.
+- Les traitements en arrière-plan conservent le bon contexte.
+
+## 14.2. Tests des charges
+
+- Plusieurs factures de même catégorie pendant un même mois.
+- Détection des véritables doublons.
+- Facture sans justificatif.
+- Facture avec plusieurs taux de TVA.
+- Charge payée directement par la société.
+- Charge avancée personnellement.
+- Remboursement partiel.
+- Remboursement complet.
+- Facture partiellement payée.
+- Facture payée avant le contrôle comptable.
+- Facture comptabilisée mais non payée.
+- Correction avec historique.
+
+## 14.3. Tests de trésorerie
+
+- Chaque paiement apparaît une seule fois.
+- Aucun double décaissement.
+- Les paiements partiels sont correctement calculés.
+- Les virements internes ne modifient pas le total global des disponibilités.
+- Le remboursement du capital d'un crédit est distinct des intérêts.
+- Les prévisions sont distinctes des mouvements constatés.
+- Les soldes concordent avec les mouvements enregistrés.
+
+## 14.4. Tests comptables
+
+- Débit égal crédit.
+- Absence de doubles écritures.
+- Numérotation cohérente.
+- Calcul correct de la TVA.
+- Gestion des arrondis.
+- Gestion des avoirs.
+- Gestion des remboursements.
+- Gestion des comptes auxiliaires.
+- Rapprochements bancaires.
+- Concordance journaux/grand livre/balance.
+- Gestion des exercices.
+- Verrouillage des périodes.
+- Corrections par contrepassation.
+
+## 14.5. Tests FEC
+
+- Présence de tous les champs obligatoires.
+- Respect du format réglementaire.
+- Séquences cohérentes.
+- Absence d'écritures manquantes.
+- Équilibre des écritures.
+- Exhaustivité de la période.
+- Présence des écritures d'ouverture et d'inventaire requises.
+- Restitution fidèle de la comptabilité.
+
+## 14.6. Tests de charge et concurrence
+
+Tester plusieurs sociétés et plusieurs cabinets travaillant simultanément.
+
+Vérifier notamment que les opérations de vente, paiement, validation comptable, rapprochement et génération des écritures ne créent aucun doublon, aucune perte de données et aucune fuite inter-tenant.
+
+Les tests critiques doivent être exécutés sur PostgreSQL.
+
+---
+
+# PARTIE 15 — MÉTHODE DE DÉVELOPPEMENT DEMANDÉE
+
+Je ne souhaite que tu analyses toutes les fonctionnalités.
+
+Je demande la démarche suivante.
+
+### Étape 1 — Audit complet
+
+Examiner le PILIQI existant.
+
+Étudier particulièrement :
+- Charges et TVA.
+- Achats.
+- Ventes.
+- Facturation.
+- Caisse.
+- Paiements.
+- Trésorerie éventuellement existante.
+- Graphiques.
+- Permissions.
+- Espace cabinet.
+- TenantContext.
+- Base de données.
+
+### Étape 2 — Rapport d'écarts
+
+Présenter clairement :
+
+- Ce qui existe déjà.
+- Ce qui fonctionne déjà.
+- Ce qui doit être conservé.
+- Ce qui doit être amélioré.
+- Ce qui manque.
+- Ce qui risque de faire doublon.
+- Les risques techniques.
+- Les conséquences sur les migrations et les données existantes.
+
+Ne pas supposer qu'une fonction n'existe pas sans avoir inspecté le code.
+
+### Étape 3 — Architecture détaillée
+
+Produire :
+
+1. Architecture fonctionnelle complète.
+2. Schéma de base de données.
+3. Relations entre les sociétés, magasins, cabinets et utilisateurs.
+4. Architecture du moteur comptable.
+5. Plan comptable et versionnement.
+6. Configuration des journaux.
+7. Matrice des permissions.
+8. Circuit des factures et charges.
+9. Circuit des paiements et remboursements.
+10. Circuit de génération des écritures.
+11. Architecture de trésorerie.
+12. Architecture fiscale.
+13. Plan de tests complet.
+
+### Étape 4 — Validation de la conception
+
+Présenter les décisions techniques et les conséquences de chaque choix avant de modifier les fondations existantes.
+
+Ne pas poser de nouveau des questions dont les réponses existent déjà dans les décisions du projet.
+
+Lorsque des détails techniques manquent, proposer la solution la plus cohérente et expliquer les hypothèses.
+
+### Étape 5 — Développement progressif
+
+Développer par lots indépendants.
+
+Chaque lot doit comporter :
+- Migrations.
+- Modèles.
+- Services.
+- Actions.
+- Policies.
+- Interfaces.
+- Tests.
+- Vérifications de sécurité.
+- Vérifications PostgreSQL.
+
+Ne pas modifier inutilement les modules déjà validés.
+
+### Étape 6 — Audit indépendant
+
+Faire vérifier les nouvelles fonctionnalités par des tests indépendants.
+
+Contrôler l'isolation des données, l'intégrité de la comptabilité, les paiements, les écritures, les exports et la concurrence.
+
+Ne pas considérer un lot comme terminé simplement parce que les pages affichent correctement les informations.
+
+---
+
+# RÉSULTAT FINAL ATTENDU
+
+Je souhaite que PILIQI devienne un véritable environnement de gestion commerciale, financière et comptable.
+
+Un commerçant utilise PILIQI pour :
+- Gérer ses magasins.
+- Effectuer ses ventes.
+- Gérer ses achats.
+- Enregistrer ses charges.
+- Suivre sa trésorerie.
+- Suivre ses impôts.
+- Connaître sa situation financière.
+
+Son expert-comptable utilise le même PILIQI pour :
+- Consulter les opérations.
+- Contrôler les justificatifs.
+- Contrôler les paiements.
+- Comptabiliser les opérations.
+- Gérer les journaux.
+- Effectuer les rapprochements.
+- Consulter le grand livre.
+- Consulter les balances.
+- Analyser les résultats.
+- Produire le FEC.
+
+Toutes les informations doivent circuler correctement entre les modules, sans double saisie et sans double comptabilisation.
+
+**Principe fondamental : une opération est saisie une seule fois, conservée dans sa source d'origine, puis réutilisée par les différents modules selon les règles comptables, fiscales et financières applicables.**
+
+La sécurité, l'isolation des sociétés, l'intégrité des factures, de la caisse et de la comptabilité restent prioritaires sur toute nouvelle fonctionnalité.  MAIS comme d'habitude tu me montre les modèles afin que je puisse voir comment ressemble et que tu construis selon le modele choisi par moi."
+
+## 634. 2026-11-28 10:25 UTC
+
+ecoute, je vais te donner des nouveaux chose à faire, et toi tu fait avec opus 5.5 effort extra en ultracode maiiiiss si toi tu vois que c 'est mieux avec effort max alors fait comme tu veux mais si c'est la meme chose avec effort extrat comme max alors tu fait effort extra.Donc tout ce que tu as fais jusque mtn et ce que t'etais en train de faire alors tu continue mais tu prend en compte tout ce que je te donne en plus et tu les place comme tu vois meilleurs. La 1ere: "TVA27 laisse choisir le trimestriel en 2026 avec le seul seuil de 1 100 000 €, et son aide dit que le régime simplifié « n'existe plus depuis le 1er janvier 2027 ». Faut-il ajouter, pour 2026, la règle des 4 000 € de TVA par an ?Mon conseil : oui, jusqu'au 31/12/2026, et écrire l'aide au futur jusqu'à cette date. mais moi je dit non car le logiciel sera en production que en 2027 mais tu vois mieux que moi". La 2eme: "et pour le demande de remboursement de credit de tva à l etat! alors si par ex: l etat refuse de lui donne la tva alors tu doit laisser l option d annuler la demande et de retourner la tva pour calculer sur piliqi car peut etre cette tva sera deja utiliser comme credit du mois pour reduire la tva. donc tu regarde si on peut laisser cette option ou pas selon les lois ou regles, et si les regles ne parle pas alors moi je pense que c est mieux de pouvoir retourner le credit sur piliqi pour recalculer avec la tva du mois. donc si on permet d annuler la demande alors peut sera mieux pour la societe et le comptable.". La 3eme: "peut etre il faut creer un menu "Les frais" donc les frais de la societe comme ( Tenue comptable + Bilan + TVA,Fiches de paie (si vous vous rémunérez), Déclaration sociale annuelle du dirigeant,Option versement de dividendes (AG annuelle) ) ou (Frais de fonctionnement dont, Cotisations sociales sur rémunération, Rémunération nette versée, Bénéfice imposable (avant IS), Dividendes bruts distribués, Cotisations sociales TNS sur dividendes,Impôt sur le revenu sur dividendes,Flat Tax (31,4 % en 2026) ) ou un autre menu " Tresorie" de la societe. ou peut etre les frais entre dans les charges ou peut etre qu'une partie une entre dans les frais? je te laisse toi voir tres serieux et attentivement. tu vois la tresorie de la societe pour voir et calculer tout son argent avec ses depenses dans l'année en cours ou par moi ou par année, donc pareille pour les frais si tu decide de laisser à part mais malgre tout je crois que les charges entre dans les frais et la tresorie car les chareges dimunue la treasorie de la societe. donc tu cherche les info exacte sur internet et aplique comme par exemple : 15% sur 42500€ et 25% au dela. 1. Les frais de structure et obligations (Incompressibles)
+Ce sont les frais obligatoires pour faire tourner la société :
+
+* L'expert-comptable : Entre 1 200 € et 2 500 € HT par an (en ligne ou en cabinet physique). C'est quasi indispensable pour le bilan annuel et les fiches de paie.
+* La banque professionnelle : Environ 10 € à 30 € HT par mois (soit 120 € à 360 €/an).
+* Les assurances professionnelles : La Responsabilité Civile Professionnelle (RC Pro) et éventuellement la mutuelle/prévoyance du dirigeant (environ 300 € à 1 000 €/an selon le métier).
+* La domiciliation : Si vous passez par une société de domiciliation pour ne pas mettre votre adresse personnelle sur les documents publics (environ 300 € à 600 €/an).
+
+2. Le matériel, les fournitures et les logiciels
+
+* Matériel informatique et bureautique : Ordinateur, téléphone portable, écrans, clavier, imprimante, mobilier de bureau (fauteuil ergonomique, bureau). Note : Au-dessus de 500 € HT, le matériel est « amorti » (déduit sur plusieurs années, généralement 3 ans pour un ordinateur).
+* Logiciels et abonnements numériques : Suite Microsoft/Google, logiciels métiers (Adobe, CRM, outils IA), hébergement web, nom de domaine.
+* Télécom : Votre forfait mobile et votre abonnement internet (à 100 % si ligne pro dédiée, ou au prorata de l'usage pro si ligne mixte).
+
+3. Les déplacements et le véhicule
+Vous avez deux façons de déduire vos déplacements professionnels (rendez-vous clients, déplacements sur chantier, salons) :
+
+* Les Indemnités Kilométriques (IK) : Vous utilisez votre voiture personnelle. La société vous rembourse chaque kilomètre professionnel selon un barème officiel de l'État (en fonction de la puissance fiscale du véhicule et de la distance). Cet argent vous est versé sans impôt ni charges sociales, et est déduit des bénéfices
+* Les frais réels de transport : Billets de train, d'avion, tickets de métro, péages, parkings, et frais d'hôtel lors de déplacements professionnels. (Attention : les trajets domicile-bureau ne sont généralement pas déductibles, sauf exceptions).
+
+4. Les repas et réceptions
+
+* Repas pris seul lors d'un déplacement pro : Si vous ne pouvez pas rentrer chez vous le midi à cause de l'éloignement de votre lieu de travail, vous pouvez déduire la différence entre le prix du restaurant (plafonné autour de 21 € en 2026) et le coût d'un repas à domicile (évalué forfaitairement autour de 5,50 €). Soit environ 15 € déductibles par repas.
+* Repas d'affaires (avec un client, prospect ou partenaire) : Déductibles à 100 % sans plafond strict (tant que cela reste raisonnable). Il faut impérativement noter au dos du ticket de caisse le nom et l'entreprise de vos invités pour le justifier en cas de contrôle fiscal.
+
+5. Le bureau à domicile (Loyer et charges)
+Si vous travaillez depuis chez vous et que vous n'avez pas de local commercial :
+
+* Vous pouvez facturer un loyer à votre SASU,sarl etc correspondant à la surface occupée par votre bureau (ex : si votre bureau fait 10 m² dans un appartement de 50 m², la societe peut payer 20 % de votre loyer, de votre électricité, de votre chauffage et de votre assurance habitation).
+* Attention : Les loyers que vous percevez personnellement devront être déclarés dans vos revenus fonciers personnels.
+
+6. La formation, le conseil et la prospection
+
+* Formations professionnelles liées à votre activité, livres techniques, abonnements à la presse spécialisée.
+* Publicité et marketing : Création de site internet, cartes de visite, publicités en ligne (Google Ads, LinkedIn), cadeaux d'affaires offerts aux clients (avec un plafond autour de 73 € TTC par an et par client pour récupérer la TVA).
+* Frais juridiques ou de recrutement : Avocats, sous-traitants, freelances qui travaillent pour vous.
+
+Les 3 règles d'or pour qu'un frais soit accepté par le fisc
+
+1. L'intérêt de l'entreprise : La dépense doit servir à faire gagner de l'argent à la societe. Tout achat personnel (vêtements du quotidien, courses alimentaires personnelles, vacances) est strictement interdit et constitue un abus de biens sociaux (lourdement sanctionné).
+2. Une facture conforme : Un simple ticket de carte bleue ne suffit pas. Il faut une facture libellée au nom de la societe (et non nom personnel), faisant apparaître le montant HT, le taux de TVA et le montant TTC.
+3. La proportionnalité : Les frais doivent rester cohérents avec votre chiffre d'affaires. Déclarer 40 000 € de restaurants pour 90 000 € de CA déclenchera immédiatement un contrôle fiscal.
+
+Exemple concret de répartition des 10 000 € de frais annuels
+Pour un indépendant (consultant, développeur, prestataire) qui fait 90 000 € de CA, 10 000 € de frais annuels correspond typiquement à :
+
+* Expert-comptable + banque + assurances : 2 500 €
+* Téléphone + Internet + Logiciels/Abonnements : 1 500 €
+* Amortissement d'un ordinateur + matériel bureau : 1 200 €
+* Indemnités kilométriques / Transports / Repas d'affaires : 3 000 €
+* Quote-part loyer/électricité bureau à domicile : 1 800 €
+* Total = 10 000 € HT (qui sortent du compte de la société sans impôt)." mais tu compare avec la 5eme ce que je te dis pour la 3em. La 4eme: "la TVA sur les prestations de services est généralement exigible à l'encaissement, sauf option pour les débits, tandis que la TVA sur les livraisons de biens est généralement exigible lors de la livraison. De plus, la déduction de TVA obéit à ses propres conditions et à des dates d'exigibilité précises.  ==  L’article 206 de l'annexe II du CGI fixe la part exacte de TVA qu'une entreprise peut récupérer sur un achat (le coefficient de déduction) [Fin de la mise en surbrillance] . LegifranceDans la majorité des cas, ce coefficient vaut 1 (100 % de TVA récupérable). Lorsqu'une entreprise exerce des activités mixtes ou achète certains biens réglementés, ce coefficient est inférieur à 1 et se calcule en multipliant trois facteurs compris entre 0 et 1. Assistance-juridique.fr +11. Les 3 composantes du coefficient de déductionCoefficientCe qu'il mesureValeurs possibles1. Assujettissement (BOI-TVA-DED-20-10-10)Utilisation professionnelle imposable. Proportion dans laquelle le bien ou service sert à réaliser des opérations situées dans le champ d'application de la TVA (par opposition à un usage privé ou hors champ TVA, comme certaines subventions ou dividendes).1 : 100 % dans le champ de la TVA0 : 100 % hors champEntre 0 et 1 : usage mixte (ex. : surface en m² ou temps d'utilisation)2. Taxation (BOI-TVA-DED-20-10-20)Droit effectif à déduction. Parmi les opérations dans le champ de la TVA, proportion de celles qui sont effectivement taxées (et non exonérées sans droit à déduction, comme l'activité médicale, l'enseignement ou certaines opérations bancaires).1 : affecté uniquement à des opérations ouvrant droit à déduction0 : affecté uniquement à des opérations exonéréesEntre 0 et 1 : usage mixte (calculé selon le rapport du chiffre d'affaires annuel HT taxé sur le CA total)3. Admission (BOI-TVA-DED-20-10-30)Restrictions légales sur le bien. Limite fixée par la loi fiscale selon la nature de la dépense, indépendamment de l'activité de l'entreprise.1 : aucune exclusion légale (cas général)0 : exclusion totale (véhicules de tourisme, cadeaux > 73 € TTC, logements gratuits hors gardiennage)0,80 : cas particulier de l'essence et du gazole pour véhicules de tourisme (80 % déductibles)2. Règle de calcul et d'arrondiLa formule officielle prévue au I et au V de l'article 206 est la suivante : \[\text{Coefficient\ de\ déduction}=\text{Assujettissement}\times \text{Taxation}\times \text{Admission}\]Règle d'arrondi obligatoire : Chacun des trois coefficients, ainsi que le produit final, doit être arrondi par excès à la deuxième décimale (au centième supérieur). Par exemple, 0,384 devient 0,39. impots.gouv.frCaractère provisoire puis définitif : En cours d'année, l'entreprise utilise des coefficients provisoires basés sur l'année précédente. Elle doit arrêter les coefficients définitifs avant le 25 avril de l'année suivante et régulariser l'écart éventuel. Revue Fiduciaire +13. Exemple concret chiffréPrenons une société qui achète du carburant (gazole) pour un véhicule de tourisme utilisé à la fois pour ses activités professionnelles et pour une activité hors champ de la TVA. La facture comporte 200 € de TVA. Université Côte d'Azur +1Coefficient d'assujettissement : Le véhicule sert à 80 % pour l'activité économique dans le champ de la TVA et 20 % hors champ \[\rightarrow \]⁠ 0,80.Coefficient de taxation : L'entreprise réalise 60 000 € de CA soumis à TVA et 40 000 € de CA exonéré (soit 100 000 € au total). Le rapport est de \(60\,000 / 100\,000\) \[\rightarrow \]⁠ 0,60.Coefficient d'admission : Pour du gazole utilisé dans un véhicule de tourisme, la loi limite la déduction à 80 % \[\rightarrow \]⁠ 0,80. Université Côte d'Azur +1sn._setImageSrc('[jeton retiré]','data:image\/png;base64,[jeton retiré]\/\/\/+UraU1jrL\/36\/\/2qHE0s2pvbeuwLrFz8ayxL7\[jeton retiré]\/Hwz5SMtLqIvNLC3ejKzLqqxMa3zMz\/+fHCxa\/\/9eVZnrb\/zoT\/58KBrrn\/1ZZ9lmNJAAAAgklEQVQImX3NywKCIBSE4TmiZpBKF5XoKoFRvf\/7BeiqRbP7NvNDbGo0bSaz7Y7l2FNx6GQ\/SKmOOkh0JwDnQdEFJV1viLsrGqOaJBhaBZkZEEmPRdWP1n8VeovGpGqGdUGK3JTEXPh8kvM24KVjQb4d5\[jeton retiré]\x3d\x3d')Calcul final : Produit brut : \(0,80 \times 0,60 \times 0,80 = 0,384\)Arrondi au centième supérieur : 0,39TVA déductible : \(200\text{ €} \times 0,39 =\) 78 € (les 122 € restants constituent une charge non récupérable). impots.gouv.frsn._setImageSrc('[jeton retiré]','data:image\/png;base64,[jeton retiré]\/\/\/\[jeton retiré]\[jeton retiré]\[jeton retiré]\/Zb055ZIBT8tr00HLATEy7vQLoNm2VOrhjRwAcB0q7DTC9FzPrEQFDVruuV11hxjgcMlH4YGPOHofBxEeBtkZ7F5nBTB2jz084zVSOWYeAXe0RIEUBq1GC4dUjvPXA9CSDzBjTX4NsQjIYR00Inq5iSw5528ivPK2NIR1rdnl5qDaIodA3TGzpmHCeNAfSw3iESQ\/1vjQVQGJEbQ\[jeton retiré]\/9CMeV1o\/s6i38JXMkfEBoTtlkZHKsAAAAASUVORK5CYII\x3d')Si vous souhaitez appliquer ce texte à votre situation, indiquez-moi :La nature de la dépense concernée (véhicule, carburant, matériel informatique, local, etc.)La répartition de votre chiffre d'affaires (activité taxée, exonérée ou hors champ TVA). == Voici un autre cas concret : l'achat d'un serveur informatique (5 000 € HT, soit 1 000 € de TVA à 20 %) par une entreprise ayant une activité mixte et un usage partiellement privé/hors champ. 1. Détermination des 3 coefficientsComposanteSituation de l'entrepriseCalcul et valeur retenue1. Coefficient d'assujettissementLe serveur héberge à 70 % les outils des activités économiques de la société (dans le champ de la TVA) et à 30 % la gestion d'une activité patrimoniale hors champ TVA (perceptions de dividendes).0,702. Coefficient de taxationParmi les activités dans le champ de la TVA, l'entreprise réalise 150 000 € HT de prestations de conseil (soumises à TVA) et 50 000 € de formations professionnelles exonérées sans droit à déduction (soit 200 000 € au total).\(\frac{150\,000}{200\,000} =\) 0,753. Coefficient d'admissionLe matériel informatique ne fait l'objet d'aucune restriction légale particulière d'exclusion.1,002. Calcul de la TVA récupérableProduit brut : 0,70 × 0,75 × 1,00 = 0,525Coefficient de déduction (arrondi au centième supérieur) : 0,53TVA déductible : 1 000 € × 0,53 = 530 €TVA non déductible : 1 000 € - 530 € = 470 € (ce montant est intégré au coût d'acquisition comptable du serveur et amorti avec lui). == Voici un troisième exemple illustrant à la fois l'impact d'un coefficient d'admission nul (0) sur un véhicule de tourisme et le mécanisme de régularisation annuelle sur un bien d'équipement. Cas A : Achat d'un véhicule de tourisme (Coefficient d'admission = 0)Une société de conseil (100 % soumise à la TVA) achète un véhicule de tourisme à 30 000 € HT, soit 6 000 € de TVA (20 %). ComposanteSituation de l'entrepriseValeur retenue1. Coefficient d'assujettissementLe véhicule est utilisé exclusivement pour les besoins de l'activité professionnelle dans le champ de la TVA.1,002. Coefficient de taxationL'entreprise ne réalise que des opérations soumises à la TVA.1,003. Coefficient d'admissionLa loi exclut totalement du droit à déduction les véhicules conçus pour le transport de personnes (sauf exceptions : taxis, auto-écoles, loueurs, etc.).0Calcul : 1,00 × 1,00 × 0 = 0TVA déductible : 0 € (même si l'entreprise est 100 % assujettie et taxée, la loi bloque toute récupération ; le véhicule est comptabilisé pour son montant TTC de 36 000 €). Cas B : Régularisation annuelle d'une immobilisation (Année N+1)Reprenons l'exemple précédent du serveur informatique (1 000 € de TVA) acheté en année N, pour lequel l'entreprise avait déduit 530 € sur la base d'un coefficient provisoire de 0,53. Avant le 25 avril de l'année N+1, l'entreprise calcule ses chiffres d'affaires définitifs pour l'année N : Coefficient d'assujettissement définitif : inchangé à 0,70.Coefficient de taxation définitif : l'activité soumise à TVA a été plus élevée que prévu (170 000 € HT sur 200 000 €), soit \(\frac{170\,000}{200\,000} =\) 0,85.Coefficient d'admission : 1,00. Calcul de la régularisation : Nouveau coefficient définitif : 0,70 × 0,85 × 1,00 = 0,595, arrondi par excès à 0,60.TVA réellement déductible : 1 000 € × 0,60 = 600 €.Complément de déduction : 600 € - 530 € = 70 € que l'entreprise peut récupérer en plus sur sa déclaration de TVA. == Pour un magasin de téléphonie ayant cette activité mixte, le coefficient de déduction global est de 1 (100 %), mais avec une interdiction spécifique de déduire la TVA sur les téléphones revendus sous le régime de la marge (article 297 D du CGI). En effet, la vente sous le régime de la TVA sur la marge n'est pas une opération exonérée ni hors champ : c'est une opération imposable qui ouvre droit à déduction. Elle ne pénalise donc pas vos autres dépenses (loyer, électricité, outillage, pièces détachées). 1. Calcul du coefficient de déduction du magasinActivité / DépenseAssujettissementTaxationAdmissionCoefficient finalConséquence pratiqueRéparation & vente de pièces (TVA normale)1111,00Vous récupérez 100 % de la TVA sur les pièces, écrans, batteries et outils.Frais généraux du magasin (loyer, caisse, électricité, pub)1111,00Vous récupérez 100 % de la TVA. La TVA sur marge ne réduit pas le coefficient de taxation.Achat d'un téléphone destiné à être revendu sur marge110 (règle spéciale art. 297 D)0Vous ne pouvez pas déduire la TVA qui aurait éventuellement grevé l'achat de ce téléphone (en pratique, vous l'achetez généralement à un particulier sans TVA).2. Exemple chiffré sur un mois d'activitéSupposons que votre magasin réalise les opérations suivantes sur un mois : A. Vos achats (TVA déductible) Pièces détachées neuves (écrans, batteries) : 2 000 € HT + 400 € de TVA → Coefficient 1 → 400 € déductibles.Frais généraux (loyer, logiciel, électricité) : 1 500 € HT + 300 € de TVA → Coefficient 1 → 300 € déductibles.Rachat de 5 smartphones d'occasion à des particuliers : 1 000 € TTC (pas de TVA facturée par le particulier, et aucune TVA déductible).Total TVA déductible : 400 + 300 = 700 €. B. Vos ventes (TVA collectée à reverser) Réparations et vente de pièces : 6 000 € HT → TVA à 20 % = 1 200 €. Revente des 5 smartphones d'occasion (TVA sur marge) : Vendus 1 600 € TTC au total.Marge TTC : 1 600 € - 1 000 € = 600 €.Marge HT : 600 / 1,20 = 500 €.TVA collectée sur la marge : 500 € × 20% = 100 € (sur la facture client, vous ne faites pas apparaître de TVA et indiquez « Régime particulier - Biens d'occasion »). Total TVA collectée : 1 200 + 100 = 1 300 €. C. Résultat à payer à l'État \[\text{TVA à payer}=1\,300\text{ € (collectée)}-700\text{ € (déductible)}=\mathbf{600}\text{ €}\]Point de vigilance : pièces détachées utilisées sur un téléphone d'occasionSi vous utilisez une pièce neuve (sur laquelle vous avez récupéré la TVA à 100 %) pour réparer un téléphone d'occasion avant de le revendre sur marge, vous conservez le droit de déduire la TVA sur la pièce détachée. En revanche, le coût de cette pièce ne peut pas être ajouté au prix d'achat du téléphone pour diminuer votre marge imposable.  == expliqué en detailRéponse du Mode IA pour En revanche, le coût de cette pièce ne peut pas être ajouté au prix d'achat du téléphone pour diminuer votre marge imposable. et tu m explique en detailEn régime de TVA sur la marge,  [Début de la mise en surbrillance] la marge imposable se calcule uniquement par différence entre le prix de vente du téléphone et son prix d'achat initial auprès du fournisseur ou particulier [Fin de la mise en surbrillance]  (article 297 A du CGI). Vous ne pouvez donc pas intégrer les frais de remise en état (pièces détachées, main-d'œuvre) dans le coût d'achat pour réduire l'assiette de la TVA, mais vous récupérez en contrepartie 100 % de la TVA sur ces pièces. Cette règle fiscale évite que vous ne bénéficiez d'un double avantage (déduire la TVA sur la pièce et réduire la TVA due sur la vente du téléphone). 1. Exemple chiffré : revente d'un iPhone reconditionnéSupposons l'opération suivante : Rachat d'un téléphone cassé à un particulier : 200 € (sans TVA).Achat d'un écran neuf chez votre fournisseur : 50 € HT + 10 € de TVA (soit 60 € TTC).Revente du téléphone réparé à un client : 380 € TTC. Étape A : Ce que vous faites sur la pièce détachée (Écran) Vous récupérez normalement les 10 € de TVA sur votre déclaration de TVA (coefficient de déduction = 1).Le coût réel de l'écran pour votre comptabilité est donc de 50 € HT. Étape B : Comment calculer la TVA sur la marge lors de la revente ÉlémentCalcul conforme à la loiErreur fréquente (interdite)Prix de vente TTC380 €380 €Prix d'achat retenu200 € (uniquement le rachat du téléphone)250 € (200 € + 50 € d'écran)Marge TTC imposable380 € - 200 € = 180 €380 € - 250 € = 130 €Marge HT180 € / 1,20 = 150 €130 € / 1,20 = 108,33 €TVA à reverser (20 %)150 € × 20 % = 30 €108,33 € × 20 % = 21,67 €2. Bilan global de l'opération pour votre magasinEn appliquant la règle légale : TVA collectée sur la vente : 30 €TVA déduite sur l'écran : - 10 €TVA nette payée à l'État : 20 € Pourquoi est-ce logique fiscalement ?La valeur ajoutée réelle créée par votre magasin (votre marge commerciale nette avant impôt) est de :\[\text{Vente\ (380 € TTC)}-\text{Achat\ téléphone (200 €)}-\text{Écran HT (50 €)}=\mathbf{130}\text{ € TTC}\]Si l'on décompose ces 130 € TTC de marge économique réelle, ils correspondent à 110 € de bénéfice HT et 20 € de TVA (soit exactement les 30 € collectés moins les 10 € récupérés sur la pièce). Si vous aviez ajouté l'écran au prix d'achat du téléphone, vous auriez déduit deux fois l'impact de cet écran. 3. Règle comptable et facturation à respecterSur la facture client : Vous indiquez uniquement le prix total (380 €) sans faire ressortir la TVA, avec la mention obligatoire : « Régime particulier – Biens d'occasion – Article 297 A du CGI ». Suivi du stock : Vous devez tenir un registre (livre de police / suivi lot par lot) justifiant le prix d'achat exact de chaque téléphone (200 €) afin de prouver le calcul de la marge en cas de contrôle fiscal. === ce que je t ai donné est ce que tu as deja appliquer ces regles ou pas?? ou c est le comptable qui aplique dans les charge le coeficient pour la charge? alors est ce que tu as mis l'option pour appliquer le coef?". La 5eme: "# CAHIER DES CHARGES — ÉVOLUTION FINANCIÈRE ET COMPTABLE DE PILIQI 
+
+## Objectif général
+
+Je souhaite faire évoluer PILIQI pour en faire un véritable logiciel de gestion financière et comptable destiné aux commerçants, dirigeants et experts-comptables.
+
+PILIQI doit permettre à une entreprise de gérer son activité commerciale, ses dépenses, sa trésorerie, ses obligations fiscales et sa comptabilité au même endroit.
+
+Je souhaite également que les cabinets comptables puissent travailler directement dans PILIQI pour leurs différentes sociétés clientes, consulter leurs opérations, effectuer les contrôles et réaliser le travail comptable.
+
+Cette évolution doit respecter entièrement l'architecture existante de PILIQI, notamment le fonctionnement multi-sociétés, multi-magasins, les permissions et l'isolation des données.
+
+**IMPORTANT : avant toute modification du code, regarde le code existant. Ne pas créer de doublons et ne pas casser les fonctionnalités déjà développées et testées.**
+
+---
+
+# PARTIE 1 — ORGANISATION DES MENUS
+
+## 1.1. Organisation générale
+
+Je souhaite organiser les fonctionnalités financières dans une section « Finances de la société ».
+
+Les menus à prévoir sont :
+
+1. Trésorerie.
+2. Charges,(mais les charge tu laisse comme tu as laisser mtn, donc le menu separement car c'est besion de voir separement, mais aux endroit ou doit se calculer alors tu calcule comme demandé et si besoin tu ajoute des fonctionalité mtn car j'ai mtn bcp de nouveaux fonctionalié, et tu fais pareille pour le menu TVA).
+3. Fiscalité et déclarations.
+4. Rémunérations et cotisations sociales.
+5. Associés et dividendes.
+
+Le menu existant « Tableau de bord de la société » doit être conservé et enrichi avec les nouveaux indicateurs financiers.
+
+Le tableau de bord actuel doit rester le point central permettant au dirigeant et aux personnes autorisées de visualiser la situation générale de la société.
+
+## 1.2. Un seul menu « Charges de la société »
+
+Toutes les dépenses professionnelles de la société doivent être regroupées dans un seul menu : **Charges de la société**.
+
+Cela comprend :
+
+- Les factures adressées directement à la société.
+- Les dépenses de fonctionnement.
+- Les dépenses professionnelles payées directement par la société.
+- Les dépenses professionnelles avancées personnellement par le dirigeant.
+- Les dépenses professionnelles avancées personnellement par les collaborateurs et salariés.
+
+Les notes de frais constituent donc un type particulier de dépense à l'intérieur du même module. Ne pas créer un deuxième module indépendant.
+
+Prévoir des filtres permettant de distinguer :
+- Factures fournisseurs de charges.
+- Dépenses avancées personnellement.
+- Charges payées.
+- Charges partiellement payées.
+- Charges à payer.
+- Charges à contrôler.
+- Charges comptabilisées.
+
+Il faut conserver une présentation simple pour les commerçants et suffisamment complète pour les comptables.
+
+---
+
+# PARTIE 2 — MODULE « CHARGES DE LA SOCIÉTÉ »
+
+## 2.1. Réutiliser la page existante
+
+Une page HTML intitulée « Charges et TVA réelle » a déjà été préparée.
+
+Je souhaite conserver sa logique générale :
+
+- Tableau des types de charges par mois.
+- Liste détaillée des pièces enregistrées.
+- Bouton « Ajouter une charge ».
+- Formulaire de dépôt de justificatifs.
+- Montants HT, TVA et TTC.
+- Contrôle par le comptable.
+- Détection des doublons.
+- Historique des opérations.
+
+Ne pas recommencer cette page inutilement. Auditer le prototype et l'intégrer proprement dans PILIQI.
+
+## 2.2. Catégories de charges
+
+Prévoir une liste initiale de catégories, configurable par société.
+
+### A. Frais de structure et fonctionnement
+
+- Expert-comptable.
+- Tenue comptable.
+- Bilan annuel.
+- Conseils comptables.
+- Frais bancaires.
+- Assurances professionnelles.
+- Responsabilité civile professionnelle.
+- Domiciliation.
+- Loyers et charges locatives.
+- Électricité.
+- Gaz.
+- Eau.
+- Téléphone.
+- Internet.
+
+### B. Matériel et fournitures
+
+- Matériel informatique.
+- Ordinateurs.
+- Téléphones utilisés par l'entreprise.
+- Écrans.
+- Imprimantes.
+- Mobilier.
+- Fournitures de bureau.
+- Matériel professionnel.
+- Entretien et réparations.
+
+Prévoir une distinction entre charge directement déductible et immobilisation amortissable selon les règles applicables.
+
+### C. Logiciels et services numériques
+
+- Logiciels.
+- Abonnements numériques.
+- Hébergement web.
+- Noms de domaine.
+- Outils de gestion.
+- Services IA.
+- CRM.
+- Services informatiques.
+
+### D. Déplacements professionnels
+
+- Indemnités kilométriques.
+- Frais de carburant.
+- Train.
+- Avion.
+- Péages.
+- Stationnement.
+- Parking.
+- Hôtel.
+- Transport professionnel.
+
+Distinguer véhicule personnel et véhicule de société.
+
+### E. Repas et réceptions
+
+- Repas professionnels.
+- Repas avec clients.
+- Repas avec fournisseurs.
+- Réceptions professionnelles.
+- Invitations professionnelles.
+
+Prévoir le motif professionnel, les personnes invitées et les justificatifs.
+
+### F. Bureau et travail à domicile
+
+- Quote-part professionnelle du loyer.
+- Électricité.
+- Chauffage.
+- Internet.
+- Assurance.
+- Autres dépenses réellement professionnelles.
+
+Ne pas calculer automatiquement une déduction sur la seule base de la surface occupée. Le traitement doit être justifié et validé selon la situation juridique et fiscale.
+
+### G. Formation et développement commercial
+
+- Formation professionnelle.
+- Conseil.
+- Avocats.
+- Prestations externes.
+- Sous-traitance.
+- Publicité.
+- Marketing.
+- Site Internet.
+- Communication.
+- Prospection.
+- Cadeaux professionnels.
+
+### H. Dépenses avancées personnellement (notes de frais)
+
+Ces dépenses restent dans le même module.
+
+Exemples :
+- Un dirigeant paie un repas professionnel avec son argent personnel.
+- Un salarié utilise sa voiture personnelle pour se déplacer chez un client.
+- Un collaborateur paie un billet de train.
+- Un dirigeant achète personnellement des fournitures nécessaires à l'entreprise.
+
+PILIQI doit enregistrer la dépense, identifier la personne ayant avancé l'argent, conserver le justificatif et suivre le remboursement éventuel.
+
+Une fois la dépense acceptée, elle peut générer une dette de remboursement envers la personne concernée. Lors du remboursement, le mouvement correspondant est enregistré dans la trésorerie.
+
+Ne pas confondre cette situation avec une dépense payée directement par le compte bancaire de la société.
+
+## 2.3. Formulaire « Ajouter une charge »
+
+Conserver le formulaire existant et le compléter.
+
+Informations à prévoir :
+
+- Justificatif PDF, JPEG ou PNG.
+- Type de charge.
+- Catégorie.
+- Fournisseur.
+- Numéro de facture.
+- Date de facture.
+- Date d'échéance.
+- Période concernée.
+- Période fiscale ou TVA applicable.
+- Société concernée.
+- Magasin concerné, facultatif.
+- Personne ayant effectué l'avance, si applicable.
+- Mode de paiement.
+- Compte comptable.
+- Montant HT.
+- Taux de TVA.
+- Montant de TVA facturée.
+- Montant de TVA déductible.
+- Montant TTC.
+- Montant payé.
+- Montant restant à payer.
+- Justificatif et observations.
+
+Autoriser plusieurs taux de TVA sur une même facture.
+
+Les calculs automatiques doivent être contrôlables et modifiables selon les montants réellement mentionnés sur la pièce.
+
+Prévoir la possibilité d'ajouter des catégories personnalisées.
+
+## 2.4. Présentation par mois
+
+Conserver le principe du tableau des charges par type et par mois.
+
+Cependant, corriger une limite du prototype actuel : plusieurs factures peuvent exister pour une même catégorie au cours du même mois.
+
+Il ne faut pas qu'une nouvelle facture écrase une précédente.
+
+Chaque cellule de la matrice doit pouvoir afficher par exemple :
+
+- 3 pièces enregistrées.
+- 2 pièces payées.
+- 1 pièce à payer.
+- Montant total du mois.
+
+En cliquant sur une cellule, l'utilisateur accède à toutes les pièces concernées.
+
+La détection des doublons doit examiner le fournisseur, le numéro de facture, la date, le montant et les identifiants disponibles. Une catégorie déjà utilisée pendant un mois ne signifie pas qu'une autre facture est un doublon.
+
+## 2.5. Deux statuts obligatoirement indépendants
+
+C'est une décision importante.
+
+Dans mon prototype, le statut vert « Validée » était destiné à indiquer qu'une charge était payée.
+
+Pour éviter toute ambiguïté avec le travail du comptable, je souhaite désormais deux informations distinctes.
+
+**A. Statut du paiement**
+
+- À payer.
+- Partiellement payée.
+- Payée.
+- Remboursement en attente.
+- Remboursée, pour les dépenses avancées personnellement.
+
+**B. Statut du traitement comptable**
+
+- Pièce déposée.
+- Informations à compléter.
+- À vérifier par le comptable.
+- Renvoyée au client.
+- Contrôlée.
+- Comptabilisée.
+- Corrigée par une nouvelle écriture, avec conservation de l'historique.
+
+La couleur verte « Payée » concerne uniquement le paiement.
+
+Une facture payée n'est pas nécessairement comptabilisée.
+
+Une facture comptabilisée n'est pas nécessairement payée.
+
+Ne jamais utiliser un seul statut pour ces deux notions.
+
+## 2.6. Circuit de traitement des charges
+
+Prévoir plusieurs situations :
+
+1. Le client dépose la pièce et renseigne les montants.
+2. Le client dépose uniquement la pièce.
+3. Le comptable renseigne les montants et effectue le contrôle.
+4. Le comptable ajoute directement une charge pour son client.
+5. Le comptable renvoie une pièce au client avec un motif.
+6. Le comptable contrôle et comptabilise la dépense.
+
+Les permissions déterminent qui peut effectuer chaque opération.
+
+Après validation et comptabilisation, une pièce et son historique ne doivent pas pouvoir être modifiés ou supprimés silencieusement.
+
+Toute correction doit être tracée.
+
+## 2.7. Sécurité des justificatifs
+
+Réutiliser les mécanismes de sécurité existants pour les documents :
+
+- Contrôle du type réel de fichier.
+- Antivirus.
+- Validation des fichiers.
+- Protection des données.
+- Isolation par société.
+- Vérification des droits à chaque téléchargement.
+- Journal d'audit.
+- Conservation de l'original.
+- Historique des versions.
+
+Prévoir ultérieurement l'intégration des factures électroniques reçues par la plateforme agréée utilisée par PILIQI, avec rapprochement des pièces déjà reçues pour éviter les doublons.
+
+---
+
+# PARTIE 3 — MODULE « TRÉSORERIE DE LA SOCIÉTÉ »
+
+## 3.1. Objectif
+
+Créer un véritable module de trésorerie permettant au dirigeant et au comptable de connaître la situation financière réelle de l'entreprise.
+
+Il doit permettre de consulter les entrées et sorties d'argent et de suivre les soldes sur une période.
+
+Filtres :
+- Aujourd'hui.
+- Cette semaine.
+- Ce mois.
+- Mois précédent.
+- Année en cours.
+- Année précédente.
+- Exercice comptable.
+- Période personnalisée.
+
+## 3.2. Situation de trésorerie
+
+Afficher :
+
+- Solde de chaque compte bancaire.
+- Argent disponible en caisse.
+- Total bancaire.
+- Total en espèces.
+- Total des disponibilités.
+- Factures clients non réglées.
+- Factures fournisseurs à payer.
+- Dépenses à rembourser.
+- Échéances fiscales et sociales.
+
+Séparer clairement les disponibilités réelles, les créances et les dettes.
+
+Ne pas ajouter les factures clients impayées au solde bancaire disponible.
+
+## 3.3. Entrées d'argent
+
+- Ventes encaissées.
+- Règlements de factures clients.
+- Versements CB.
+- Dépôts d'espèces.
+- Virements reçus.
+- Apports des associés.
+- Emprunts reçus.
+- Autres recettes.
+
+## 3.4. Sorties d'argent
+
+- Paiement des fournisseurs.
+- Paiement des charges de fonctionnement.
+- Remboursements de notes de frais.
+- Salaires.
+- Cotisations sociales.
+- TVA.
+- Impôts.
+- Loyers.
+- Investissements.
+- Remboursements de crédits.
+- Dividendes versés.
+- Autres décaissements.
+
+Ne pas confondre sortie de trésorerie et charge comptable.
+
+Exemples :
+- Le remboursement du capital d'un emprunt est une sortie de trésorerie, mais pas une charge.
+- Les intérêts constituent généralement une charge financière.
+- Les dividendes ne sont pas une charge d'exploitation.
+- Un transfert entre deux comptes de la même société n'est ni une recette ni une dépense.
+
+## 3.5. Liaison automatique avec les charges
+
+C'est une règle fondamentale.
+
+Lorsqu'une charge est payée :
+
+1. Le paiement est enregistré sur la facture concernée.
+2. Le montant payé est mis à jour.
+3. Le solde restant à payer est recalculé.
+4. Le mouvement correspondant apparaît dans la trésorerie.
+5. Le règlement reste lié à la facture originale.
+6. L'écriture comptable correspondante est générée selon les règles applicables.
+
+Ne jamais enregistrer deux fois le même décaissement.
+
+Prévoir les paiements partiels, les paiements complets, les échéances et les remboursements.
+
+## 3.6. Prévisions de trésorerie
+
+Créer une vue prévisionnelle à partir :
+
+- Des factures fournisseurs à payer.
+- Des factures clients à encaisser.
+- Des charges récurrentes.
+- Des salaires.
+- Des impôts et cotisations.
+- Des échéances bancaires.
+- Des paiements planifiés.
+
+Afficher le solde prévisionnel par jour, semaine et mois.
+
+Signaler les risques de manque de trésorerie.
+
+Distinguer visuellement les mouvements constatés des opérations prévisionnelles.
+
+Ne jamais présenter une prévision comme un solde bancaire réel.
+
+---
+
+# PARTIE 4 — MODULE « FISCALITÉ ET DÉCLARATIONS »
+
+## 4.1. TVA
+
+Conserver la page actuelle « TVA de la société ».
+
+Ne pas créer une seconde page TVA.
+
+L'intégrer dans le nouveau menu « Fiscalité et déclarations ».
+
+Elle doit permettre de consulter :
+
+- TVA collectée.
+- TVA déductible sur achats de marchandises.
+- TVA déductible sur charges.
+- Crédit de TVA antérieur.
+- Crédit de TVA à reporter.
+- TVA nette à payer.
+- TVA déjà réglée.
+- Déclarations et échéances.
+
+La TVA des charges doit provenir des pièces et des règles comptables et fiscales applicables.
+
+Distinguer :
+
+A. TVA estimée : calcul provisoire, incluant éventuellement les pièces à vérifier.
+
+B. TVA comptable calculée : résultat issu des écritures et des règles d'exigibilité et de déduction.
+
+C. TVA déclarée : montant effectivement validé et déclaré.
+
+La TVA sur les services peut être exigible à l'encaissement, sauf option pour les débits, tandis que les livraisons de biens suivent leurs règles propres.
+
+Ne pas se contenter du mois de facture pour déterminer automatiquement la période de TVA.
+
+Le comptable doit pouvoir contrôler la période de rattachement et la TVA réellement déductible.
+
+Le traitement des taux différents, exonérations, autoliquidations, avoirs et régularisations doit être prévu.
+
+## 4.2. Impôt sur les sociétés
+
+Prévoir le calcul et le suivi de l'IS.
+
+Le logiciel doit distinguer :
+
+- Résultat comptable.
+- Réintégrations fiscales.
+- Déductions fiscales.
+- Résultat fiscal imposable.
+- IS estimé.
+- Acomptes.
+- Solde à payer.
+- IS effectivement réglé.
+
+Prévoir les règles de taux normal et de taux réduit.
+
+À titre de référence pour le régime français en 2026, le taux normal est de 25 % et certaines PME peuvent bénéficier d'un taux réduit de 15 % sur la première tranche de 42 500 €, sous conditions légales. Mais ca peut etre c'est mieux de laisser libre pour que comptable choisi quelle %.
+
+Le système doit vérifier l'éligibilité : chiffre d'affaires, capital libéré, détention du capital et autres conditions applicables.
+
+Ne jamais appliquer automatiquement le taux réduit à toutes les entreprises.
+
+Les taux, seuils et conditions doivent être versionnés par année fiscale et validés à partir des sources officielles en vigueur au moment de leur utilisation.
+
+## 4.3. Autres obligations fiscales
+
+Prévoir :
+
+- CFE.
+- Autres taxes applicables.
+- Échéances fiscales.
+- Déclarations.
+- Historique des paiements.
+- Justificatifs.
+- Alertes avant échéance.
+
+Ne pas transformer toutes les taxes en charges d'exploitation. Leur traitement comptable doit être déterminé selon leur nature.
+
+---
+
+# PARTIE 5 — MODULE « RÉMUNÉRATIONS ET COTISATIONS SOCIALES »
+
+Prévoir un espace spécifique pour :
+
+- Salaires bruts.
+- Salaires nets.
+- Fiches de paie.
+- Cotisations salariales.
+- Cotisations patronales.
+- Rémunération du dirigeant.
+- Cotisations sociales TNS.
+- Paiements Urssaf.
+- Déclarations sociales.
+- Régularisations.
+- Échéances sociales.
+- Historique des paiements.
+
+Le calcul doit dépendre de la forme juridique, du statut du dirigeant et des règles applicables à la période.
+
+Distinguer notamment :
+
+- Président de SAS/SASU.
+- Gérant majoritaire de SARL.
+- Gérant minoritaire ou égalitaire de SARL.
+- Autres situations applicables.
+
+Ne jamais appliquer un pourcentage social unique à tous les dirigeants.
+
+Prévoir un suivi des coûts de rémunération pour la société, avec distinction entre rémunérations nettes, cotisations et paiements réellement effectués.
+
+---
+
+# PARTIE 6 — MODULE « ASSOCIÉS ET DIVIDENDES »
+
+Créer un espace permettant de suivre :
+
+- Bénéfice de l'exercice.
+- Réserves.
+- Report à nouveau.
+- Résultat distribuable.
+- Décisions d'assemblée générale.
+- Dividendes bruts distribués.
+- Répartition entre associés.
+- Prélèvements fiscaux.
+- Prélèvements sociaux.
+- Dividendes nets versés.
+- Dates de paiement.
+
+Attention : les dividendes ne sont pas des charges de fonctionnement de la société.
+
+Ils sont distribués selon les règles juridiques et comptables après détermination du résultat et décision valable des associés.
+
+La fiscalité des dividendes doit tenir compte de la forme juridique et du statut du bénéficiaire.
+
+Prévoir des paramètres fiscaux et sociaux versionnés, sans coder définitivement un taux dans Laravel.
+
+---
+
+# PARTIE 7 — MOTEUR COMPTABLE DE PILIQI
+
+Cette partie est fondamentale.
+
+PILIQI doit disposer d'un véritable moteur comptable en partie double.
+
+Il ne doit pas être simplement un système qui calcule les dépenses et la TVA.
+
+## 7.1. Séparation entre activité commerciale et comptabilité
+
+Le système commercial existant conserve les données originales :
+
+- Ventes.
+- Factures.
+- Avoirs.
+- Achats.
+- Fournisseurs.
+- Clients.
+- Paiements.
+- Caisses.
+- Clôtures.
+- Stocks.
+- Remboursements - si un jour piliqi sera connecté avec la banque.
+
+Le moteur comptable récupère ces opérations et les transforme en écritures selon les règles comptables applicables.
+
+Ne pas mélanger directement les tables opérationnelles existantes avec les tables comptables.
+
+Prévoir une relation traçable entre chaque opération commerciale et ses écritures.
+
+## 7.2. Plan comptable
+
+Prévoir un plan comptable général français de référence, initialisé selon le PCG officiel applicable à l'exercice.
+
+Quelques comptes de référence :
+
+| Compte | Signification |
+|---|---|
+| 401 | Fournisseurs |
+| 411 | Clients |
+| 512 | Banques |
+| 53 | Caisse |
+| 607 | Achats de marchandises |
+| 707 | Ventes de marchandises |
+| 44566 | TVA déductible sur autres biens et services |
+| 44571 | TVA collectée |
+
+Ce n'est pas une liste exhaustive.
+
+Le système doit également gérer les comptes de stocks, immobilisations, amortissements, salaires, cotisations sociales, charges, produits, emprunts et impôts.
+
+Le compte 53 est la racine comptable de la caisse. Les subdivisions seront définies dans le plan utilisé.
+
+Prévoir des subdivisions configurables.
+
+Exemples :
+- 401100 : fournisseur A.
+- 401200 : fournisseur B.
+- 707100 : ventes de téléphones.
+- 707200 : ventes d'accessoires.
+
+Ces subdivisions sont des exemples de paramétrage, pas des numéros obligatoires.
+
+Le plan comptable doit être :
+
+- Configurable par société.
+- Versionné.
+- Associé à l'exercice comptable.
+- Adaptable par le comptable dans les limites du plan applicable.
+- Historisé.
+
+Ne jamais coder définitivement les numéros de comptes dans les fonctions Laravel.
+
+## 7.3. Journaux comptables
+
+Prévoir une configuration initiale avec les journaux suivants :
+
+| Code | Journal | Utilisation |
+|---|---|---|
+| VE | Ventes | Factures et opérations de vente |
+| AC | Achats | Factures fournisseurs |
+| BQ | Banque | Transactions bancaires |
+| CA | Caisse | Opérations de caisse |
+| OD | Opérations diverses | Régularisations et écritures diverses |
+| AN | À nouveaux | Soldes d'ouverture |
+
+Ces codes sont des valeurs initiales configurables.
+
+Chaque société peut adapter ses journaux selon ses besoins.
+
+Prévoir une numérotation contrôlée par journal et par exercice.
+
+## 7.4. Exemples de comptabilisation
+
+Claude doit comprendre et implémenter les situations suivantes.
+
+### A. Vente de 120 € TTC à crédit
+
+Hypothèse : vente de marchandises avec TVA à 20 %.
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| 411 Clients | 120 € | |
+| 707 Ventes | | 100 € |
+| 44571 TVA collectée | | 20 € |
+| Total | 120 € | 120 € |
+
+Le client doit encore payer 120 €.
+
+### B. Vente de 120 € TTC payée immédiatement en espèces
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| 53 Caisse | 120 € | |
+| 707 Ventes | | 100 € |
+| 44571 TVA collectée | | 20 € |
+
+### C. Vente de 120 € TTC payée par carte bancaire
+
+Prévoir un compte de transition configurable pour les sommes encaissées par carte mais pas encore versées sur le compte bancaire.
+
+Exemple de principe :
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| Compte de cartes à encaisser configuré | 120 € | |
+| 707 Ventes | | 100 € |
+| 44571 TVA collectée | | 20 € |
+
+Le compte de transition doit être défini dans le plan comptable de la société.
+
+Un compte de subdivision tel que 5115 peut être étudié comme exemple de paramétrage, mais ne doit pas être imposé comme compte officiel obligatoire.
+
+Lors du versement par le prestataire de paiement, prévoir le rapprochement entre le montant brut encaissé, les frais du prestataire et le montant net reçu en banque.
+
+### D. Facture fournisseur de marchandises de 120 € TTC
+
+Hypothèse : achat de marchandises avec TVA à 20 %.
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| 607 Achats de marchandises | 100 € | |
+| 44566 TVA déductible | 20 € | |
+| 401 Fournisseurs | | 120 € |
+
+### E. Paiement de cette facture
+
+| Compte | Débit | Crédit |
+|---|---:|---:|
+| 401 Fournisseurs | 120 € | |
+| 512 Banque | | 120 € |
+
+Ces exemples sont illustratifs. Le moteur doit appliquer les règles correspondant à la nature de l'opération, à son régime de TVA, au moyen de paiement et aux paramètres comptables de la société.
+
+## 7.5. Comptabilisation des charges
+
+Une facture d'électricité doit pouvoir générer les écritures adaptées.
+
+Une dépense payée personnellement par le dirigeant ou un salarié doit pouvoir générer une dette envers cette personne, avec le compte comptable approprié selon la situation.
+
+Lors du remboursement, cette dette est soldée et le paiement apparaît dans la trésorerie.
+
+Ne pas utiliser systématiquement le même compte pour tous les types de remboursements.
+
+## 7.6. Tables comptables à étudier
+
+Prévoir notamment :
+
+- Exercices comptables.
+- Plan comptable.
+- Comptes comptables.
+- Journaux comptables.
+- Écritures.
+- Lignes d'écritures.
+- Codes de TVA.
+- Comptes auxiliaires.
+- Axes analytiques.
+- Affectations analytiques.
+- Règles de génération comptable.
+- Liens avec les documents sources.
+- Périodes verrouillées.
+- Historiques des corrections.
+
+Les noms de tables proposés devront être adaptés à la convention de nommage déjà utilisée dans PILIQI.
+
+Toutes les tables doivent respecter l'isolation par société.
+
+## 7.7. Équilibre et intégrité des écritures
+
+Règles obligatoires :
+
+- Total débit égal au total crédit.
+- Montants enregistrés avec une précision monétaire contrôlée.
+- Numérotation cohérente.
+- Aucune double comptabilisation.
+- Idempotence des événements sources.
+- Écritures liées aux pièces justificatives.
+- Contrôle des périodes ouvertes.
+- Traçabilité de l'auteur et de la date.
+- Historique des modifications.
+
+Une écriture définitivement comptabilisée ne doit pas être supprimée ou modifiée silencieusement.
+
+Les corrections doivent utiliser des contrepassations et de nouvelles écritures reliées aux originales.
+
+Prévoir les écritures brouillon, à contrôler, validées et contrepassées.
+
+## 7.8. Comptabilité analytique par magasin
+
+Une société peut avoir plusieurs magasins.
+
+Il faut pouvoir consulter la comptabilité de la société et analyser les opérations par magasin.
+
+Prévoir des axes analytiques indépendants du plan comptable.
+
+Exemple :
+- Magasin Lyon.
+- Magasin Villeurbanne.
+- Magasin Vénissieux.
+
+Ne pas créer automatiquement une comptabilité juridique indépendante pour chaque magasin appartenant à la même société.
+
+Les sociétés juridiquement distinctes doivent conserver chacune leur propre comptabilité.
+
+---
+
+# PARTIE 8 — JOURNAL, GRAND LIVRE, BALANCE ET FEC
+
+L'expert-comptable doit pouvoir travailler directement dans PILIQI.
+
+Prévoir les fonctionnalités suivantes :
+
+## 8.1. Journaux
+
+Consulter, rechercher, filtrer, saisir et contrôler les écritures par journal et par période.
+
+## 8.2. Grand livre
+
+Afficher les écritures compte par compte, avec :
+- Date.
+- Journal.
+- Numéro de pièce.
+- Libellé.
+- Débit.
+- Crédit.
+- Solde.
+- Lien vers le justificatif.
+- Lien vers la facture ou opération d'origine.
+
+## 8.3. Balance générale
+
+Afficher les comptes et leurs totaux débit, crédit et solde.
+
+Permettre les comparaisons entre périodes et exercices.
+
+## 8.4. Comptabilité analytique
+
+Permettre les analyses par magasin, activité ou axe défini par la société.
+
+## 8.5. FEC
+
+Prévoir un véritable export Fichier des Écritures Comptables conforme aux exigences françaises applicables.
+
+Le FEC doit être produit à partir de la comptabilité complète, pas simplement à partir des factures ou des ventes.
+
+Il faudra gérer :
+- Écritures d'ouverture.
+- Ventes.
+- Achats.
+- Banque.
+- Caisse.
+- Règlements.
+- Écritures d'inventaire.
+- Amortissements.
+- Stocks.
+- Régularisations.
+- Autres écritures nécessaires.
+
+Le format, les champs obligatoires, les séquences et les contrôles doivent être vérifiés selon les textes fiscaux applicables.
+
+Ne jamais présenter un export comme FEC conforme avant d'avoir vérifié son contenu et sa conformité.
+
+---
+
+# PARTIE 9 — TABLEAU DE BORD ET GRAPHIQUES EXISTANTS
+
+Enrichir le tableau de bord existant avec les nouvelles informations.
+
+Prévoir notamment :
+
+- Chiffre d'affaires HT.
+- Achats HT.
+- Charges professionnelles HT.
+- Comparaison ventes et achats.
+- Évolution des charges mensuelles.
+- Répartition des charges par catégorie.
+- Charges payées et restant à payer.
+- Trésorerie disponible.
+- Entrées et sorties d'argent.
+- Prévisions de trésorerie.
+- TVA estimée et TVA comptable.
+- Impôts à payer.
+- Factures clients impayées.
+- Factures fournisseurs à payer.
+- Rémunérations et cotisations.
+- Résultat comptable, lorsque disponible.
+
+Permettre les filtres par :
+- Mois.
+- Année.
+- Exercice comptable.
+- Période personnalisée.
+- Magasin.
+- Ensemble des magasins.
+
+Conserver le système de sélection et de personnalisation des graphiques.
+
+Les données doivent provenir des véritables enregistrements de PILIQI.
+
+Respecter les permissions de chaque utilisateur : un utilisateur ne doit pas voir un graphique basé sur des données auxquelles il n'a pas accès.
+
+---
+
+# PARTIE 10 — ESPACE CABINET COMPTABLE
+
+Cette évolution doit être compatible avec l'architecture Cabinet comptable déjà décidée pour PILIQI.
+
+Les cabinets doivent pouvoir consulter, contrôler et effectuer directement le travail comptable sur les dossiers autorisés.
+
+Prévoir :
+
+- Un espace indépendant pour chaque cabinet.
+- Des collaborateurs.
+- Des rôles.
+- Des affectations de dossiers.
+- Des mandats.
+- Des permissions par société.
+- Des permissions éventuellement limitées par magasin.
+- Un tableau de bord multi-clients.
+- L'accès aux factures.
+- L'accès aux charges.
+- L'accès aux justificatifs.
+- La gestion comptable.
+- La saisie et validation des écritures.
+- Les rapprochements.
+- Le grand livre.
+- La balance.
+- Les exports FEC.
+
+Le propriétaire de chaque société doit autoriser son cabinet et choisir les accès accordés.
+
+Un cabinet ne devient jamais propriétaire des données de ses clients.
+
+Le cabinet ne doit pas pouvoir modifier les factures commerciales originales déjà validées. Il peut effectuer des corrections comptables sans altérer la source opérationnelle.
+
+Conserver la distinction entre :
+- Comptabilité et gestion commerciale.
+- Cabinet et société cliente.
+- Collaborateur du cabinet et salarié du magasin.
+
+---
+
+# PARTIE 11 — SÉCURITÉ ET ISOLATION
+
+La sécurité est une priorité absolue.
+
+Ne pas affaiblir les protections déjà mises en place dans PILIQI.
+
+Conserver le principe :
+
+- Un compte utilisateur possède une identité globale unique.
+- Une société possède son propre espace de données.
+- Les magasins sont rattachés à leur société.
+- Un cabinet peut accéder à plusieurs sociétés uniquement par délégation.
+- Un collaborateur du cabinet n'accède qu'aux dossiers qui lui sont affectés.
+
+Conserver et renforcer TenantContext.
+
+Distinguer :
+- UserContext : utilisateur connecté.
+- CabinetContext : cabinet actif.
+- TenantContext : société active.
+- AuthorizationContext : permissions effectives.
+
+Chaque requête, téléchargement, export, traitement asynchrone et opération comptable doit vérifier le bon contexte et les droits.
+
+Prévoir des journaux d'audit pour :
+- Ajout de documents.
+- Modification de brouillons.
+- Validation.
+- Comptabilisation.
+- Contrepassation.
+- Paiement.
+- Remboursement  - ca si un jour piliqi sera connecté avec la banque.
+- Révocation d'un mandat.
+- Changement de permissions.
+- Export de données.
+
+Prévoir une authentification multifacteur recommandée pour les comptes de cabinet.
+
+---
+
+# PARTIE 12 — CONFORMITÉ FISCALE ET PARAMÈTRES RÉGLEMENTAIRES
+
+Il ne faut pas coder définitivement les taux fiscaux, sociaux, plafonds et barèmes dans les fonctions Laravel.
+
+Créer une architecture de paramètres réglementaires versionnés avec :
+
+- Valeur.
+- Année ou période d'application.
+- Date de début.
+- Date de fin éventuelle.
+- Référence officielle.
+- Conditions d'application.
+- Régime juridique concerné.
+- Type de société concerné.
+
+Les exemples de référence doivent être vérifiés à partir des sources officielles à la date de développement.
+
+Prévoir également les contrôles nécessaires à la conformité du logiciel de caisse : inaltérabilité, sécurisation, conservation, archivage et restitution des données lorsque les règles applicables l'exigent.
+
+La conformité caisse, la conformité comptable et la conformité FEC sont des sujets distincts.
+
+Ne pas déclarer PILIQI conforme, certifié ou attesté sans avoir réalisé les vérifications et démarches nécessaires.
+
+---
+
+# PARTIE 13 — BASE DE DONNÉES ET ARCHITECTURE LARAVEL
+
+Avant de créer de nouvelles tables, examiner :
+
+- Les tables existantes.
+- Les modèles Eloquent.
+- Les migrations.
+- Les Services.
+- Les Actions.
+- Les Policies.
+- Les middleware.
+- Les permissions.
+- Le TenantContext.
+- Les mécanismes de paiement.
+- Les factures et achats.
+- Les caisses et clôtures.
+- Les documents.
+- Les journaux d'audit.
+- Les tests existants.
+
+Identifier les données déjà disponibles et les réutiliser.
+
+Ne pas créer deux sources de vérité pour le même document, paiement, règlement ou montant.
+
+Toutes les migrations doivent être compatibles avec la base de production PostgreSQL.
+
+Ne pas compter uniquement sur les contrôles de l'interface : les protections doivent être réalisées dans Laravel et au niveau de la base de données lorsque cela est nécessaire.
+
+Prévoir les transactions SQL, les contraintes d'unicité et les mécanismes de verrouillage adaptés aux opérations financières concurrentes.
+
+Les validations critiques doivent être réalisées sur PostgreSQL.
+
+---
+
+# PARTIE 14 — TESTS OBLIGATOIRES
+
+Créer une suite de tests indépendante pour les nouveaux modules.
+
+## 14.1. Tests multi-sociétés et cabinets
+
+- Un cabinet ne voit pas un autre cabinet.
+- Un cabinet ne voit pas les sociétés non autorisées.
+- Un collaborateur ne voit pas les clients auxquels il n'est pas affecté.
+- La révocation du mandat supprime immédiatement l'accès.
+- Un changement d'identifiant ou d'URL ne permet pas de contourner les permissions.
+- Les documents restent isolés.
+- Les exports restent isolés.
+- Les traitements en arrière-plan conservent le bon contexte.
+
+## 14.2. Tests des charges
+
+- Plusieurs factures de même catégorie pendant un même mois.
+- Détection des véritables doublons.
+- Facture sans justificatif.
+- Facture avec plusieurs taux de TVA.
+- Charge payée directement par la société.
+- Charge avancée personnellement.
+- Remboursement partiel.
+- Remboursement complet.
+- Facture partiellement payée.
+- Facture payée avant le contrôle comptable.
+- Facture comptabilisée mais non payée.
+- Correction avec historique.
+
+## 14.3. Tests de trésorerie
+
+- Chaque paiement apparaît une seule fois.
+- Aucun double décaissement.
+- Les paiements partiels sont correctement calculés.
+- Les virements internes ne modifient pas le total global des disponibilités.
+- Le remboursement du capital d'un crédit est distinct des intérêts.
+- Les prévisions sont distinctes des mouvements constatés.
+- Les soldes concordent avec les mouvements enregistrés.
+
+## 14.4. Tests comptables
+
+- Débit égal crédit.
+- Absence de doubles écritures.
+- Numérotation cohérente.
+- Calcul correct de la TVA.
+- Gestion des arrondis.
+- Gestion des avoirs.
+- Gestion des remboursements - ca si un jours piliqi sera connecté avec la banque.
+- Gestion des comptes auxiliaires.
+- Rapprochements bancaires - ca peut etre il faut ecrire à la main par comptable car piliqi n 'est pas connecté avec la banque.
+- Concordance journaux/grand livre/balance.
+- Gestion des exercices.
+- Verrouillage des périodes.
+- Corrections par contrepassation.
+
+## 14.5. Tests FEC
+
+- Présence de tous les champs obligatoires.
+- Respect du format réglementaire.
+- Séquences cohérentes.
+- Absence d'écritures manquantes.
+- Équilibre des écritures.
+- Exhaustivité de la période.
+- Présence des écritures d'ouverture et d'inventaire requises.
+- Restitution fidèle de la comptabilité. - et tu ajoute aussi des testes naisaicaires pour bien blinder la securite.
+
+## 14.6. Tests de charge et concurrence
+
+Tester plusieurs sociétés et plusieurs cabinets travaillant simultanément.
+
+Vérifier notamment que les opérations de vente, paiement, validation comptable, rapprochement et génération des écritures ne créent aucun doublon, aucune perte de données et aucune fuite inter-tenant.
+
+Les tests critiques doivent être exécutés sur PostgreSQL.
+
+---
+
+# PARTIE 15 — MÉTHODE DE DÉVELOPPEMENT DEMANDÉE
+
+Je ne souhaite que tu analyses toutes les fonctionnalités.
+
+Je demande la démarche suivante.
+
+### Étape 1 — Audit complet
+
+Examiner le PILIQI existant.
+
+Étudier particulièrement :
+- Charges et TVA.
+- Achats.
+- Ventes.
+- Facturation.
+- Caisse.
+- Paiements.
+- Trésorerie éventuellement existante.
+- Graphiques.
+- Permissions.
+- Espace cabinet.
+- TenantContext.
+- Base de données.
+
+### Étape 2 — Rapport d'écarts
+
+Présenter clairement :
+
+- Ce qui existe déjà.
+- Ce qui fonctionne déjà.
+- Ce qui doit être conservé.
+- Ce qui doit être amélioré.
+- Ce qui manque.
+- Ce qui risque de faire doublon.
+- Les risques techniques.
+- Les conséquences sur les migrations et les données existantes.
+
+Ne pas supposer qu'une fonction n'existe pas sans avoir inspecté le code.
+
+### Étape 3 — Architecture détaillée
+
+Produire :
+
+1. Architecture fonctionnelle complète.
+2. Schéma de base de données.
+3. Relations entre les sociétés, magasins, cabinets et utilisateurs.
+4. Architecture du moteur comptable.
+5. Plan comptable et versionnement.
+6. Configuration des journaux.
+7. Matrice des permissions.
+8. Circuit des factures et charges.
+9. Circuit des paiements et remboursements.
+10. Circuit de génération des écritures.
+11. Architecture de trésorerie.
+12. Architecture fiscale.
+13. Plan de tests complet.
+
+### Étape 4 — Validation de la conception
+
+Présenter les décisions techniques et les conséquences de chaque choix avant de modifier les fondations existantes.
+
+Ne pas poser de nouveau des questions dont les réponses existent déjà dans les décisions du projet.
+
+Lorsque des détails techniques manquent, proposer la solution la plus cohérente et expliquer les hypothèses.
+
+### Étape 5 — Développement progressif
+
+Développer par lots indépendants.
+
+Chaque lot doit comporter :
+- Migrations.
+- Modèles.
+- Services.
+- Actions.
+- Policies.
+- Interfaces.
+- Tests.
+- Vérifications de sécurité.
+- Vérifications PostgreSQL.
+
+Ne pas modifier inutilement les modules déjà validés.
+
+### Étape 6 — Audit indépendant
+
+Faire vérifier les nouvelles fonctionnalités par des tests indépendants.
+
+Contrôler l'isolation des données, l'intégrité de la comptabilité, les paiements, les écritures, les exports et la concurrence.
+
+Ne pas considérer un lot comme terminé simplement parce que les pages affichent correctement les informations.
+
+---
+
+# RÉSULTAT FINAL ATTENDU
+
+Je souhaite que PILIQI devienne un véritable environnement de gestion commerciale, financière et comptable.
+
+Un commerçant utilise PILIQI pour :
+- Gérer ses magasins.
+- Effectuer ses ventes.
+- Gérer ses achats.
+- Enregistrer ses charges.
+- Suivre sa trésorerie.
+- Suivre ses impôts.
+- Connaître sa situation financière.
+
+Son expert-comptable utilise le même PILIQI pour :
+- Consulter les opérations.
+- Contrôler les justificatifs.
+- Contrôler les paiements.
+- Comptabiliser les opérations.
+- Gérer les journaux.
+- Effectuer les rapprochements.
+- Consulter le grand livre.
+- Consulter les balances.
+- Analyser les résultats.
+- Produire le FEC.
+
+Toutes les informations doivent circuler correctement entre les modules, sans double saisie et sans double comptabilisation.
+
+**Principe fondamental : une opération est saisie une seule fois, conservée dans sa source d'origine, puis réutilisée par les différents modules selon les règles comptables, fiscales et financières applicables.**
+
+La sécurité, l'isolation des sociétés, l'intégrité des factures, de la caisse et de la comptabilité restent prioritaires sur toute nouvelle fonctionnalité.  MAIS comme d'habitude tu me montre les modèles afin que je puisse voir comment ressemble et que tu construis selon le modele choisi par moi."
+

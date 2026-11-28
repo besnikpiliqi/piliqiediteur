@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 28/11/2026 à 10:40 UTC par pilotage-sync.sh : « Reprise du 28/11 : six courses relancées, audit financier lancé [skip ci] ».
+Mis à jour le 28/11/2026 à 11:16 UTC par pilotage-sync.sh : « Date d'un paiement : recherche finie, questions posées [skip ci] ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 

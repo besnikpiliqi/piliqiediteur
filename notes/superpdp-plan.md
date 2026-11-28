@@ -1006,25 +1006,59 @@ Toutes les factures reçues viennent de Tricatel et sont adressées à Burger Qu
 
 ## Phase 8 — Encaissement fr:212, puis b2c_payments
 
-- **Événement** `app/Domain/Facturation/Events/PaiementEnregistre(Paiement $paiement)`, dispatché par `EnregistrerPaiementAction`. Il couvre aussi la caisse, qui passe par cette action.
-- **Listener** `app/Integrations/Pdp/Listeners/DeclarerEncaissementAuPdpApresPaiement`. Pour chaque facture allouée, il dispatche `EnvoyerEncaissementAuPdpJob(magasinId, transmissionId)` en `afterCommit` si toutes ces conditions sont réunies :
-  - transmission sortante déposée ;
-  - `statut === Payee` ;
-  - **uniquement des lignes de service** ;
-  - `option_debits_tva === false` ;
-  - aucun fr:212 déjà enregistré.
-  Ce périmètre est le seul cas sans ambiguïté. Les autres attendent D7.
+> **Corrigé le 28/11/2026 (lot DATE-PAIEMENT, décisions de l'éditeur du 28/11/2026, choix B)** : la version précédente envoyait `fr:212` « sans `details` », c'est-à-dire sans la date d'encaissement que demande l'art. 242 nonies P, I, 3° de l'annexe II au CGI (« la date d'encaissement effectif ») et sans les montants par taux que demande la norme AFNOR XP Z12-014 (« Le statut « Encaissée » DOIT indiquer le ou les montant(s) encaissé(s) par taux de TVA applicables »). Sans `details`, SUPER PDP prend le total de la facture, au jour de l'envoi : faux pour un paiement partiel, pour une facture mixte et pour un paiement saisi après sa réception. Elle se limitait aussi à une facture entièrement payée, alors que `CLAUDE.md` (« Facture électronique ») dit que le statut part à chaque paiement. Ce qui suit la remplace.
+
+- **Événements** :
+  - `app/Domain/Facturation/Events/PaiementEnregistre(Paiement $paiement)`, dispatché par `EnregistrerPaiementAction` (la caisse et « Émettre et encaisser » comprises, qui passent par elle) ;
+  - le même événement, dispatché par `ContrePasserPaiementAction` pour la contre-passation (montant négatif) ;
+  - `CreditImputeSurUneFacture(AvoirAllocation $imputation)` pour un crédit d'avoir imputé sur une facture de services (à l'émission d'un avoir, à une contre-passation, à l'émission d'une facture), qui compte comme un paiement au jour de son imputation (`CLAUDE.md`, « Facture électronique »), sauf l'imputation d'un avoir de régularisation, qui n'est jamais déclarée.
+- **Listener** `app/Integrations/Pdp/Listeners/DeclarerEncaissementAuPdpApresPaiement`. Pour chaque facture que le paiement (ou l'imputation) règle, il dispatche `EnvoyerEncaissementAuPdpJob(magasinId, transmissionId, paiementId|imputationId)` en `afterCommit` si toutes ces conditions sont réunies :
+  - la facture a une transmission sortante déposée (facture électronique entre professionnels ; les tickets passent par `b2c_payments`, plus bas) ;
+  - elle porte au moins une ligne de service ;
+  - son émetteur figé n'a pas l'option pour les débits (`$facture->emetteur()->optionDebitsTva === false`, T112.1 : quoi que la société ait choisi depuis) ;
+  - sa nature n'est ni une prestation autoliquidée ni une prestation hors de l'Union (art. 290 A : rien pour une taxe due par le preneur ; le B2B international est la phase 9) ;
+  - aucun statut d'encaissement n'est déjà enregistré pour ce paiement (ou cette imputation) et cette facture.
+  Le paiement partiel, le second paiement et la facture mixte en font partie : chaque paiement envoie son propre statut (T65.4 : seule la part des services se déclare).
+- **Contenu du statut** : `POST /v1.beta/invoice_events`, jamais sans `details` :
+
+  ```json
+  {"invoice_id": 4242, "status_code": "fr:212",
+   "details": [{"reported_data": [
+     {"type_code": "MEN", "amount": "60.00", "value_percent": "20.00", "currency_code": "EUR", "date": "2026-07-12"},
+     {"type_code": "MEN", "amount": "11.00", "value_percent": "10.00", "currency_code": "EUR", "date": "2026-07-12"}
+   ]}]}
+  ```
+
+  - une entrée par taux de TVA des lignes de service de la facture (MDT-224 : `value_percent`) ;
+  - `amount` (MDT-215) = le TTC encaissé à ce taux par CE paiement, calculé comme l'e-reporting des particuliers (`EncaissementsDesPrestations` : paiement total, TTC des services à ce taux ; paiement partiel, au prorata des TTC du document d'origine, restant après un avoir, en cumul dans l'ordre des taux, chaque part arrondie au centime le plus proche, leur somme égale au paiement ; T9.3, T107), en centimes, formaté « 60.00 » ;
+  - `type_code` (MDT-207) = « MEN » (montant net encaissé) ;
+  - **`date` = le jour de réception du paiement (`paiements.recu_le`, « Reçu le »), jamais le jour de sa saisie ni celui de l'envoi** (242 nonies P ; spécifications externes v3.2, note 125 : le fait générateur de la transmission des données de paiement est la date d'encaissement) ; pour une contre-passation, son propre `recu_le` (le jour où elle est faite, décision 4 du 28/11/2026), avec des montants négatifs (T65.2 ; AFNOR, cas n° 34 ; règle P1.15) ; pour un crédit d'avoir imputé, le jour de son imputation ;
+  - le schéma déprécié `amounts[]` (`invoice_event_amount`) n'est pas utilisé.
 - **Job** :
-  - si un essai précédent a peut-être abouti, on cherche d'abord un fr:212 avec `evenementsDeLaFacture` ;
-  - sinon, `envoyerStatut(fr:212)` **sans `details`** : selon la spécification, le montant pris est alors le total de la facture ;
-  - l'événement renvoyé est enregistré.
+  - si un essai précédent a peut-être abouti, on cherche d'abord, dans `evenementsDeLaFacture`, un `fr:212` de la même date et des mêmes montants pas encore rattaché en local ;
+  - sinon on envoie le statut ci-dessus ;
+  - l'événement renvoyé est enregistré dans une table `statuts_encaissement_pdp` (`BelongsToMagasin` ; `paiement_id` ou `avoir_allocation_id`, `facture_id`, identifiant externe, date, montants envoyés tels quels, état), unique par (paiement ou imputation, facture) : un statut ne part jamais deux fois.
+- **Paiement saisi après le délai de sa période** (décisions de l'éditeur du 28/11/2026 ; le code de l'écran existe déjà pour la phrase de la TVA, lot DATE-PAIEMENT) :
+  - la période d'un paiement est celle de son jour de réception ; son délai se calcule depuis le régime de TVA de la société (art. 41 septies P de l'annexe IV : réel normal, dix jours après la fin du mois ; franchise en base, du 25 au 30 du mois qui suit le bimestre) et depuis la date où la société entre dans l'e-reporting (01/09/2026 pour une grande entreprise ou une ETI, 01/09/2027 pour une PME ou une micro-entreprise : PILIQI ne porte pas encore la catégorie d'entreprise ; à régler par un réglage, ou par la date la plus prudente) ;
+  - ce qui est réellement parti se lit dans une **table des envois** (par société, période et canal) ;
+  - à la saisie d'un paiement d'une facture qui porte un service, sans option pour les débits, dont la période est déjà passée, la phrase grise de « Reçu le » commence par : « Le délai de transmission des paiements de juillet 2026 est passé : ce paiement partira en retard, avec sa vraie date. », suivie de la phrase de la TVA déjà écrite (« Si la TVA de juillet 2026 est déjà déclarée, elle est à régulariser : prévenez votre comptable. ») ;
+  - une ligne entre dans l'« À faire » du propriétaire et de son comptable (cabinet lié ou expert-comptable déclaré) : « Paiement reçu en juillet 2026, saisi après le délai de ce mois », qui mène au paiement ;
+  - le paiement part avec sa vraie date, dans l'envoi suivant (SUPER PDP 1.37.0.beta : « allow ereporting transactions and payments to be declared even if the period is finished. The transactions/payments declared this way will be included in the next e-reporting »).
+- **Trois questions à poser à SUPER PDP avant de coder** (synthèse `paiement-date/synthese.md`, § 6) : (a) l'« e-reporting suivant » est-il un envoi initial (IN) de la période courante, ou un rectificatif (RE) de l'ancienne ? (b) le PPF l'accepte-t-il sans rejet REJ_PER ? (c) un `fr:212` daté d'une période révolue est-il accepté ? Le champ exact de la date dans le message CDAR (MDT-219 chez SUPER PDP) se constate au bac à sable (phase 10).
 - **`b2c_payments`** (services payés par des particuliers sans option pour les débits) : à implémenter seulement après D8. Ce sont des lignes `type='paiement'` dans `declarations_ereporting`, préparées une fois par jour d'encaissement. Le schéma de la spécification est incohérent (`company_id` et `category_code` sont exigés sans être définis, T8).
   - D8 tranché par l'éditeur le 11/11/2026 (D67 ; T1.1 à T1.4 ; Q399 à Q402) : ces paiements se déclarent, sans attendre un expert-comptable. `amount` = montant encaissé TTC, `tax_percent` = taux, agrégés par jour d'encaissement (`encaissements()` additionne déjà les centimes TTC par date et par taux). D'une vente qui mêle biens et services, seule la part des services se déclare : paiement total, le TTC des lignes de service par taux ; paiement partiel, paiement × TTC du service à ce taux ÷ TTC du ticket (prorata des TTC du document d'origine). Questions de suite : T107.1 (arrondi du prorata) et T107.2 (base après un avoir ; crédit d'avoir compté comme un paiement). La valeur de `category_code`, exigée mais non définie (T8), se lit au premier envoi. Non couvert, à traiter à l'étape 2 sans question : les paiements des services d'un magasin en franchise, aujourd'hui jamais retenus (filtre `taux > 0` de `EReportingDesParticuliers`), alors que l'art. 242 nonies P prévoit une transmission bimestrielle pour un franchisé.
+  - Date de chaque ligne (28/11/2026, lot DATE-PAIEMENT) : le jour de réception du paiement (`recu_le`), tel que l'aperçu de la clôture le porte déjà (`EReportingDesParticuliers::mouvements()`), dans la clôture du jour de sa **saisie** ; un paiement saisi après coup part donc avec la clôture de son jour de saisie et sa vraie date ; le crédit d'avoir, au jour de son imputation ; une contre-passation, au jour où elle est faite, en négatif.
 
 **Tests** (`tests/Feature/SuperPdp/EncaissementTest.php`) :
-- facture de services entièrement payée : un seul POST `{"invoice_id":4242,"status_code":"fr:212"}` ;
-- biens seuls, option pour les débits ou paiement partiel : aucun envoi ;
-- second paiement ou fr:212 retrouvé : aucun doublon.
+- facture de services entièrement payée le jour même : un POST avec `details[0].reported_data` = une entrée par taux, `type_code` « MEN », montants TTC, `date` = jour de réception ; jamais un POST sans `details` ;
+- virement reçu le 12/07/2026, saisi le 23/11/2026 : `date` = « 2026-07-12 » ;
+- paiement partiel d'une facture à deux taux de service : parts au prorata, en cumul, leur somme égale au paiement ;
+- facture mixte (biens et services) : seuls les taux et le TTC des services ;
+- contre-passation : montants négatifs, `date` = jour de la contre-passation ;
+- crédit d'avoir imputé sur une facture de services : un statut au jour de l'imputation ; avoir de régularisation : aucun ;
+- biens seuls, option pour les débits (émetteur figé), prestation autoliquidée ou hors de l'Union : aucun envoi ;
+- second paiement : un second statut ; même paiement relancé ou statut retrouvé : aucun doublon ;
+- paiement saisi après le délai de sa période : la phrase « Le délai de transmission … est passé … » et la ligne de l'« À faire » ; un paiement dans le délai : ni l'une ni l'autre.
 
 ## Phase 9 — B2B international (après D11)
 
@@ -1093,6 +1127,7 @@ Pour chaque point : la question, la proposition retenue par défaut dans ce plan
    - Paiements partiels : faut-il `reported_data` « MEN » ? Le montant est-il HT ou TTC, ventilé par taux ?
    - Facture déjà payée à l'émission : envoie-t-on quand même ?
    - Par défaut : services seuls, entièrement payés, sans option pour les débits, sans `details`.
+   - Tranché (28/11/2026) par `CLAUDE.md` (« le statut « encaissée » d'une facture de services part à chaque paiement, avec le montant et la date »), T65.2 (contre-passation en négatif), T65.4 (seule la part des services d'une facture mixte), T112.1 (émetteur figé) et les décisions de l'éditeur du 28/11/2026 (choix B : la date est le jour de réception) : chaque paiement, partiel ou total, envoie son statut avec `reported_data` « MEN », montants TTC par taux et `date` = « Reçu le ». Voir la phase 8, corrigée.
 8. **D8 — `b2c_payments`.**
    - Faut-il les déclarer pour les services payés par des particuliers ?
    - Montant TTC ou HT ?

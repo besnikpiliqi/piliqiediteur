@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 28/11/2026 à 15:03 UTC par pilotage-sync.sh : « Décisions sur la date des paiements, lot DATE-PAIEMENT lancé [skip ci] ».
+Mis à jour le 28/11/2026 à 15:17 UTC par pilotage-sync.sh : « Rapport d'écarts fini, document, maquettes financières prêtes [skip ci] ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -41,18 +41,19 @@ d92d46b5 Protocole : la règle des types en ligne est écrite dans CLAUDE.md
 
 ## Dernière course de la chaîne
 
-Course `wf_3bcd5cc9-d31`, étapes commencées (de la plus ancienne à la plus récente) :
+Course `wf_98da6350-e6c`, étapes commencées (de la plus ancienne à la plus récente) :
 
 ```
-MDP:code
-MDP:relecture
-MDP:correction
-IDENT:code
-IDENT:relecture
-IDENT:correction
-CESSION:code
-CESSION:relecture
-NAF25:code
-NAF25:relecture
-chaine:verification
+audit:charges-et-tva
+audit:ventes-paiements-caisse
+audit:achats-stock
+audit:droits-isolation-cabinet
+audit:tableau-de-bord
+audit:base-et-architecture
+droit:tva-et-declarations
+droit:is-dividendes-social
+droit:frais-et-comptabilite
+rapport:ecarts
+controle:critique
+controle:correction
 ```

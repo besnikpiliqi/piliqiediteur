@@ -1,6 +1,6 @@
 # État du projet (généré automatiquement)
 
-Mis à jour le 28/11/2026 à 11:16 UTC par pilotage-sync.sh : « Date d'un paiement : recherche finie, questions posées [skip ci] ».
+Mis à jour le 28/11/2026 à 14:55 UTC par pilotage-sync.sh : « Reprise après la limite des 5 heures [skip ci] ».
 
 ## Branche de travail (claude/saas-invoice-editor-architecture-q6eizh)
 
@@ -51,4 +51,8 @@ IDENT:code
 IDENT:relecture
 IDENT:correction
 CESSION:code
+CESSION:relecture
+NAF25:code
+NAF25:relecture
+chaine:verification
 ```
